@@ -1,0 +1,26 @@
+{
+  "name": "plans-cc",
+  "version": "0.1.0",
+  "description": "Lightweight task management for Claude Code",
+  "bin": {
+    "plans-cc": "bin/install.js"
+  },
+  "files": [
+    "bin",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=16.7.0"
+  },
+  "keywords": [
+    "claude-code",
+    "task-management",
+    "planning",
+    "skills"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mattboldt/plans-cc"
+  }
+}
