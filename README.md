@@ -28,9 +28,17 @@ Open Claude Code in your project directory and run:
 /plan-init
 ```
 
-This creates a `.plans/` directory with tracking files. Claude will also ask about your project context (tech stack, conventions, testing setup) so it can make better decisions during execution.
+This creates a `.plans/` directory with tracking files and templates.
 
-### 2. Capture a task
+### 2. Set up project context
+
+```
+/plan-context
+```
+
+Claude scans your codebase and populates `.plans/CONTEXT.md` with your tech stack, project structure, testing setup, and key patterns. This context helps Claude make better decisions during elaboration and execution.
+
+### 3. Capture a task
 
 ```
 /plan-capture Fix the login timeout bug
@@ -38,7 +46,7 @@ This creates a `.plans/` directory with tracking files. Claude will also ask abo
 
 This creates a task file at `.plans/pending/001-fix-login-timeout-bug.md` with a unique ID, inferred type (bug/feature/refactor/chore), and placeholder sections for elaboration.
 
-### 3. Elaborate the task
+### 4. Elaborate the task
 
 ```
 /plan-elaborate 1
@@ -46,7 +54,7 @@ This creates a task file at `.plans/pending/001-fix-login-timeout-bug.md` with a
 
 Claude researches your codebase, identifies affected files, and fills in the **Why**, **How** (with step-by-step checkboxes), and **Verification** sections. This is where the plan gets fleshed out — root cause analysis for bugs, architecture decisions for features, and concrete implementation steps.
 
-### 4. Execute the task
+### 5. Execute the task
 
 ```
 /plan-execute 1
@@ -54,7 +62,7 @@ Claude researches your codebase, identifies affected files, and fills in the **W
 
 Claude works through the implementation steps, checking off each one as it goes. It spawns focused sub-agents for each segment of work, follows TDD practices when a test suite is detected, and pauses at observation steps for your manual verification.
 
-### 5. Complete the task
+### 6. Complete the task
 
 ```
 /plan-complete 1
