@@ -10,7 +10,7 @@ description: Show dashboard of all tasks and current progress
 
 # plan-status
 
-Display a dashboard showing the current state of all tasks.
+Display a compact dashboard showing the current state of all tasks.
 
 ## Steps
 
@@ -18,57 +18,59 @@ Display a dashboard showing the current state of all tasks.
    - Check for `.plans/config.json`
    - If not found: "Not initialized. Run `/plan-init` to get started."
 
-2. **Count tasks by status**
-   - Scan `.plans/pending/*.md` files
-   - For each file, grep for `**Status:**` line
-   - Count: pending, elaborated, in-progress
-   - Count files in `.plans/completed/` for completed count
-
-3. **Gather task details**
-   For each task in pending/:
+2. **Gather all tasks**
+   For each task in `.plans/pending/`:
    - Extract ID from filename (first 3 digits)
    - Extract title from `# ` header line
    - Extract type from `**Type:**` line
    - Extract status from `**Status:**` line
-   - Extract created date from `**Created:**` line
+   - **Parse checkbox progress from How section:**
+     - Count total: all `- [ ]` and `- [x]` lines
+     - Count completed: `- [x]` lines
+     - Store as `completed_steps/total_steps`
 
-4. **Read recent history**
-   - Read last 5 entries from `.plans/HISTORY.md` table
+   Count tasks in `.plans/completed/` for the summary line.
 
-5. **Display dashboard**
+3. **Sort tasks for display**
+   Order pending tasks by status priority:
+   1. `in-progress` (currently being worked on)
+   2. `review` (execution complete, awaiting review)
+   3. `elaborated` (ready to start)
+   4. `pending` (needs elaboration)
+
+4. **Display output**
+
+   Output EXACTLY this format. Each task is ONE LINE. No tables, no separators, no labels.
+
    ```
    # Plans Status
 
-   ## Overview
-   | Status | Count |
-   |--------|-------|
-   | Pending | X |
-   | Elaborated | X |
-   | In Progress | X |
-   | Completed | X |
-   | **Total** | **X** |
+   2 pending · 1 ready · 1 in progress · 1 in review · 3 completed
 
-   ## Active Work
-   [List in-progress tasks, or "No active tasks"]
-   - **#NNN** - [Title] ([type])
+   ▶ 003 Fix login timeout [bug] 3/5
+   ★ 004 Add search feature [feature] 4/4
+   ○ 002 Add dark mode [feature] 0/4
+   · 001 Update docs [chore]
 
-   ## Ready to Start
-   [List elaborated tasks, or "No elaborated tasks"]
-   - **#NNN** - [Title] ([type])
-
-   ## Backlog
-   [List pending tasks, or "No pending tasks"]
-   - **#NNN** - [Title] ([type])
-
-   ## Recently Completed
-   [Last 5 from HISTORY.md, or "No completed tasks yet"]
-   - **#NNN** - [Title] (completed [date])
+   Legend: ▶ In Progress  ★ Review  ○ Ready  · Pending
 
    ## Quick Actions
    [Contextual suggestions based on current state]
    ```
 
-6. **Generate contextual suggestions**
+   **CRITICAL: Each task must be exactly ONE LINE in this format:**
+   - `▶ 003 Fix login timeout [bug] 3/5` — in-progress task
+   - `★ 004 Add search feature [feature] 4/4` — review task
+   - `○ 002 Add dark mode [feature] 0/4` — elaborated task
+   - `· 001 Update docs [chore]` — pending task (no progress)
+
+   **DO NOT use:**
+   - Tables or columns
+   - Separators or dividers between tasks
+   - Labels like "ID:", "Task:", "Type:", "Progress:"
+   - Multi-line formatting per task
+
+7. **Generate contextual suggestions**
    Based on current state:
 
    **If no tasks at all:**
@@ -78,11 +80,14 @@ Display a dashboard showing the current state of all tasks.
    - "Next: `/plan-elaborate <id>` to research a task before starting"
 
    **If elaborated tasks exist:**
-   - "Ready to work: `/plan-start <id>` to begin an elaborated task"
+   - "Ready to work: `/plan-execute <id>` to start an elaborated task"
 
    **If in-progress tasks exist:**
    - "Continue: `/plan-execute <id>` to continue working"
    - "Done? `/plan-complete <id>` to mark complete"
+
+   **If review tasks exist:**
+   - "Ready for review: `/plan-review <id>` to review changes"
 
    **If tasks completed recently:**
    - "Great progress! `/plan-capture` to add more tasks"
@@ -90,6 +95,6 @@ Display a dashboard showing the current state of all tasks.
 ## Edge Cases
 
 - **Not initialized**: Friendly message suggesting `/plan-init`
-- **No tasks**: Show empty dashboard with suggestion to capture first task
-- **Many tasks**: Show counts, don't list more than 10 per section (show "and X more...")
-- **Malformed task files**: Skip them, note count of unreadable files
+- **No tasks**: Show empty table header with suggestion to capture first task
+- **Many tasks**: Show all pending tasks; completed tasks only shown as count in summary
+- **Malformed task files**: Skip them, note count of unreadable files if any

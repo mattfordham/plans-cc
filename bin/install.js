@@ -4,9 +4,12 @@ const fs = require("fs");
 const path = require("path");
 
 const SKILLS_PREFIX = "plan-";
+const AGENTS_PREFIX = "plan-";
 const HOME = require("os").homedir();
 const TARGET_DIR = path.join(HOME, ".claude", "skills");
 const SOURCE_DIR = path.join(__dirname, "..", "skills");
+const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
+const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
 
 function main() {
   console.log("\n  plans-cc — Installing skills to ~/.claude/skills/\n");
@@ -49,7 +52,41 @@ function main() {
     console.log(`    /${skill}`);
   }
 
-  console.log("\n  Run /plan-help in Claude Code to get started.\n");
+  // Install agents
+  if (fs.existsSync(AGENTS_SOURCE)) {
+    // Ensure agents directory exists
+    if (!fs.existsSync(AGENTS_TARGET)) {
+      fs.mkdirSync(AGENTS_TARGET, { recursive: true });
+    }
+
+    // Remove existing plan-* agents
+    const existingAgents = fs.readdirSync(AGENTS_TARGET).filter((f) => f.startsWith(AGENTS_PREFIX) && f.endsWith(".md"));
+    for (const file of existingAgents) {
+      fs.unlinkSync(path.join(AGENTS_TARGET, file));
+    }
+    if (existingAgents.length > 0) {
+      console.log(`  Removed ${existingAgents.length} existing plan-* agent(s)`);
+    }
+
+    // Copy agents
+    const agentFiles = fs.readdirSync(AGENTS_SOURCE).filter((f) => f.endsWith(".md"));
+    for (const file of agentFiles) {
+      fs.copyFileSync(
+        path.join(AGENTS_SOURCE, file),
+        path.join(AGENTS_TARGET, file)
+      );
+    }
+
+    if (agentFiles.length > 0) {
+      console.log(`  Installed ${agentFiles.length} agent(s):\n`);
+      for (const file of agentFiles.sort()) {
+        console.log(`    ${file.replace(".md", "")}`);
+      }
+      console.log();
+    }
+  }
+
+  console.log("  Run /plan-help in Claude Code to get started.\n");
 }
 
 main();

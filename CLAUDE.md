@@ -15,7 +15,7 @@ plans-cc/
     install.js          # Installer (copies skills to ~/.claude/skills/)
     dev.js              # Development helper
   skills/
-    plan-*/SKILL.md     # Skill definitions (11 total)
+    plan-*/SKILL.md     # Skill definitions (21 total)
   .claude/
     settings.local.json # Local Claude settings
 ```
@@ -88,11 +88,26 @@ Longer explanation of what this skill does.
 ### Task Lifecycle
 
 ```
-capture → elaborate → start → execute → complete
-   │          │         │        │         │
-pending   elaborated  in-progress  ...   completed
-                                          (archived)
+capture → elaborate → execute → complete
+   │          │          │         │
+pending   elaborated  in-progress  completed
+                                   (archived)
+
+capture → elaborate → execute (worktree) → review → complete
+   │          │          │                    │         │
+pending   elaborated  in-progress          review   completed
+                                                    (archived)
+
+brainstorm → expand → elaborate → execute → complete
+   │            │
+  idea     pending tasks
+   │
+   └──────→ pick → elaborate → execute → complete
+               │
+          selected tasks
 ```
+
+**Shortcuts:** Any command auto-fills missing earlier steps. `/plan-execute Fix bug` auto-captures and auto-elaborates before executing. `/plan-elaborate Fix bug` auto-captures before elaborating. `/plan-capture Fix bug and go` chains all three with trailing phrases. Branch keywords (`branch`, `use branch`) and worktree keywords (`worktree`, `use worktree`) work across all entry points.
 
 ### Task IDs
 
@@ -107,9 +122,10 @@ pending   elaborated  in-progress  ...   completed
   CONTEXT.md      # Project knowledge
   PROGRESS.md     # Current work status
   HISTORY.md      # Completed work archive
-  config.json     # Settings (git_commits, next_id)
+  config.json     # Settings (git_commits, next_id, idea_next_id)
   pending/        # Active task files
   completed/      # Archived task files
+  ideas/          # Brainstorm session documents
 ```
 
 ### Task Statuses
@@ -117,7 +133,24 @@ pending   elaborated  in-progress  ...   completed
 - `pending` — Captured but not elaborated
 - `elaborated` — Has Why/How/Verification filled in
 - `in-progress` — Actively being worked on
+- `review` — Execution complete, awaiting user review (worktree workflow)
 - `completed` — Done and archived
+
+### Checkbox Progress Tracking
+
+The How section uses markdown checkboxes to track step-by-step progress:
+
+```markdown
+## How
+- [x] Step 1: Create timeout configuration
+- [x] Step 2: Add timeout handling to login flow
+- [ ] Step 3: Update tests for new behavior
+```
+
+- `/plan-elaborate` creates checkboxes (aim for 3-7 per task)
+- `/plan-execute` marks checkboxes complete as work progresses
+- `/plan-status` and `/plan-list` show progress (e.g., "3/5 steps")
+- `/plan-complete` warns if checkboxes remain incomplete
 
 ### Task Types
 
@@ -136,7 +169,6 @@ Skills are declarative, not executable code. No automated tests — test manuall
 3. Walk through full lifecycle:
    - `/plan-capture Test task`
    - `/plan-elaborate 1`
-   - `/plan-start 1`
    - `/plan-execute 1`
    - `/plan-complete 1`
 4. Verify files are created/updated correctly in `.plans/`
@@ -150,11 +182,21 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-init` | Bootstrap .plans/ directory |
 | `/plan-help` | Show command reference |
 | `/plan-context` | Update project context |
-| `/plan-capture` | Quick-capture a task |
-| `/plan-elaborate` | Research and flesh out a task |
-| `/plan-start` | Begin working on a task |
-| `/plan-execute` | Continue work on active task |
+| `/plan-capture` | Quick-capture a task (optionally auto-elaborate/execute with trailing phrases) |
+| `/plan-import` | Import tasks from a markdown document |
+| `/plan-elaborate` | Research and flesh out a task (auto-captures if given a description) |
+| `/plan-execute` | Start or continue work on a task (auto-captures/elaborates if needed) |
+| `/plan-issue` | Report an issue found during manual testing |
 | `/plan-complete` | Mark task done and archive |
+| `/plan-review` | Review a task's changes — checkout branch and show diff summary |
+| `/plan-reopen` | Reopen a completed task and move it back to pending |
 | `/plan-status` | Dashboard of all work |
 | `/plan-list` | List tasks with filters |
+| `/plan-show` | Show detailed overview of a specific task |
 | `/plan-delete` | Remove a task |
+| `/plan-combine` | Merge multiple tasks into a single task |
+| `/plan-audit` | Audit task completeness — verify all affected files |
+| `/plan-ideas` | List captured ideas or show details of a specific idea |
+| `/plan-pick` | Pick high-value components from an idea to create tasks |
+| `/plan-expand` | Expand an idea into actionable tasks |
+| `/plan-brainstorm` | Explore ideas through guided discussion |

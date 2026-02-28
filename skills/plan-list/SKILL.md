@@ -1,7 +1,7 @@
 ---
 name: plan-list
 disable-model-invocation: true
-argument-hint: "[filter: pending|elaborated|in-progress|completed|bug|feature|refactor|chore|all]"
+argument-hint: "[filter: pending|elaborated|in-progress|review|completed|bug|feature|refactor|chore|all]"
 allowed-tools:
   - Read
   - Bash
@@ -23,6 +23,7 @@ Display a filtered list of tasks in table format.
 - `pending` — tasks not yet elaborated
 - `elaborated` — tasks researched but not started
 - `in-progress` — tasks currently being worked on
+- `review` — tasks with execution complete, awaiting review
 - `completed` — archived tasks
 
 **By type:**
@@ -43,12 +44,12 @@ Display a filtered list of tasks in table format.
 
 2. **Parse filter**
    - If `$ARGUMENTS` provided, validate it's a known filter
-   - If invalid filter: "Unknown filter '[filter]'. Valid filters: pending, elaborated, in-progress, completed, bug, feature, refactor, chore, all"
+   - If invalid filter: "Unknown filter '[filter]'. Valid filters: pending, elaborated, in-progress, review, completed, bug, feature, refactor, chore, all"
    - If no filter: default to showing all non-completed
 
 3. **Scan task files**
 
-   **For non-completed statuses (pending, elaborated, in-progress):**
+   **For non-completed statuses (pending, elaborated, in-progress, review):**
    - Scan `.plans/pending/*.md`
 
    **For completed:**
@@ -65,6 +66,12 @@ Display a filtered list of tasks in table format.
    - Status (from `**Status:**` line)
    - Created (from `**Created:**` line)
    - Completed (from `**Completed:**` line, if present)
+   - **Checkbox progress (for elaborated/in-progress tasks):**
+     - Count `- [ ]` and `- [x]` lines in How section
+     - Calculate: completed/total
+   - **Issue count (if Issues section present):**
+     - Count `- [ ]` lines in Issues section
+     - Store as `issue_count`
 
 5. **Apply filter**
    - Status filter: match Status field
@@ -73,21 +80,28 @@ Display a filtered list of tasks in table format.
    - Default (no arg): exclude completed status
 
 6. **Sort results**
-   - By status priority: in-progress > elaborated > pending > completed
+   - By status priority: in-progress > review > elaborated > pending > completed
    - Within status: by ID ascending
 
 7. **Display as table**
    ```
    # Tasks [filter info]
 
-   | ID | Title | Type | Status | Created |
-   |----|-------|------|--------|---------|
-   | 001 | Fix login timeout bug | bug | in-progress | 2024-01-15 |
-   | 002 | Add dark mode support | feature | elaborated | 2024-01-16 |
-   | 003 | Refactor auth module | refactor | pending | 2024-01-17 |
+   | ID | Title | Type | Status | Progress | Created |
+   |----|-------|------|--------|----------|---------|
+   | 001 | Fix login timeout bug | bug | in-progress | 3/5, 2 issues | 2024-01-15 |
+   | 002 | Add dark mode support | feature | elaborated | 0/4 | 2024-01-16 |
+   | 003 | Refactor auth module | refactor | pending | — | 2024-01-17 |
 
    Total: X tasks
    ```
+
+   **Progress column:**
+   - For pending tasks: show `—` (no steps defined yet)
+   - For elaborated tasks: show `0/N` (N steps defined, none started)
+   - For in-progress tasks: show `X/N` (X completed of N total)
+   - For review tasks: show `X/N` (same as in-progress)
+   - **If task has unresolved issues:** append `, N issues` (e.g., `3/5, 2 issues`)
 
    For completed filter, include Completed date instead of Created:
    ```

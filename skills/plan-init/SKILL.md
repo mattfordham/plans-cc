@@ -29,6 +29,8 @@ Initialize the `.plans/` directory structure for lightweight task management.
      config.json
      pending/
      completed/
+     ideas/
+     state/
    ```
 
 3. **Write CONTEXT.md template**
@@ -97,7 +99,9 @@ Initialize the `.plans/` directory structure for lightweight task management.
    ```json
    {
      "git_commits": false,
-     "next_id": 1
+     "next_id": 1,
+     "idea_next_id": 1,
+     "segment_threshold": 4
    }
    ```
 

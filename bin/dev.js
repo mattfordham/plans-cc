@@ -4,9 +4,12 @@ const fs = require("fs");
 const path = require("path");
 
 const SKILLS_PREFIX = "plan-";
+const AGENTS_PREFIX = "plan-";
 const HOME = require("os").homedir();
 const TARGET_DIR = path.join(HOME, ".claude", "skills");
 const SOURCE_DIR = path.join(__dirname, "..", "skills");
+const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
+const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
 
 function main() {
   console.log("\n  plans-cc dev — Symlinking skills for development\n");
@@ -44,7 +47,41 @@ function main() {
     console.log(`    ${TARGET_DIR}/${skill} -> ${SOURCE_DIR}/${skill}`);
   }
 
-  console.log("\n  Edits to skills/ are now live. No reinstall needed.\n");
+  // Symlink agents
+  if (fs.existsSync(AGENTS_SOURCE)) {
+    // Ensure agents directory exists
+    if (!fs.existsSync(AGENTS_TARGET)) {
+      fs.mkdirSync(AGENTS_TARGET, { recursive: true });
+    }
+
+    // Remove existing plan-* agents (real files or symlinks)
+    const existingAgents = fs.readdirSync(AGENTS_TARGET).filter((f) => f.startsWith(AGENTS_PREFIX) && f.endsWith(".md"));
+    for (const file of existingAgents) {
+      fs.unlinkSync(path.join(AGENTS_TARGET, file));
+    }
+    if (existingAgents.length > 0) {
+      console.log(`  Removed ${existingAgents.length} existing plan-* agent(s)`);
+    }
+
+    // Symlink agents
+    const agentFiles = fs.readdirSync(AGENTS_SOURCE).filter((f) => f.endsWith(".md"));
+    for (const file of agentFiles) {
+      fs.symlinkSync(
+        path.join(AGENTS_SOURCE, file),
+        path.join(AGENTS_TARGET, file)
+      );
+    }
+
+    if (agentFiles.length > 0) {
+      console.log(`  Symlinked ${agentFiles.length} agent(s):\n`);
+      for (const file of agentFiles.sort()) {
+        console.log(`    ${AGENTS_TARGET}/${file} -> ${AGENTS_SOURCE}/${file}`);
+      }
+      console.log();
+    }
+  }
+
+  console.log("  Edits to skills/ and agents/ are now live. No reinstall needed.\n");
 }
 
 main();

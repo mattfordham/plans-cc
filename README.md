@@ -1,6 +1,6 @@
 # plans-cc
 
-Lightweight task management for Claude Code, implemented as a set of skills.
+Lightweight task management for Claude Code, implemented as a set of skills
 
 ## Overview
 
@@ -33,7 +33,6 @@ Then start capturing and working on tasks:
 ```
 /plan-capture Fix the login timeout bug
 /plan-elaborate 1
-/plan-start 1
 /plan-execute 1
 /plan-complete 1
 ```
@@ -47,8 +46,7 @@ Then start capturing and working on tasks:
 | `/plan-context` | Update project context (tech stack, patterns) |
 | `/plan-capture [description]` | Quick-capture a new task |
 | `/plan-elaborate <id>` | Research and flesh out a task |
-| `/plan-start <id>` | Begin working on a task |
-| `/plan-execute <id>` | Continue work on active task |
+| `/plan-execute <id>` | Start or continue work on a task |
 | `/plan-complete <id>` | Mark task done and archive it |
 | `/plan-status` | Dashboard of all work |
 | `/plan-list [filter]` | List tasks with optional filter |
@@ -57,10 +55,10 @@ Then start capturing and working on tasks:
 ### Task Lifecycle
 
 ```
-capture → elaborate → start → execute → complete
-   │          │         │        │         │
-pending   elaborated  in-progress  ...   completed
-                                          (archived)
+capture → elaborate → execute → complete
+   │          │          │         │
+pending   elaborated  in-progress  completed
+                                   (archived)
 ```
 
 ### File Structure
@@ -150,7 +148,6 @@ Skills are declarative, not executable code. Test manually:
 3. Walk through the full lifecycle:
    - `/plan-capture Test task`
    - `/plan-elaborate 1`
-   - `/plan-start 1`
    - `/plan-execute 1`
    - `/plan-complete 1`
 4. Verify files in `.plans/` are created and updated correctly

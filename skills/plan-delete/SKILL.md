@@ -54,11 +54,17 @@ Permanently delete a task from the system.
    [What section content]
    ```
 
-5. **Warn for in-progress tasks**
+5. **Warn for in-progress or review tasks**
    If status is `in-progress`:
    ```
    Warning: Task #NNN is currently in progress!
    Any uncommitted work will be lost.
+   ```
+
+   If status is `review`:
+   ```
+   Warning: Task #NNN is in review and has a branch with unmerged changes!
+   The branch will remain but the task tracking will be lost.
    ```
 
 6. **Confirm deletion**
@@ -96,6 +102,7 @@ Permanently delete a task from the system.
 
 - **No ID argument**: List all tasks (both pending and completed) and ask
 - **In-progress task**: Extra warning about losing work
+- **Review task**: Warning about unmerged branch changes
 - **Completed task**: Note that history entry will also be removed
 - **Task not found**: Error message
 - **User cancels**: "Deletion cancelled." — no changes made
