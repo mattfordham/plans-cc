@@ -52,8 +52,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and resolve arguments**
    - Check for worktree keywords/phrases (see Arguments section) → store as `worktree_mode` flag (true/false). If true, also set `branch_mode = true`.
@@ -293,11 +293,13 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    **Identify observation steps**
 
-   An observation step is any step requiring the user to run, view, or manually verify something that can't be confirmed by automated means. Indicators:
-   - Logging/debug/console/print output the user needs to read
-   - Running the app and observing behavior
-   - Visual or behavioral verification (UI, browser, terminal)
-   - Phrases like "verify that", "check that", "should see", "should show", "observe", "look for", "confirm visually" referring to manual observation
+   An observation step is any step requiring the user to run, view, or manually verify something that can't be confirmed by automated means. Detection (in priority order):
+   1. **Explicit marker:** Steps tagged with `👁` prefix (from elaboration tagging) — always treated as observation steps
+   2. **Keyword heuristics** (fallback for untagged steps):
+      - Logging/debug/console/print output the user needs to read
+      - Running the app and observing behavior
+      - Visual or behavioral verification (UI, browser, terminal)
+      - Phrases like "verify that", "check that", "should see", "should show", "observe", "look for", "confirm visually" referring to manual observation
    - **NOT** steps about writing automated tests or assertions — those are normal implementation steps
 
    **Segmentation rules**
@@ -309,6 +311,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
      - If an observation step falls in the middle of what would be a segment, split the segment so the observation step is last in the first part
      - Multiple consecutive observation steps → each ends its own segment
      - An observation step that is first in remaining steps → include 1-2 preceding non-observation steps if available, or create a single-step segment
+   - **Instrumentation dependency rule:** If a step adds instrumentation/logging/debugging AND a later step implements a fix or solution informed by that instrumentation, these steps MUST be in different segments with the instrumentation step ending its segment. This ensures a pause for observation between adding instrumentation and acting on its results — even if the instrumentation step wasn't explicitly tagged with `👁`.
 
 11. **Execute segments**
 

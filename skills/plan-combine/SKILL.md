@@ -22,8 +22,8 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse task IDs from arguments**
    - If no `$ARGUMENTS`, list pending tasks and use AskUserQuestion:

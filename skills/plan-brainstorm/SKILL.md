@@ -21,8 +21,8 @@ Facilitate exploratory idea discussions and capture them as synthesized document
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Create ideas directory if needed**
    - Check if `.plans/ideas/` exists

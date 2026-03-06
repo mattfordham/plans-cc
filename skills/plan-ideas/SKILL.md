@@ -19,8 +19,8 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments**
    - If `$ARGUMENTS` is numeric → treat as idea ID, go to detail mode (step 6)

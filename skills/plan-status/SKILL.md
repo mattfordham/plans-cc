@@ -15,8 +15,8 @@ Display a compact dashboard showing the current state of all tasks.
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found: "Not initialized. Run `/plan-init` to get started."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist: "Not initialized. Run `/plan-init` to get started."
 
 2. **Gather all tasks**
    For each task in `.plans/pending/`:

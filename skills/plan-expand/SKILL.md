@@ -22,8 +22,8 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and find idea file**
    - If no `$ARGUMENTS` provided, ask: "Which idea do you want to expand? (provide the idea ID)"

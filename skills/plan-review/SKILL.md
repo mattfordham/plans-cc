@@ -22,8 +22,8 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and resolve task ID**
    - Accept flexible ID formats: "1", "01", "001"
@@ -72,7 +72,30 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    - If branch doesn't exist: "Branch '[branch-name]' not found. It may have been deleted."
    - Checkout branch: `git checkout [branch-name]`
 
-6. **Display review summary**
+6. **Rebase onto latest main**
+   - Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
+   - Fetch latest: `git fetch origin [default-branch]`
+   - Check if rebase is needed: `git merge-base --is-ancestor origin/[default-branch] HEAD`
+     - If exit code 0: branch is already up to date, skip rebase
+     - If exit code 1: rebase is needed
+   - Run rebase: `git rebase origin/[default-branch]`
+   - **If rebase succeeds:** inform the user: "Rebased onto latest `[default-branch]` — review reflects current state."
+   - **If rebase conflicts:**
+     - Abort the rebase: `git rebase --abort`
+     - Inform the user:
+       ```
+       ⚠ Rebase onto [default-branch] has conflicts. The branch is unchanged.
+
+       Conflicting files:
+       [list conflicting files from rebase output]
+
+       You can:
+       - Resolve conflicts manually and re-run `/plan-review NNN`
+       - `/plan-execute NNN` to continue working and resolve conflicts there
+       ```
+     - **Stop here** — do not proceed to the review summary
+
+7. **Display review summary**
 
    Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
 
@@ -115,3 +138,5 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 - **Task is pending/elaborated**: Error — must execute first
 - **Already on the task's branch**: Skip checkout, just display the summary
 - **Merge conflicts during checkout**: Report the conflict and suggest resolving manually
+- **Rebase conflicts**: Abort rebase, show conflicting files, and stop — don't show a stale review
+- **Already up to date with main**: Skip rebase, proceed to review summary

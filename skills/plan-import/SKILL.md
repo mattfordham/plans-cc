@@ -22,8 +22,8 @@ Import a brainstorming or planning markdown document and split it into multiple 
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments**
    - `$ARGUMENTS` should contain a file path
