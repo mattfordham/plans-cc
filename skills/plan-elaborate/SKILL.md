@@ -53,8 +53,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 ## Steps
 
 1. **Verify initialization**
-   - Check for `.plans/config.json`
-   - If not found, error: "Not initialized. Run `/plan-init` first."
+   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
+   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and resolve arguments**
    - Check for skip keywords/phrases (see Arguments section) → store as `skip_mode` flag (true/false)
@@ -220,6 +220,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        ...
        ```
 
+       **Tag observation steps** with `👁` (see tagging rules below).
+
     3. **Auto-generate Verification** based on task type:
        - Bug: "Verify the issue no longer occurs; existing tests pass"
        - Feature: "Verify the new functionality works as expected; tests pass"
@@ -308,12 +310,13 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     ```markdown
     ## How
     - [ ] Step 1: Description of first task
-    - [ ] Step 2: Description of second task
+    - [ ] 👁 Step 2: Add logging and run app to observe output
     - [ ] Step 3: Description of third task
     ```
     - Each checkbox should be a concrete, completable action
     - Aim for 3-7 checkboxes per task (break down large tasks, combine trivial ones)
     - Include file paths where relevant: `- [ ] Update timeout handling in \`src/auth/login.ts\``
+    - **Tag observation steps** with `👁` (see tagging rules below)
 
     **Verification section:**
 
@@ -399,6 +402,30 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        - Do NOT reset any checkboxes
        - Only add to or refine existing content
 
+    ---
+
+    ### Observation Step Tagging Rules
+
+    When generating How checkboxes (in any path above), tag steps with `👁` if they require user observation:
+
+    ```markdown
+    - [ ] 👁 Step N: Add request logging and run the app to observe output
+    ```
+
+    **Tag with `👁` when:**
+    - The step requires the user to manually run, view, or verify something the agent cannot observe (mobile simulator, browser UI, terminal output from a running app, visual appearance, etc.)
+    - The step adds instrumentation/logging/debugging where the output requires running the app in a way the agent can't (e.g., mobile simulator, browser, GUI app)
+
+    **Do NOT tag when:**
+    - The agent can verify the result itself (running tests, checking file contents, CLI output from build commands)
+    - The step writes automated tests or assertions
+
+    **Instrumentation dependency rule:** If a step adds instrumentation/logging solely to inform a subsequent fix step, place them in separate checkboxes so execution can pause between them. Note this relationship in the step description, e.g.:
+    ```markdown
+    - [ ] 👁 Step 3: Add request logging to track API response times (observation needed before optimization)
+    - [ ] Step 4: Optimize slow endpoints based on logging results
+    ```
+
 12. **Validate How steps against codebase**
 
     After generating the How section, validate each step:
@@ -472,6 +499,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     Next: /plan-execute NNN to start working
     ```
 
+    **STOP after displaying this confirmation. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file and re-display this confirmation — but do NOT start executing the task.
+
 16. **Display multi-task summary**
 
     Only shown when multiple tasks were processed. If only one task was processed, skip this step entirely.
@@ -490,6 +519,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     Next: /plan-execute 1 (or /plan-execute 3)
     ```
+
+    **STOP after displaying this summary. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file(s) and re-display this summary — but do NOT start executing any task.
 
 ## Edge Cases
 
@@ -512,3 +543,4 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 - **Description with skip mode**: Auto-capture then elaborate in skip mode (e.g., `/plan-elaborate Fix login bug skip`)
 - **Auto-capture failure**: Print error and stop — do not attempt elaboration without a task file
 - **Description that looks like numbers**: If ALL tokens are numeric, they're IDs, not a description. "42" is ID 042. "Fix bug 42" is a description (has non-numeric tokens).
+- **User responds with tweaks after elaboration**: Apply the requested changes to the task file (update How steps, Why, Verification, etc.), re-display the confirmation, and STOP. Do not proceed to execution — the user must invoke `/plan-execute` explicitly.
