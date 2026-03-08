@@ -1,6 +1,6 @@
 ---
 name: plan-issue
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[id] <description>"
 allowed-tools:
   - Read

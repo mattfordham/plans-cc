@@ -1,6 +1,6 @@
 ---
 name: plan-show
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<id>"
 allowed-tools:
   - Read

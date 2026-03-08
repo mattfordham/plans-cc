@@ -1,6 +1,6 @@
 ---
 name: plan-status
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools:
   - Read
   - Bash

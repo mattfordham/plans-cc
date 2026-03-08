@@ -1,6 +1,6 @@
 ---
 name: plan-list
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[filter: pending|elaborated|in-progress|review|completed|bug|feature|refactor|chore|all]"
 allowed-tools:
   - Read

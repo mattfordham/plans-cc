@@ -1,6 +1,6 @@
 ---
 name: plan-capture
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[description] [and elaborate|execute|go]"
 allowed-tools:
   - Read

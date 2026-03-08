@@ -67,7 +67,7 @@ Longer explanation of what this skill does.
 |-------|----------|-------------|
 | `name` | Yes | Skill name (must match directory name) |
 | `description` | Yes | Short description for skill picker |
-| `disable-model-invocation` | Yes | Always `true` — skills are user-invoked only |
+| `disable-model-invocation` | Yes | `true` for most skills. `false` for low-risk read-only or capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show) |
 | `allowed-tools` | No | Tools the skill can use |
 | `argument-hint` | No | Shows in skill picker (e.g., `"<id>"`, `"[description]"`) |
 
