@@ -1,7 +1,7 @@
 ---
 name: plan-execute
 disable-model-invocation: true
-argument-hint: "<id|description> [branch|worktree]"
+argument-hint: "<id|description> [steps N-M] [branch|worktree]"
 allowed-tools:
   - Read
   - Write
@@ -24,7 +24,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
 ## Arguments
 
-- `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a branch keyword
+- `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a branch keyword and/or step filter
 
 **Parsing rules:**
 - **Worktree keyword detection** (first) — set `worktree_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `worktree`, `use worktree`, `with worktree`
@@ -32,12 +32,34 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
   - `worktree_mode = true` implies `branch_mode = true` (worktrees always use branches)
 - **Branch keyword detection** (second) — set `branch_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `branch`, `get branch`, `use branch`, `yes branch`
   - Strip branch keywords from `$ARGUMENTS` before further parsing
-- **Determine argument type** — after removing worktree/branch tokens, examine what remains:
+- **Step filter detection** (third) — check for step selection directives. Set `step_filter` if found, and strip from `$ARGUMENTS` before further parsing.
+
+  **Explicit step references** (matched against argument string, case-insensitive):
+  - `step N` or `steps N` → single step N (e.g., `step 3`)
+  - `steps N-M` → step range N through M inclusive (e.g., `steps 3-5`)
+  - `steps N,M,P` → specific steps N, M, P (e.g., `steps 1,3,5`)
+  - `steps N-M,P` → mixed range and individual (e.g., `steps 1-3,5`)
+  - Store as `step_filter = { type: "explicit", steps: [list of step numbers] }`
+
+  **Natural language step references** (matched against remaining argument string after worktree/branch stripping, case-insensitive):
+  - Detect phrases that describe a subset of steps rather than a task description. Look for patterns like:
+    - Ordinal/positional: `first N steps`, `last N steps`, `next N steps`, `first batch`, `last batch`, `next batch`
+    - Descriptive/topical: `the diagnostic steps`, `the setup steps`, `the testing steps`, `the refactoring steps`, `the UI steps`
+    - Relative: `up to step N`, `from step N`, `starting at step N`, `everything after step N`
+  - These phrases require the task to already exist (they reference its How steps), so they **cannot** coexist with auto-capture descriptions
+  - Store as `step_filter = { type: "natural", query: "[the matched phrase]" }`
+  - The query is resolved later in step 10 after reading the task's How steps
+
+  **Disambiguation:** If the argument contains both a task ID and additional non-numeric text, check whether the text matches a step filter pattern before assuming it's a task description. For example, `1 first 3 steps` → task ID 001 with step filter, NOT a description. The presence of a leading numeric token followed by step-filter language should be parsed as ID + filter.
+
+- **Determine argument type** — after removing worktree/branch/step-filter tokens, examine what remains:
   - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits. Deduplicate.
   - If ANY remaining token is non-numeric → the entire remaining string (including any numbers) is a **task description** for auto-capture. Set `auto_capture = true`.
   - If nothing remains → no IDs and no description (will prompt for task selection)
 - IDs and branch/worktree keywords coexist freely.
 - A description and branch/worktree keywords coexist freely.
+- Step filters coexist with IDs and branch/worktree keywords, but NOT with auto-capture descriptions.
+- If `step_filter` is set and `auto_capture` would also be true, this is ambiguous — treat the entire string as a description (auto-capture wins). Step filters only make sense for existing tasks.
 
 **Examples:**
 - `/plan-execute 1` → execute task 1
@@ -48,6 +70,13 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - `/plan-execute Fix login timeout bug` → auto-capture, auto-elaborate, then execute
 - `/plan-execute Fix login bug branch` → auto-capture, auto-elaborate, then execute with git branch
 - `/plan-execute Fix login bug use worktree` → auto-capture, auto-elaborate, execute in worktree
+- `/plan-execute 1 steps 3-5` → execute only steps 3, 4, 5 of task 1
+- `/plan-execute 1 step 3` → execute only step 3 of task 1
+- `/plan-execute 1 steps 1,3,5` → execute steps 1, 3, and 5 of task 1
+- `/plan-execute 1 first 3 steps` → execute the first 3 steps of task 1
+- `/plan-execute 1 the diagnostic steps` → execute steps whose descriptions relate to diagnostics
+- `/plan-execute 1 next batch` → execute the next segment of uncompleted steps
+- `/plan-execute 1 last 2 steps` → execute the last 2 steps of task 1
 
 ## Steps
 
@@ -60,9 +89,14 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    - Strip worktree keywords from `$ARGUMENTS`
    - Check for branch keywords/phrases (see Arguments section) → store as `branch_mode` flag (true/false)
    - Strip branch keywords from `$ARGUMENTS`
+   - Check for step filter (see Arguments section) → store as `step_filter` (or null if none found)
+     - Check explicit patterns first: `steps? N`, `steps N-M`, `steps N,M,P`, `steps N-M,P`
+     - Then check natural language patterns: `first/last/next N steps`, `first/last/next batch`, `the [topic] steps`, `up to step N`, `from step N`, `starting at step N`, `everything after step N`
+     - Strip matched step filter text from `$ARGUMENTS`
    - Examine remaining tokens:
      - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits, deduplicate → store as `task_ids` list. Set `auto_capture = false`.
-     - If ANY remaining token is non-numeric → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
+     - If ANY remaining token is non-numeric AND `step_filter` is NOT set → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
+     - If ANY remaining token is non-numeric AND `step_filter` IS set → ambiguous. Discard `step_filter`, treat entire original remaining string as a description. Set `auto_capture = true`. (Step filters only work with existing task IDs.)
      - If nothing remains → `task_ids` is empty, `auto_capture = false`
 
 3. **Auto-capture and auto-elaborate** (only if `auto_capture` is true)
@@ -291,6 +325,31 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    Never write code or make changes directly — always delegate to the executor agent.
    This ensures fresh context and consistent execution quality.
 
+   **Resolve step filter** (if `step_filter` is set)
+
+   Parse all How section checkboxes into a numbered list (step 1, step 2, etc. based on order in the file).
+
+   - **If `step_filter.type == "explicit"`:** Use the step numbers directly. Validate they exist (1 ≤ N ≤ total steps). Error if any are out of range: `"Step N is out of range (task has M steps)."`
+   - **If `step_filter.type == "natural"`:** Resolve the query against the step list:
+     - `first N steps` → steps 1 through N
+     - `last N steps` → steps (total-N+1) through total
+     - `next N steps` → starting from first unchecked step, take N steps
+     - `first batch` / `next batch` → the next segment of unchecked steps (use normal segmentation rules to determine segment boundaries, then select the first pending segment)
+     - `last batch` → the final segment per normal segmentation rules
+     - `the [topic] steps` → match step descriptions containing the topic keyword(s). E.g., `the diagnostic steps` matches steps with "diagnos" in their description; `the setup steps` matches "setup", "configure", "initialize", "scaffold", etc. Use fuzzy keyword matching — the topic words should appear in or relate to the step description. If no steps match, error: `"No steps matching '[topic]' found in task #NNN."`
+     - `up to step N` → steps 1 through N
+     - `from step N` / `starting at step N` → steps N through total
+     - `everything after step N` → steps (N+1) through total
+
+   After resolving, store as `filtered_steps` (a list of step numbers to execute). Only these steps will be included in segmentation — all other steps are skipped. Already-checked steps within the filter are also skipped (only unchecked steps are executed).
+
+   If `step_filter` is null (not set), behavior is unchanged — all unchecked steps are included as before.
+
+   Show filter summary when active:
+   ```
+   Step filter: executing steps [list] of [total]
+   ```
+
    **Identify observation steps**
 
    An observation step is any step requiring the user to run, view, or manually verify something that can't be confirmed by automated means. Detection (in priority order):
@@ -304,6 +363,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    **Segmentation rules**
 
+   - If `filtered_steps` is set, only include those steps (that are still unchecked) in segmentation. Otherwise, include all unchecked steps.
    - Group remaining steps into segments of 3-4 steps each
    - Example: 7 steps → segments of 4, 3
    - Example: 2 steps → single segment of 2
@@ -756,3 +816,11 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - **User repeatedly says "Something's wrong"**: After 2 failed fix attempts, suggest manual investigation or `/plan-issue` and continue to the next segment
 - **"Skip" for CI/non-interactive contexts**: The Skip option allows users in non-interactive or CI environments to bypass observation steps without blocking execution
 - **Temptation to run full suite "just to be safe"**: Don't. Run only targeted tests for files you changed. If you're unsure which test files are relevant, run none rather than the full suite.
+- **Step filter with all steps already complete**: "All filtered steps are already complete. Nothing to execute."
+- **Step filter out of range**: "Step N is out of range (task has M steps)."
+- **Step filter with no matching topic**: "No steps matching '[topic]' found in task #NNN."
+- **Step filter with auto-capture description**: Ambiguous — discard filter, treat as description (auto-capture wins)
+- **Step filter with multiple task IDs**: The same filter applies to each task independently (e.g., `/plan-execute 1 3 steps 2-4` runs steps 2-4 of task 1, then steps 2-4 of task 3)
+- **Step filter "next batch" with no unchecked steps**: "All steps are already complete. Nothing to execute."
+- **Step filter on pending (un-elaborated) task**: Filter is applied after auto-elaboration completes — the How steps must exist first
+- **Step filter skips steps with dependencies**: Steps are executed as requested — the user is responsible for ensuring earlier steps are complete or unnecessary. Show a note: "Note: Skipping steps [list] — ensure their work is already done."
