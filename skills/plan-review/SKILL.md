@@ -4,11 +4,14 @@ disable-model-invocation: true
 argument-hint: "<id>"
 allowed-tools:
   - Read
+  - Write
+  - Edit
   - Bash
   - Glob
   - Grep
+  - Agent
   - AskUserQuestion
-description: Review a task's changes — checkout branch and show diff summary
+description: Review a task's changes — checkout branch, walk through deferred observations, and show diff summary
 ---
 
 # plan-review
@@ -95,7 +98,41 @@ Review a task that has completed execution (typically via worktree workflow). Ch
        ```
      - **Stop here** — do not proceed to the review summary
 
-7. **Display review summary**
+7. **Walk through deferred observations**
+
+   - Read state file (`.plans/state/NNN-state.md`) if it exists
+   - Check the Observations section for any `⏳ Deferred to review` entries
+   - If no deferred observations found, skip to step 8
+
+   For each deferred observation (in order):
+
+   1. Find the corresponding step description in the task file's How section
+   2. **MUST use `AskUserQuestion` tool:**
+      - Header: `"Observation"`
+      - Question: Quote the observation step description, tell the user the implementation is in place, and ask them to perform the observation and report what they see. **If the entry contains ⚠ (dependency flag)**, prominently note: "Later steps were built on plan assumptions without verifying this observation — please check carefully."
+      - Options:
+        1. "Looks good" (description: "The observation matches expectations — continue")
+        2. "Something's wrong" (description: "The observation doesn't match — describe what you see")
+        3. "Skip" (description: "Continue without verifying this step")
+      - **On "Looks good":**
+        - Update state file Observations section: replace `⏳ Deferred to review` with `✓ User confirmed`
+        - Continue to next observation
+      - **On "Something's wrong":**
+        - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
+        - Update state file Observations section: replace entry with `✗ [user's observation]`
+        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation and the current branch context in the prompt
+        - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
+        - If user says "Something's wrong" again after 2 fix attempts, suggest:
+          ```
+          Two fix attempts haven't resolved this. Consider investigating manually,
+          or run `/plan-issue` to capture this for a focused debugging session.
+          ```
+          Then continue to next observation (don't block indefinitely)
+      - **On "Skip":**
+        - Update state file Observations section: replace `⏳ Deferred to review` with `⊘ Skipped`
+        - Continue to next observation
+
+8. **Display review summary**
 
    Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
 
@@ -139,4 +176,7 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 - **Already on the task's branch**: Skip checkout, just display the summary
 - **Merge conflicts during checkout**: Report the conflict and suggest resolving manually
 - **Rebase conflicts**: Abort rebase, show conflicting files, and stop — don't show a stale review
-- **Already up to date with main**: Skip rebase, proceed to review summary
+- **Already up to date with main**: Skip rebase, proceed to observations/review summary
+- **No state file**: Skip observation walkthrough — no deferred observations to process
+- **No deferred observations in state file**: Skip observation walkthrough, proceed to review summary
+- **Fix sub-agent changes during observation**: Commit fixes to the branch before continuing to next observation

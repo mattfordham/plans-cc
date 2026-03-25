@@ -180,6 +180,10 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
      - If task has `**Worktree:**` field:
        - If the path exists: set execution working directory to that path, set `worktree_mode = true`
        - If the path doesn't exist: warn "Worktree path no longer exists. Continuing in current directory.", remove `**Worktree:**` line from task file
+     - **Multi-repo resume** (if task has both `**Worktree:**` and `**Repos:**` fields):
+       - Set `multi_repo_mode = true`
+       - Parse `**Repos:**` field to restore `relevant_repos` list
+       - Existing path-exists check applies as-is
 
 7. **If starting (pending/elaborated status):**
 
@@ -209,7 +213,16 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    c. **Ask about git branch** (if in a git repo)
       - Check if current directory is a git repository: `git rev-parse --git-dir 2>/dev/null`
-      - If not a git repo, skip this step silently
+      - If not a git repo:
+        - Scan for sub-repos: find immediate subdirectories with `.git` directories (`find . -maxdepth 2 -name .git -type d`)
+        - If sub-repos found: set `multi_repo_mode = true`, store list of sub-repo directory names
+        - If none found: skip this step silently (not a git project)
+      - **If `multi_repo_mode` is true:**
+        - Determine branch type and generate suggested branch name as below (same logic)
+        - Follow the same branch question / auto-accept flow as below
+        - Do NOT create branches yet — defer to after step 7d determines `relevant_repos`
+        - After step 7d completes: create the branch in each relevant sub-repo: `cd [sub-repo] && git checkout -b [branch-name]`
+        - Branch metadata format: `**Branch:** [branch-name] (multi-repo: [comma-separated repo names])`
       - Determine branch type from task type:
         - `bug` → "fix"
         - `feature` → "feature"
@@ -230,7 +243,19 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
         - Add branch metadata to task file: `**Branch:** [branch-name]` (below the Status line)
       - If user selects "No branch": continue without creating branch (also disables `worktree_mode`)
 
+   d. **Determine relevant sub-repos** (only if `multi_repo_mode` is true)
+      - Parse the task's How section and Impact Scope section (if present) for file paths
+      - Match path prefixes to sub-repo directory names (e.g., a path like `repo-a/src/main.js` matches sub-repo `repo-a`)
+      - If matches found: store as `relevant_repos`
+      - If no matches found: use `AskUserQuestion` to ask the user:
+        - Header: "Multi-repo project"
+        - Question: "Which repositories are relevant to this task?"
+        - Options: list each discovered sub-repo name + "All of them"
+      - Store final list as `relevant_repos`
+
    e. **Create worktree** (only if `worktree_mode` is true and branch was created in step 7c)
+
+      **Single-repo path** (when `multi_repo_mode` is false):
       1. Get project root: `git rev-parse --show-toplevel`
       2. Check not already in a worktree: `git rev-parse --is-inside-work-tree` and `git rev-parse --show-superproject-working-tree`
          - If already in a worktree: warn "Already inside a worktree. Falling back to normal branch mode.", set `worktree_mode = false`, create branch with `git checkout -b [branch-name]` instead, and skip remaining worktree steps
@@ -242,6 +267,36 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       5. Symlink shared .plans/: `ln -s [project-root]/.plans [worktree-path]/.plans`
       6. Add metadata to task file: `**Worktree:** [absolute-worktree-path]` (below the Branch line)
       7. Set execution working directory to the worktree path for all subsequent steps
+
+      **Multi-repo path** (when `multi_repo_mode` is true):
+
+      Creates a unified worktree directory that mirrors the parent layout:
+      ```
+      parent/
+        .worktrees/
+          NNN-slug/              ← execution root
+            repo-a/ → repo-a/.worktrees/NNN-slug
+            repo-b/ → repo-b/.worktrees/NNN-slug
+            shared-config/ → ../../shared-config    (non-git dirs symlinked)
+            .plans/ → ../../.plans
+        repo-a/.worktrees/NNN-slug/   ← actual git worktree
+        repo-b/.worktrees/NNN-slug/   ← actual git worktree
+      ```
+
+      Steps:
+      1. Create parent-level worktree directory: `mkdir -p .worktrees/NNN-slug`
+      2. For each repo in `relevant_repos`:
+         - Create per-repo worktree: `cd [repo] && git worktree add .worktrees/NNN-slug -b [branch-name]`
+         - Symlink into parent worktree dir: `ln -s [absolute-path-to-repo]/.worktrees/NNN-slug .worktrees/NNN-slug/[repo-name]`
+      3. Symlink non-git subdirectories into worktree dir: for each immediate subdirectory that is NOT a git repo and NOT `.worktrees`, create `ln -s ../../[dir-name] .worktrees/NNN-slug/[dir-name]`
+      4. Symlink `.plans/`: `ln -s ../../.plans .worktrees/NNN-slug/.plans`
+      5. Ensure `.worktrees/` is in `.gitignore` for each relevant repo AND in the parent directory's `.gitignore`:
+         - For each repo: read `[repo]/.gitignore`, append `.worktrees/` if not present
+         - For parent: read `.gitignore`, append `.worktrees/` if not present
+      6. Add metadata to task file:
+         - `**Worktree:** [absolute-path-to-.worktrees/NNN-slug]` (below the Branch line)
+         - `**Repos:** [comma-separated list of relevant repo names]` (below the Worktree line)
+      7. Set execution working directory to `.worktrees/NNN-slug/` for all subsequent steps
 
    f. **Update task status**
       - Change Status from `pending` or `elaborated` to `in-progress`
@@ -443,7 +498,16 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       - Check off completed steps (`- [ ]` → `- [x]`)
       - Add to Changes section
 
-   6. **If segment's last step was an observation step — MUST pause for user feedback:**
+   6. **If segment's last step was an observation step:**
+
+      **If `worktree_mode` is true — defer observation to review:**
+      - Do NOT pause with AskUserQuestion
+      - Check if later steps depend on this observation (instrumentation dependency rule applied during segmentation, or step language like "based on what you saw", "if the output shows"):
+        - If dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review (⚠ later steps depend on this — agent proceeded with plan assumptions)`
+        - If not dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review`
+      - Continue to next segment
+
+      **If `worktree_mode` is false — MUST pause for user feedback:**
 
       **MUST use `AskUserQuestion` tool:**
       - Header: `"Observation"`
@@ -508,6 +572,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    **Type:** [type]
    **Branch:** [branch-name]
    [If worktree_mode]: **Worktree:** [worktree-path] — ALL work must happen inside this directory. Prefix all bash commands with `cd [worktree-path] &&`.
+   [If worktree_mode AND multi_repo_mode]: Worktree is a multi-repo project; sub-repos ([relevant_repos list]) are worktree copies, other directories are symlinked from the parent. All file paths work identically to the original layout.
 
    ## Project Context
    [Abbreviated CONTEXT.md content - tech stack, key patterns, testing info]
@@ -564,6 +629,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    **e. Worktree finish** (only if `worktree_mode` is true — runs after all segments complete)
 
+   **Single-repo path** (when `multi_repo_mode` is false):
+
    1. Commit any uncommitted changes in worktree:
       ```bash
       cd [worktree-path] && git add -A && git status --porcelain
@@ -584,6 +651,35 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
       Total: X/Y steps completed
       Branch: [branch-name] (ready for review)
+      Worktree: cleaned up
+
+      Next: /plan-review NNN
+      ```
+      **STOP after "Next:" line. Do not add any other instructions, suggestions, or testing advice. `/plan-review` handles branch checkout automatically — the user does NOT need to merge or checkout anything manually.**
+
+   **Multi-repo path** (when `multi_repo_mode` is true):
+
+   1. For each repo in `relevant_repos`:
+      - Check for changes: `cd .worktrees/NNN-slug/[repo-name] && git status --porcelain`
+      - If changes exist: `git add -A && git commit -m "plan: complete work on task #NNN - [title]"`
+      - Track which repos had changes in `repos_with_changes` list
+   2. Return to parent directory
+   3. For each repo in `relevant_repos`:
+      - Remove worktree: `cd [repo-name] && git worktree remove .worktrees/NNN-slug`
+        - If remove fails, force it: `git worktree remove --force .worktrees/NNN-slug`
+      - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
+   4. Remove parent-level worktree directory: `rm -rf .worktrees/NNN-slug`
+      - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
+   5. Set task status to `review` (not `in-progress`)
+   6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
+   7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`
+   8. Show worktree completion summary — print EXACTLY this format and STOP:
+      ```
+      All segments complete for task #NNN (worktree mode)
+
+      Total: X/Y steps completed
+      Branch: [branch-name] (ready for review)
+      Repos with changes: [repos_with_changes list, or "none"]
       Worktree: cleaned up
 
       Next: /plan-review NNN
@@ -824,3 +920,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - **Step filter "next batch" with no unchecked steps**: "All steps are already complete. Nothing to execute."
 - **Step filter on pending (un-elaborated) task**: Filter is applied after auto-elaboration completes — the How steps must exist first
 - **Step filter skips steps with dependencies**: Steps are executed as requested — the user is responsible for ensuring earlier steps are complete or unnecessary. Show a note: "Note: Skipping steps [list] — ensure their work is already done."
+- **Multi-repo detected**: Parent directory is not a git repo but contains sub-repos — creates per-repo worktrees with a unified parent directory that mirrors the original layout
+- **No matching sub-repos in task**: If task file paths don't match any sub-repo names, asks user which repos are relevant via `AskUserQuestion`
+- **Some repos have no changes after execution**: Only commits where changes exist; deletes empty branches in repos with no changes
+- **Single relevant repo in multi-repo mode**: Still uses parent-level worktree directory for consistency (unified layout is maintained)
+- **Mixed git/non-git subdirs**: Non-git directories are symlinked as-is into the worktree directory; only git repos get actual worktrees
