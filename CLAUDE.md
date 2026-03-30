@@ -15,7 +15,7 @@ plans-cc/
     install.js          # Installer (copies skills to ~/.claude/skills/)
     dev.js              # Development helper
   skills/
-    plan-*/SKILL.md     # Skill definitions (21 total)
+    plan-*/SKILL.md     # Skill definitions (22 total)
   .claude/
     settings.local.json # Local Claude settings
 ```
@@ -193,6 +193,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-status` | Dashboard of all work |
 | `/plan-list` | List tasks with filters |
 | `/plan-show` | Show detailed overview of a specific task |
+| `/plan-summary` | Summarize work completed in the current session |
 | `/plan-delete` | Remove a task |
 | `/plan-combine` | Merge multiple tasks into a single task |
 | `/plan-audit` | Audit task completeness — verify all affected files |

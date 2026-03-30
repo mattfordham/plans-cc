@@ -47,6 +47,7 @@ Display the complete command reference. Output the following help text:
 | `/plan-pick <idea-id>` | Pick high-value components from an idea to create tasks |
 | `/plan-expand <id>` | Expand an idea into actionable tasks |
 | `/plan-brainstorm [topic]` | Explore ideas through guided discussion |
+| `/plan-summary` | Summarize work completed in the current session |
 
 ### Task Lifecycle
 
@@ -103,6 +104,7 @@ capture → elaborate → execute (worktree) → review → complete
 **Check progress:**
 ```
 /plan-status                    # Full dashboard
+/plan-summary                   # What was done this session
 /plan-list bug                  # All bug tasks
 /plan-list in-progress          # What's active
 /plan-show 1                    # Deep dive on task #1
