@@ -77,11 +77,16 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 
 6. **Rebase onto latest main**
    - Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
-   - Fetch latest: `git fetch origin [default-branch]`
-   - Check if rebase is needed: `git merge-base --is-ancestor origin/[default-branch] HEAD`
+   - Fetch latest: `git fetch origin [default-branch]` (ignore errors if remote is unavailable)
+   - Determine the rebase target — pick whichever is further ahead between local and remote:
+     - If `origin/[default-branch]` exists: check `git merge-base --is-ancestor origin/[default-branch] [default-branch]`
+       - If exit code 0: local is equal or ahead — use `[default-branch]` (local) as the rebase target
+       - If exit code 1: remote is ahead — use `origin/[default-branch]` as the rebase target
+     - If `origin/[default-branch]` doesn't exist (no remote): use `[default-branch]` (local)
+   - Check if rebase is needed: `git merge-base --is-ancestor [rebase-target] HEAD`
      - If exit code 0: branch is already up to date, skip rebase
      - If exit code 1: rebase is needed
-   - Run rebase: `git rebase origin/[default-branch]`
+   - Run rebase: `git rebase [rebase-target]`
    - **If rebase succeeds:** inform the user: "Rebased onto latest `[default-branch]` — review reflects current state."
    - **If rebase conflicts:**
      - Abort the rebase: `git rebase --abort`
@@ -177,6 +182,7 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 - **Merge conflicts during checkout**: Report the conflict and suggest resolving manually
 - **Rebase conflicts**: Abort rebase, show conflicting files, and stop — don't show a stale review
 - **Already up to date with main**: Skip rebase, proceed to observations/review summary
+- **Local main ahead of origin**: Rebase onto local main (handles merged-but-not-pushed tasks)
 - **No state file**: Skip observation walkthrough — no deferred observations to process
 - **No deferred observations in state file**: Skip observation walkthrough, proceed to review summary
 - **Fix sub-agent changes during observation**: Commit fixes to the branch before continuing to next observation
