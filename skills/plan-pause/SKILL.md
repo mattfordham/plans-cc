@@ -67,13 +67,19 @@ Pause an in-progress task so you can switch to another task. Progress (checked b
      - Increment Elaborated count
    - Update "Last updated" date
 
-6. **Optional: Git commit**
-   - Read config.json for `git_commits` setting
-   - If true:
+6. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
      ```bash
      git add .plans/
      git commit -m "plan: pause #NNN - [title]"
      ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
 
 7. **Display confirmation**
 

@@ -80,7 +80,21 @@ Rebuild PROGRESS.md from actual task files and clean up orphaned state files, br
    - If "Delete all": `rm -rf .worktrees/[dir]` for each. If `.worktrees/` is now empty, remove it.
    - Report: "Deleted N orphaned worktree(s)" or "No orphaned worktrees"
 
-6. **Display summary**
+6. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: cleanup tracking files"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
+7. **Display summary**
 
    ```
    # Cleanup Complete

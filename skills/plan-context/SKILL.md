@@ -117,7 +117,21 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    [Preserve existing if present, otherwise: "_Anything else relevant_"]
    ```
 
-8. **Display summary**
+8. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: update project context"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
+9. **Display summary**
    Show what was detected and written:
    ```
    Updated .plans/CONTEXT.md

@@ -326,6 +326,20 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
         ```
       - Update Stats section counts
 
+   h. **Commit .plans/ changes**
+      - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+      - If not a git repo: skip silently
+      - Read `.plans/config.json` for `git_commits` setting
+      - If `git_commits` is not `true`: skip silently
+      - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+      - If no changes: skip silently
+      - Commit:
+        ```bash
+        git add .plans/
+        git commit -m "plan: start #NNN - [title]"
+        ```
+      - If commit fails (e.g. hooks): warn but do not fail the skill
+
 8. **Detect test suite**
    Check for an existing test suite by looking for:
 
@@ -838,7 +852,21 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
     - **If user says "stop" during batch:** end batch early, show summary (step 16)
     - **In single-task mode (or final task):** "Great! Run `/plan-complete NNN` to finalize."
 
-15. **Periodic status** (when pausing mid-execution)
+15. **Commit .plans/ changes** (after execution completes or pauses)
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: update tracking for #NNN - [title]"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+16. **Periodic status** (when pausing mid-execution)
 
     When pausing before all steps complete, show:
     ```
@@ -867,7 +895,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
     Continue with `/plan-execute MMM PPP` to resume remaining tasks.
     ```
 
-16. **Display multi-task summary**
+17. **Display multi-task summary**
 
     Only shown when multiple tasks were processed. If only one task was processed, skip this step entirely.
 

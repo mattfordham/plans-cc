@@ -475,7 +475,21 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     - Update Status to `elaborated`
     - Write the updated file
 
-15. **Display confirmation**
+15. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: elaborate #NNN - [title]"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+16. **Display confirmation**
 
     **If part of multi-task loop (multiple `task_ids`):** show abbreviated confirmation:
     ```
@@ -501,7 +515,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     **STOP after displaying this confirmation. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file and re-display this confirmation — but do NOT start executing the task.
 
-16. **Display multi-task summary**
+17. **Display multi-task summary**
 
     Only shown when multiple tasks were processed. If only one task was processed, skip this step entirely.
 

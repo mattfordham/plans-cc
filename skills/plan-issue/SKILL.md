@@ -87,7 +87,21 @@ Report an issue found during manual testing. Issues are attached to a task and m
 8. **Write updated task file**
    - Save changes to the task file
 
-9. **Display confirmation**
+9. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: add issue to #NNN"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
+10. **Display confirmation**
    ```
    Issue added to task #NNN: [description]
 

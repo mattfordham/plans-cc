@@ -137,7 +137,21 @@ Review a task that has completed execution (typically via worktree workflow). Ch
         - Update state file Observations section: replace `⏳ Deferred to review` with `⊘ Skipped`
         - Continue to next observation
 
-8. **Display review summary**
+8. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: review #NNN - [title]"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
+9. **Display review summary**
 
    Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
 

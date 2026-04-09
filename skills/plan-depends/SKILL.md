@@ -101,6 +101,21 @@ Manage task dependencies. Mark tasks as blocked by other tasks, view dependency 
      2 tasks with dependencies (1 fully resolved)
      ```
 
+7. **Commit .plans/ changes** (only for `add` or `clear` actions)
+   - If action is `show`: skip this step
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: update dependencies for #NNN"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
 ## Edge Cases
 
 - **Not initialized**: Error suggesting `/plan-init`

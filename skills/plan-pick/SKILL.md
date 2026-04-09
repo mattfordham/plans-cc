@@ -191,7 +191,21 @@ Analyze an idea, surface the highest-value components, and let the user select w
    - Update task counts in the Stats section
    - Add activity note: "Picked N components from idea #NNN"
 
-10. **Display summary**
+10. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: pick from idea #NNN"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+11. **Display summary**
 
     ```
     ## Picked from Idea #NNN: [Topic]

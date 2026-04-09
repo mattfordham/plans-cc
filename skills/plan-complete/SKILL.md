@@ -253,13 +253,19 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
       - If "Skip merge":
         - Note in completion message that branch was not merged
 
-15. **Optional: Git commit**
-    - Read config.json for `git_commits` setting
-    - If true:
+15. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
       ```bash
       git add .plans/
       git commit -m "plan: complete #NNN - [title]"
       ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
 
 16. **Display confirmation**
 

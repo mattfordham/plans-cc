@@ -110,7 +110,22 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    - Count pending tasks in `.plans/pending/`
    - Update the Stats section
 
-9. **Display confirmation**
+9. **Commit .plans/ changes**
+   - If `auto_elaborate` or `auto_execute` is true: skip this step (the chained skill will commit)
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: capture #NNN - [title]"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
+
+10. **Display confirmation**
 
    **If `auto_elaborate` is true** (about to chain into elaboration):
    ```
@@ -143,7 +158,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    Next: /plan-elaborate NNN to flesh it out
    ```
 
-10. **Auto-elaborate** (only if `auto_elaborate` is true)
+11. **Auto-elaborate** (only if `auto_elaborate` is true)
 
     Print: `--- Auto-elaborating task #NNN ---`
 
@@ -168,7 +183,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
     Next: /plan-execute NNN to start working
     ```
 
-11. **Auto-execute** (only if `auto_execute` is true)
+12. **Auto-execute** (only if `auto_execute` is true)
 
     Print: `--- Auto-executing task #NNN ---`
 

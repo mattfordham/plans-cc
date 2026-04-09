@@ -108,7 +108,21 @@ Permanently delete a task from the system.
    - If deleting a completed task, remove its row from the history table
    - (Optional: could leave it for audit trail — user preference)
 
-10. **Display confirmation**
+10. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: delete #NNN - [title]"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+11. **Display confirmation**
     ```
     Deleted task #NNN: [Title]
 

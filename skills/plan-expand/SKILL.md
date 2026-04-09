@@ -184,7 +184,21 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
     - Update task counts in the Stats section
     - Add activity note: "Expanded idea #NNN into N tasks"
 
-12. **Display summary**
+12. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: expand idea #NNN into [N] tasks"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+13. **Display summary**
     ```
     ## Expansion Complete
 

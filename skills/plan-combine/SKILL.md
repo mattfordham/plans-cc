@@ -196,7 +196,21 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
     - If any combined task was in "Up Next" section, update it
     - Update "Last updated" date
 
-13. **Display confirmation**
+13. **Commit .plans/ changes**
+    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+    - If not a git repo: skip silently
+    - Read `.plans/config.json` for `git_commits` setting
+    - If `git_commits` is not `true`: skip silently
+    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+    - If no changes: skip silently
+    - Commit:
+      ```bash
+      git add .plans/
+      git commit -m "plan: combine tasks into #NNN"
+      ```
+    - If commit fails (e.g. hooks): warn but do not fail the skill
+
+14. **Display confirmation**
     ```
     Combined N tasks into #[ID]: [New Title]
 

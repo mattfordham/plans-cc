@@ -98,7 +98,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
 6. **Write config.json**
    ```json
    {
-     "git_commits": false,
+     "git_commits": true,
      "next_id": 1,
      "idea_next_id": 1,
      "segment_threshold": 4
@@ -113,6 +113,20 @@ Initialize the `.plans/` directory structure for lightweight task management.
      - `/plan-context` to set up project context
      - `/plan-capture <description>` to capture your first task
      - `/plan-help` to see all commands
+
+8. **Commit .plans/ changes**
+   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
+   - If not a git repo: skip silently
+   - Read `.plans/config.json` for `git_commits` setting
+   - If `git_commits` is not `true`: skip silently
+   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+   - If no changes: skip silently
+   - Commit:
+     ```bash
+     git add .plans/
+     git commit -m "plan: initialize .plans/"
+     ```
+   - If commit fails (e.g. hooks): warn but do not fail the skill
 
 ## Edge Cases
 
