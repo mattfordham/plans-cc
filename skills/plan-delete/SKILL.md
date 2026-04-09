@@ -6,6 +6,9 @@ allowed-tools:
   - Read
   - Write
   - Bash
+  - Glob
+  - Grep
+  - AskUserQuestion
 description: Remove a task permanently
 ---
 
@@ -76,6 +79,24 @@ Permanently delete a task from the system.
 
 7. **Delete the file**
    - Remove the task file from pending/ or completed/
+
+7b. **Clean up state file**
+    - Check if `.plans/state/NNN-state.md` exists (where NNN is the zero-padded task ID)
+    - If it exists, delete it: `rm .plans/state/NNN-state.md`
+    - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
+
+7c. **Clean up associated branch**
+    - Check if the task had a `**Branch:**` field (from step 4)
+    - If no branch field, skip to step 8
+    - Check if the branch exists locally: `git branch --list [branch-name]`
+    - **If branch exists, use `AskUserQuestion` tool:**
+      - Header: "Branch"
+      - Question: "Branch '[branch-name]' exists for this task. Delete it?"
+      - Options:
+        1. "Delete branch" — Remove the local branch
+        2. "Keep branch" — Leave the branch as-is
+    - If "Delete branch": `git branch -D [branch-name]`
+    - If "Keep branch": no action
 
 8. **Update PROGRESS.md**
    - Update Stats section counts

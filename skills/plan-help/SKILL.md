@@ -48,6 +48,11 @@ Display the complete command reference. Output the following help text:
 | `/plan-expand <id>` | Expand an idea into actionable tasks |
 | `/plan-brainstorm [topic]` | Explore ideas through guided discussion |
 | `/plan-summary` | Summarize work completed in the current session |
+| `/plan-pause <id>` | Pause an in-progress task to switch context |
+| `/plan-search <query>` | Full-text search across all tasks and ideas |
+| `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
+| `/plan-depends <id> [blocked by <id>\|clear\|show]` | Add or view task dependencies |
+| `/plan-guide` | Interactive contextual guide — what to do next |
 
 ### Task Lifecycle
 
@@ -83,6 +88,7 @@ capture → elaborate → execute (worktree) → review → complete
 - **Status**: `pending`, `elaborated`, `in-progress`, `review`, `completed`
 - **Type**: `bug`, `feature`, `refactor`, `chore`
 - **All**: `all` (includes completed)
+- **Search**: any non-keyword text is treated as a search query (e.g., `/plan-list auth`)
 
 ### Common Workflows
 
@@ -120,6 +126,22 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-execute Fix the login timeout                 # Auto-capture → elaborate → execute
 /plan-execute Fix crash branch                      # Full pipeline with git branch
 /plan-execute Fix crash use worktree                # Full pipeline with worktree isolation
+```
+
+**Switch between tasks:**
+```
+/plan-execute 1                 # Start task #1
+/plan-pause 1                   # Pause to switch context
+/plan-execute 2                 # Work on task #2
+/plan-execute 1                 # Resume task #1 where you left off
+```
+
+**Search and dependencies:**
+```
+/plan-list auth                 # Find tasks mentioning "auth"
+/plan-search timeout            # Full-text search across tasks and ideas
+/plan-depends 3 blocked by 1    # Mark task #3 as blocked by task #1
+/plan-depends 3                 # Show dependency status for task #3
 ```
 
 **Worktree workflow (parallel task execution):**

@@ -15,7 +15,7 @@ plans-cc/
     install.js          # Installer (copies skills to ~/.claude/skills/)
     dev.js              # Development helper
   skills/
-    plan-*/SKILL.md     # Skill definitions (22 total)
+    plan-*/SKILL.md     # Skill definitions (27 total)
   .claude/
     settings.local.json # Local Claude settings
 ```
@@ -67,7 +67,7 @@ Longer explanation of what this skill does.
 |-------|----------|-------------|
 | `name` | Yes | Skill name (must match directory name) |
 | `description` | Yes | Short description for skill picker |
-| `disable-model-invocation` | Yes | `true` for most skills. `false` for low-risk read-only or capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show) |
+| `disable-model-invocation` | Yes | `true` for most skills. `false` for low-risk read-only or capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show, plan-search, plan-guide) |
 | `allowed-tools` | No | Tools the skill can use |
 | `argument-hint` | No | Shows in skill picker (e.g., `"<id>"`, `"[description]"`) |
 
@@ -91,7 +91,9 @@ Longer explanation of what this skill does.
 capture → elaborate → execute → complete
    │          │          │         │
 pending   elaborated  in-progress  completed
-                                   (archived)
+                │ ↑                (archived)
+                └─┘
+              (pause/resume)
 
 capture → elaborate → execute (worktree) → review → complete
    │          │          │                    │         │
@@ -191,7 +193,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-review` | Review a task's changes — checkout branch and show diff summary |
 | `/plan-reopen` | Reopen a completed task and move it back to pending |
 | `/plan-status` | Dashboard of all work |
-| `/plan-list` | List tasks with filters |
+| `/plan-list` | List tasks with filters or keyword search |
 | `/plan-show` | Show detailed overview of a specific task |
 | `/plan-summary` | Summarize work completed in the current session |
 | `/plan-delete` | Remove a task |
@@ -201,3 +203,8 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-pick` | Pick high-value components from an idea to create tasks |
 | `/plan-expand` | Expand an idea into actionable tasks |
 | `/plan-brainstorm` | Explore ideas through guided discussion |
+| `/plan-pause` | Pause an in-progress task to switch context |
+| `/plan-search` | Full-text search across all tasks and ideas |
+| `/plan-depends` | Add or view task dependency relationships |
+| `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
+| `/plan-guide` | Interactive contextual guide — what to do next |

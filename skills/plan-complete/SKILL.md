@@ -108,6 +108,31 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
    - **Block completion** — do not proceed until issues are resolved
    - This is a hard block, not a warning (unlike incomplete How steps)
 
+5b. **Check deferred observations**
+    - Check if `.plans/state/NNN-state.md` exists (where NNN is the zero-padded task ID)
+    - If it exists, read it and look for the Observations section
+    - Search for entries containing `⏳ Deferred to review` that have NOT been replaced with `✓ User confirmed`, `✗`, or `⊘ Skipped`
+    - If unreviewed deferred observations exist:
+
+      **If auto-accept keyword was provided:** Skip the prompt, proceed. Log: `Note: N unreviewed observation(s) auto-accepted.`
+
+      **Otherwise:** Warn and prompt:
+      ```
+      Warning: Task #NNN has N unreviewed observation(s):
+      - Step 3: [observation description] ⏳ Deferred to review
+      - Step 7: [observation description] ⏳ Deferred to review
+
+      Run `/plan-review NNN` to walk through observations first, or complete anyway?
+      ```
+      Use AskUserQuestion:
+      - Header: "Observations"
+      - Question: "Task has N unreviewed observation(s). What would you like to do?"
+      - Options:
+        1. "Review first" — Stop completion, suggest `/plan-review NNN`
+        2. "Complete anyway" — Accept unreviewed observations and proceed
+      - If "Review first": exit and suggest `/plan-review NNN`
+      - If "Complete anyway": proceed to step 6
+
 6. **Display verification criteria**
 
    **If auto-accept keyword was provided:** Skip the prompt entirely. Proceed without asking. Do NOT display the verification criteria or ask for confirmation.

@@ -185,6 +185,22 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
        - Parse `**Repos:**` field to restore `relevant_repos` list
        - Existing path-exists check applies as-is
 
+6b. **Check dependencies**
+    - If the task file has a `**Blocked by:**` field, parse the referenced task IDs
+    - For each blocker ID, check if the task exists in `.plans/completed/`
+    - If ALL blockers are completed: proceed (dependencies satisfied)
+    - If any blocker is NOT completed:
+      - Error:
+        ```
+        Task #NNN is blocked by:
+          #MMM - [title] (status: [status]) ✗
+
+        Complete the blocking task first, or clear the dependency:
+          /plan-execute MMM
+          /plan-depends NNN clear
+        ```
+      - STOP execution for this task. If in multi-task loop, skip to next task.
+
 7. **If starting (pending/elaborated status):**
 
    a. **Auto-elaborate if not elaborated**

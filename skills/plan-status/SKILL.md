@@ -3,6 +3,8 @@ name: plan-status
 disable-model-invocation: false
 allowed-tools:
   - Read
+  - Write
+  - Edit
   - Bash
   - Glob
 description: Show dashboard of all tasks and current progress
@@ -34,6 +36,7 @@ Display a compact dashboard showing the current state of all tasks.
      - Count total: all `- [ ]` and `- [x]` lines
      - Count completed: `- [x]` lines
      - Store as `completed_steps/total_steps`
+   - **Check for dependencies:** if `**Blocked by:**` field exists, parse blocker IDs and check if each exists in `.plans/completed/`. Store `is_blocked = true` if any blocker is not completed.
 
    Count tasks in `.plans/completed/` for the summary line.
 
@@ -61,7 +64,7 @@ Display a compact dashboard showing the current state of all tasks.
    ○ 002 Add dark mode [feature] 0/4
    · 001 Update docs [chore]
 
-   Legend: ▶ In Progress  ★ Review  ○ Ready  · Pending
+   Legend: ▶ In Progress  ★ Review  ○ Ready  · Pending  ⊘ Blocked
 
    ## Quick Actions
    [Contextual suggestions based on current state]
@@ -78,6 +81,7 @@ Display a compact dashboard showing the current state of all tasks.
    - `★ 004 Add search feature [feature] 4/4` — review task
    - `○ 002 Add dark mode [feature] 0/4` — elaborated task
    - `· 001 Update docs [chore]` — pending task (no progress)
+   - `⊘ 006 Deploy auth [chore] 0/3` — blocked task (has unresolved dependencies)
 
    **DO NOT use:**
    - Tables or columns
@@ -106,6 +110,18 @@ Display a compact dashboard showing the current state of all tasks.
 
    **If tasks completed recently:**
    - "Great progress! `/plan-capture` to add more tasks"
+
+7. **Refresh PROGRESS.md stats**
+   After displaying output, update PROGRESS.md as a cache refresh so other tools see accurate data:
+   - Read `.plans/PROGRESS.md`
+   - Update the Stats section with actual counts derived from the file scan in step 3:
+     - Pending count (status = pending)
+     - Elaborated count (status = elaborated)
+     - In Progress count (status = in-progress)
+     - Review count (status = review)
+     - Completed count (from `.plans/completed/` file count)
+   - Update "Last updated" date
+   - Do this silently — do not display anything about the refresh
 
 ## Edge Cases
 

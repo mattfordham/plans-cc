@@ -16,9 +16,18 @@ Reopen a completed task and move it back to pending status. This is the inverse 
 
 ## Arguments
 
-- `$ARGUMENTS`: Task ID (e.g., "1", "01", or "001"), optionally followed by a reason for reopening
+- `$ARGUMENTS`: Task ID (e.g., "1", "01", or "001"), optionally followed by a reason for reopening or an auto-accept keyword
   - Example: `5` — reopen task #005 without a reason
   - Example: `5 Need to add more tests` — reopen task #005 with reason
+  - Example: `5 quick` — reopen task #005 immediately without prompting
+
+### Auto-Accept Keywords
+
+If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the task ID, **quick reopen** — skip the reason prompt (step 5) and don't add new steps (step 6):
+
+`verified`, `verify`, `quick`, `accept`, `accepted`, `skip`, `done`, `lgtm`, `good`, `approved`, `confirmed`, `yep`, `yolo`, `ship`, `ship it`
+
+**Parsing:** Extract the numeric task ID first, then check if any remaining text matches an auto-accept keyword. If it matches, set `quick_mode = true`. If it doesn't match a keyword, treat remaining text as the reason.
 
 ## Steps
 
@@ -41,8 +50,9 @@ Reopen a completed task and move it back to pending status. This is the inverse 
 
 3. **Parse optional reason text**
    - Extract any text after the ID from `$ARGUMENTS`
-   - Example: `/plan-reopen 5 Need to add more tests` → reason is "Need to add more tests"
-   - If no text after ID, reason is empty — will prompt in step 5
+   - Check if text matches an auto-accept keyword — if so, set `quick_mode = true` and reason = "Quick reopen"
+   - Otherwise: Example: `/plan-reopen 5 Need to add more tests` → reason is "Need to add more tests"
+   - If no text after ID, reason is empty — will prompt in step 5 (unless quick_mode)
 
 4. **Read and validate task**
    - Read the task file from `.plans/completed/`
@@ -51,6 +61,8 @@ Reopen a completed task and move it back to pending status. This is the inverse 
    - Check for `**Branch:**` field
 
 5. **Get reason if not provided**
+
+   **If `quick_mode = true`:** Skip this step entirely. Reason is "Quick reopen".
 
    **If no reason in `$ARGUMENTS`, use `AskUserQuestion` tool:**
    - Header: "Reopen reason"
@@ -67,7 +79,8 @@ Reopen a completed task and move it back to pending status. This is the inverse 
    - Change Status: `completed` → `pending`
    - Remove the `**Completed:**` line entirely
    - **Keep all checkboxes in their current state** — Do NOT reset `[x]` to `[ ]`
-   - Add new unchecked step(s) to the How section based on the reason:
+   - **If `quick_mode = true`:** Do NOT add new steps to the How section. Skip straight to Notes update.
+   - **Otherwise:** Add new unchecked step(s) to the How section based on the reason:
      ```markdown
      - [ ] [New step derived from reopening reason]
      ```

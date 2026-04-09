@@ -66,7 +66,7 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
 
 5. **Read all task files**
    - Parse metadata from each: ID, Title, Type, Status, Created
-   - Extract content sections: What, Why, How, Verification, Notes
+   - Extract content sections: What, Why, How, Verification, Issues, Notes
 
 6. **Display merge preview**
    ```
@@ -158,6 +158,21 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
    *Verification section:*
    - If combined status is `elaborated`: merge all verification criteria
    - If combined status is `pending`: use placeholder `_To be filled during elaboration_`
+
+   *Issues section:*
+   - Collect all `- [ ]` and `- [x]` items from all source tasks' Issues sections
+   - If any source tasks have Issues sections, concatenate them grouped by source:
+     ```markdown
+     ## Issues
+
+     ### From #NNN: [Title]
+     - [ ] Issue from task NNN
+
+     ### From #NNN: [Title]
+     - [x] Resolved issue from other task
+     ```
+   - If only one source task has issues, use its issues directly without grouping headers
+   - If no source tasks have Issues sections, omit the Issues section entirely
 
    *Notes section:*
    - Concatenate all Notes sections (if any have content beyond placeholder)
