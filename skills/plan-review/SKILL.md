@@ -180,6 +180,7 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    Test the changes, then:
    - `/plan-complete NNN` to merge and archive
    - `/plan-execute NNN` to continue working
+   - `/plan-pause NNN` to commit changes and switch back to main
    - `/plan-reopen NNN` if it needs rework after completion
    ```
 

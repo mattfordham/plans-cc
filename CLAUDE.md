@@ -96,9 +96,10 @@ pending   elaborated  in-progress  completed
               (pause/resume)
 
 capture → elaborate → execute (worktree) → review → complete
-   │          │          │                    │         │
-pending   elaborated  in-progress          review   completed
-                                                    (archived)
+   │          │          │                    │ ↑       │
+pending   elaborated  in-progress          review │  completed
+                                             └─┘   (archived)
+                                           (pause/resume)
 
 brainstorm → expand → elaborate → execute → complete
    │            │
@@ -203,7 +204,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-pick` | Pick high-value components from an idea to create tasks |
 | `/plan-expand` | Expand an idea into actionable tasks |
 | `/plan-brainstorm` | Explore ideas through guided discussion |
-| `/plan-pause` | Pause an in-progress task to switch context |
+| `/plan-pause` | Pause an in-progress or in-review task to switch context |
 | `/plan-search` | Full-text search across all tasks and ideas |
 | `/plan-depends` | Add or view task dependency relationships |
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
