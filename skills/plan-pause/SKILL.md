@@ -33,16 +33,16 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - Find task file in `.plans/pending/NNN-*.md`
 
    **If no `$ARGUMENTS`:**
-   - Find in-progress or review tasks in `.plans/pending/`
+   - Find in-progress, review, or in-review tasks in `.plans/pending/`
    - If exactly one: auto-select it
    - If multiple: list them and ask which to pause
-   - If none: error "No in-progress or review tasks to pause."
+   - If none: error "No in-progress, review, or in-review tasks to pause."
 
 3. **Validate task state**
    - Read the task file
    - Check Status:
      - If `in-progress`: proceed (in-progress flow)
-     - If `review`: proceed (review flow)
+     - If `review` or `in-review`: proceed (review flow)
      - If `elaborated` or `pending`: error "Task #NNN is not in progress."
      - If `completed`: error "Task #NNN is already completed."
    - Extract title from H1 heading
@@ -58,7 +58,8 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - Do NOT change any other metadata fields (Branch, Created, Type, etc.)
 
    **Review flow:**
-   - **Do NOT change Status** — keep it as `review`
+   - If current status is `in-review`: change Status to `review` (pausing an active review returns the task to the awaiting-review queue)
+   - If current status is already `review`: leave Status unchanged
    - Do NOT touch checkboxes or any other fields
 
    **Both flows:**
@@ -78,7 +79,9 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - Update "Last updated" date
 
    **Review flow:**
-   - Update "Last updated" date only (task stays in review count)
+   - If status was `in-review` and is now `review`: decrement In Review count, increment Review count
+   - If status was already `review`: no stat changes
+   - Update "Last updated" date
 
 6. **Commit changes and switch branch**
 
@@ -145,7 +148,7 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 ## Edge Cases
 
 - **Not initialized**: Error: "Not initialized. Run `/plan-init` first."
-- **No in-progress or review tasks**: Error: "No in-progress or review tasks to pause."
+- **No in-progress, review, or in-review tasks**: Error: "No in-progress, review, or in-review tasks to pause."
 - **Task not found**: Error: "Task #NNN not found."
 - **Task not pausable**: Error with appropriate message based on actual status
 - **Multiple pausable tasks, no ID**: List them and ask which to pause

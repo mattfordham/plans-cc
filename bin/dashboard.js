@@ -8,8 +8,10 @@ const { parseTasks } = require("../lib/parse-tasks");
 const { buildLayout, updateLayout } = require("../lib/render-dashboard");
 
 const PLANS_DIR = path.resolve(process.cwd(), ".plans");
+const CONTEXT_FILE = path.join(PLANS_DIR, "CONTEXT.md");
 const DEBOUNCE_MS = 100;
 const BRANCH_CACHE_TTL_MS = 5000;
+const PROJECT_CACHE_TTL_MS = 5000;
 
 function main() {
   if (!fs.existsSync(PLANS_DIR)) {
@@ -59,6 +61,29 @@ function main() {
     return cachedBranch;
   }
 
+  let cachedProject = null;
+  let cachedProjectAt = 0;
+  function getProject() {
+    const now = Date.now();
+    if (cachedProjectAt && now - cachedProjectAt < PROJECT_CACHE_TTL_MS) {
+      return cachedProject;
+    }
+    cachedProjectAt = now;
+    let name = null;
+    try {
+      if (fs.existsSync(CONTEXT_FILE)) {
+        const content = fs.readFileSync(CONTEXT_FILE, "utf8");
+        const match = content.match(/^\*\*Project:\*\*\s*(.+)$/m);
+        if (match) name = match[1].trim();
+      }
+    } catch (_) {
+      // ignore — fall through to basename
+    }
+    if (!name) name = path.basename(process.cwd());
+    cachedProject = name;
+    return cachedProject;
+  }
+
   function render() {
     try {
       const { tasks, summary } = parseTasks(PLANS_DIR);
@@ -66,6 +91,7 @@ function main() {
         tasks,
         summary,
         branch: getBranch(),
+        project: getProject(),
       });
       screen.render();
     } catch (err) {

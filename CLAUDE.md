@@ -95,11 +95,11 @@ pending   elaborated  in-progress  completed
                 └─┘
               (pause/resume)
 
-capture → elaborate → execute (worktree) → review → complete
-   │          │          │                    │ ↑       │
-pending   elaborated  in-progress          review │  completed
-                                             └─┘   (archived)
-                                           (pause/resume)
+capture → elaborate → execute (worktree) → review → in-review → complete
+   │          │          │                    │ ↑        │ ↑       │
+pending   elaborated  in-progress          review │  in-review │  completed
+                                             └─┘          └─┘ (archived)
+                                        (pause back to review)
 
 brainstorm → expand → elaborate → execute → complete
    │            │
@@ -137,6 +137,7 @@ brainstorm → expand → elaborate → execute → complete
 - `elaborated` — Has Why/How/Verification filled in
 - `in-progress` — Actively being worked on
 - `review` — Execution complete, awaiting user review (worktree workflow)
+- `in-review` — Actively being walked through with `/plan-review` (worktree workflow)
 - `completed` — Done and archived
 
 ### Checkbox Progress Tracking

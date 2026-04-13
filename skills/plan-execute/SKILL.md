@@ -167,7 +167,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
      - `pending`: Start mode (needs elaboration first — see step 7a)
      - `elaborated`: Start mode (ideal)
      - `in-progress`: Resume mode
-     - `review`: Resume mode — set status back to `in-progress`, use `AskUserQuestion` to ask if user wants worktree or current directory:
+     - `review` or `in-review`: Resume mode — set status back to `in-progress`, use `AskUserQuestion` to ask if user wants worktree or current directory:
        - Header: "Resume review"
        - Question: "Task #NNN is in review. Resume execution in current directory or create a new worktree?"
        - Options:
@@ -237,7 +237,10 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
         - Determine branch type and generate suggested branch name as below (same logic)
         - Follow the same branch question / auto-accept flow as below
         - Do NOT create branches yet — defer to after step 7d determines `relevant_repos`
-        - After step 7d completes: create the branch in each relevant sub-repo: `cd [sub-repo] && git checkout -b [branch-name]`
+        - After step 7d completes: for each sub-repo in `relevant_repos`, apply the same pre-switch check before creating the branch:
+          - Get sub-repo's current branch: `cd [sub-repo] && git rev-parse --abbrev-ref HEAD`
+          - If it matches any in-progress task's `**Branch:**` field (excluding the task being started), determine that sub-repo's default branch (`git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main` then `master`) and run `cd [sub-repo] && git checkout [default-branch]`; print the same notice
+          - Then create the branch: `cd [sub-repo] && git checkout -b [branch-name]`
         - Branch metadata format: `**Branch:** [branch-name] (multi-repo: [comma-separated repo names])`
       - Determine branch type from task type:
         - `bug` → "fix"
@@ -245,6 +248,15 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
         - `refactor` → "refactor"
         - `chore` → "chore"
       - Generate suggested branch name: `[type]/NNN-[slug]` (e.g., `feature/001-add-dark-mode`)
+      - **Pre-switch off other in-progress task branches** (single-repo path only):
+        - Get current branch: `git rev-parse --abbrev-ref HEAD`
+        - Scan `.plans/pending/*.md` for files with `Status: in-progress` (excluding the task being started)
+        - For each, extract the `**Branch:**` field value (if present)
+        - If current branch matches any of those branch values:
+          - Determine default branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`; if empty, try `main`, then `master`
+          - Run `git checkout [default-branch]`
+          - Print: `Current branch belongs to in-progress task #MMM. Switched to [default-branch] before creating new branch.`
+        - If current branch does not match any in-progress task branch, do nothing — branch from the current checkout as before
       - **Auto-accept shortcut:** If `branch_mode` is true (set in step 2), skip the question and immediately create the suggested branch — no `AskUserQuestion` needed.
       - **Otherwise, MUST use `AskUserQuestion` tool** to prompt user about branch creation:
         - Header: "Git branch"

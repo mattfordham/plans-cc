@@ -25,6 +25,7 @@ Display a filtered list of tasks in table format.
 - `elaborated` — tasks researched but not started
 - `in-progress` — tasks currently being worked on
 - `review` — tasks with execution complete, awaiting review
+- `in-review` — tasks actively being reviewed
 - `completed` — archived tasks
 
 **By type:**
@@ -49,14 +50,14 @@ Display a filtered list of tasks in table format.
 
 2. **Parse filter**
    - If `$ARGUMENTS` provided:
-     - Check if it matches a known filter keyword (pending, elaborated, in-progress, review, completed, bug, feature, refactor, chore, all)
+     - Check if it matches a known filter keyword (pending, elaborated, in-progress, review, in-review, completed, bug, feature, refactor, chore, all)
      - If it matches: use as filter (filter mode)
      - If it does NOT match any known keyword: treat as a **search query** (search mode)
    - If no filter: default to showing all non-completed
 
 3. **Scan task files**
 
-   **For non-completed statuses (pending, elaborated, in-progress, review):**
+   **For non-completed statuses (pending, elaborated, in-progress, review, in-review):**
    - Scan `.plans/pending/*.md`
 
    **For completed:**
@@ -89,7 +90,7 @@ Display a filtered list of tasks in table format.
    - **Search mode**: use Grep to search `.plans/pending/*.md` and `.plans/completed/*.md` for the search query (case-insensitive). Only include files that contain the query. This replaces the status/type filter — all matching tasks are included regardless of status.
 
 6. **Sort results**
-   - By status priority: in-progress > review > elaborated > pending > completed
+   - By status priority: in-progress > in-review > review > elaborated > pending > completed
    - Within status: by ID ascending
 
 7. **Display as table**
@@ -109,7 +110,7 @@ Display a filtered list of tasks in table format.
    - For pending tasks: show `—` (no steps defined yet)
    - For elaborated tasks: show `0/N` (N steps defined, none started)
    - For in-progress tasks: show `X/N` (X completed of N total)
-   - For review tasks: show `X/N` (same as in-progress)
+   - For review and in-review tasks: show `X/N` (same as in-progress)
    - **If task has unresolved issues:** append `, N issues` (e.g., `3/5, 2 issues`)
    - **If task is blocked:** append `(blocked)` to the Status column (e.g., `elaborated (blocked)`)
 

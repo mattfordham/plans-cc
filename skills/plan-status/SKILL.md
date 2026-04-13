@@ -43,9 +43,10 @@ Display a compact dashboard showing the current state of all tasks.
 4. **Sort tasks for display**
    Order pending tasks by status priority:
    1. `in-progress` (currently being worked on)
-   2. `review` (execution complete, awaiting review)
-   3. `elaborated` (ready to start)
-   4. `pending` (needs elaboration)
+   2. `in-review` (actively being reviewed)
+   3. `review` (execution complete, awaiting review)
+   4. `elaborated` (ready to start)
+   5. `pending` (needs elaboration)
 
 5. **Display output**
 
@@ -57,14 +58,15 @@ Display a compact dashboard showing the current state of all tasks.
    Branch: feature/login-fix
    Sub-repos: app → feature/login-fix · api → main
 
-   2 pending · 1 ready · 1 in progress · 1 in review · 3 completed
+   2 pending · 1 ready · 1 in progress · 1 ready for review · 0 in review · 3 completed
 
    ▶ 003 Fix login timeout [bug] 3/5
    ★ 004 Add search feature [feature] 4/4
+   ◉ 005 Refactor auth [refactor] 6/6
    ○ 002 Add dark mode [feature] 0/4
    · 001 Update docs [chore]
 
-   Legend: ▶ In Progress  ★ Review  ○ Ready  · Pending  ⊘ Blocked
+   Legend: ▶ In Progress  ★ Ready for Review  ◉ In Review  ○ Ready  · Pending  ⊘ Blocked
 
    ## Quick Actions
    [Contextual suggestions based on current state]
@@ -78,7 +80,8 @@ Display a compact dashboard showing the current state of all tasks.
 
    **CRITICAL: Each task must be exactly ONE LINE in this format:**
    - `▶ 003 Fix login timeout [bug] 3/5` — in-progress task
-   - `★ 004 Add search feature [feature] 4/4` — review task
+   - `★ 004 Add search feature [feature] 4/4` — review task (ready for review)
+   - `◉ 005 Refactor auth [refactor] 6/6` — in-review task (actively being reviewed)
    - `○ 002 Add dark mode [feature] 0/4` — elaborated task
    - `· 001 Update docs [chore]` — pending task (no progress)
    - `⊘ 006 Deploy auth [chore] 0/3` — blocked task (has unresolved dependencies)
@@ -108,6 +111,9 @@ Display a compact dashboard showing the current state of all tasks.
    **If review tasks exist:**
    - "Ready for review: `/plan-review <id>` to review changes"
 
+   **If in-review tasks exist:**
+   - "Resume review: `/plan-review <id>` to continue reviewing"
+
    **If tasks completed recently:**
    - "Great progress! `/plan-capture` to add more tasks"
 
@@ -119,6 +125,7 @@ Display a compact dashboard showing the current state of all tasks.
      - Elaborated count (status = elaborated)
      - In Progress count (status = in-progress)
      - Review count (status = review)
+     - In Review count (status = in-review)
      - Completed count (from `.plans/completed/` file count)
    - Update "Last updated" date
    - Do this silently — do not display anything about the refresh

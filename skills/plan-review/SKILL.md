@@ -34,20 +34,22 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    - Find task file in `.plans/pending/NNN-*.md`
 
    **If no `$ARGUMENTS`:**
-   - Scan `.plans/pending/*.md` for tasks with `**Status:** review`
-   - If exactly one review task: auto-select it
-   - If multiple review tasks: list them and ask which to review
-   - If no review tasks: check for in-progress tasks with `**Branch:**` field and list those
-   - If nothing found: "No tasks ready for review. Run `/plan-execute <id>` to execute a task first."
+   - Scan `.plans/pending/*.md` for tasks with `**Status:** review` or `**Status:** in-review`
+   - If exactly one eligible task: auto-select it
+   - If multiple eligible tasks: list them (tag each with its status — `review` = ready for review, `in-review` = resume) and ask which to review
+   - If none found: check for in-progress tasks with `**Branch:**` field and list those
+   - If nothing found at all: "No tasks ready for review. Run `/plan-execute <id>` to execute a task first."
 
 3. **Validate task state**
    - Read the task file
    - Check Status field:
-     - `review`: proceed (ideal)
-     - `in-progress`: proceed (user may want to review mid-execution)
+     - `review`: proceed — will transition to `in-review` in step 6.5 (entering review)
+     - `in-review`: proceed (resuming review — status stays as-is)
+     - `in-progress`: proceed (user may want to review mid-execution — do NOT change status)
      - `pending` or `elaborated`: "Task #NNN hasn't been started yet. Run `/plan-execute NNN` first."
      - `completed`: "Task #NNN is already completed."
      - Not found: "Task #NNN not found. Run `/plan-list` to see available tasks."
+   - Remember the original status (`review`, `in-review`, or `in-progress`) — step 6.5 uses it.
    - Check for `**Branch:**` field:
      - If no branch: "Task #NNN has no branch. Nothing to review — the changes are in the current checkout."
 
@@ -102,6 +104,13 @@ Review a task that has completed execution (typically via worktree workflow). Ch
        - `/plan-execute NNN` to continue working and resolve conflicts there
        ```
      - **Stop here** — do not proceed to the review summary
+
+6.5. **Mark task as in-review**
+   - If the original status from step 3 was `review`:
+     - Rewrite the `**Status:**` line in the task file from `review` to `in-review`
+     - Update the "Last updated" date to today
+   - If the original status was `in-review` or `in-progress`: skip this step (do not mutate status)
+   - The status mutation is committed as part of step 8's `.plans/` commit — do not commit separately.
 
 7. **Walk through deferred observations**
 
@@ -180,14 +189,14 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    Test the changes, then:
    - `/plan-complete NNN` to merge and archive
    - `/plan-execute NNN` to continue working
-   - `/plan-pause NNN` to commit changes and switch back to main
+   - `/plan-pause NNN` to commit changes, revert status to `review`, and switch back to main
    - `/plan-reopen NNN` if it needs rework after completion
    ```
 
 ## Edge Cases
 
-- **No ID + one review task**: Auto-select it
-- **No ID + no review tasks**: Check for in-progress tasks with branches, list those
+- **No ID + one review/in-review task**: Auto-select it
+- **No ID + no review/in-review tasks**: Check for in-progress tasks with branches, list those
 - **No ID + no eligible tasks**: Error suggesting `/plan-execute`
 - **Uncommitted changes**: Must handle before branch switch (stash, commit, or abort)
 - **Branch doesn't exist**: Error — branch may have been deleted or never created

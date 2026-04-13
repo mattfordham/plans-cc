@@ -59,15 +59,15 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
    - Find task file in `.plans/pending/NNN-*.md`
 
    **If no `$ARGUMENTS`:**
-   - Find in-progress tasks
+   - Find in-progress, review, and in-review tasks
    - If exactly one: auto-select it
    - If multiple: list and ask which to complete
-   - If none in-progress but pending exist: list pending and ask (with warning)
+   - If none in-progress/review/in-review but pending exist: list pending and ask (with warning)
 
 3. **Validate task state**
    - Read the task file
    - Check Status:
-     - If `in-progress` or `review`: proceed (ideal)
+     - If `in-progress`, `review`, or `in-review`: proceed (ideal)
      - If `pending` or `elaborated`: warn "Task #NNN wasn't started. Are you sure you want to mark it complete?" Require confirmation.
      - If not found: "Task #NNN not found."
 
