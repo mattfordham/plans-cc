@@ -14,7 +14,15 @@ Tasks are stored as markdown files in a `.plans/` directory within your project,
 npx plans-cc
 ```
 
-This copies 21 skill files to `~/.claude/skills/`. No dependencies are installed in your project.
+This copies 27 skill files to `~/.claude/skills/`. No dependencies are installed in your project.
+
+plans-cc also ships a second binary, `plans-cc-dashboard`, a live-updating TUI for watching task status in real time. `npx plans-cc` deploys the dashboard runtime (including the `blessed` runtime dependency) to `~/.claude/plans-cc/` and drops a launcher at `~/.claude/bin/plans-cc-dashboard` so it keeps working after the `npx` cache is cleaned up. Add `~/.claude/bin` to your PATH to run it from any project:
+
+```bash
+export PATH="$HOME/.claude/bin:$PATH"
+```
+
+`blessed` is the only runtime dependency — previously the package was zero-dep.
 
 **Requirements:** Node.js 16.7.0 or later, [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 
@@ -117,6 +125,16 @@ This auto-captures, auto-elaborates, and starts executing — all in one command
 | `/plan-list [filter]` | Filterable task list (by status, type, or `all`) |
 | `/plan-show <id>` | Detailed view of a single task — progress bar, steps, verification criteria |
 | `/plan-help` | Full command reference with examples |
+| `plans-cc-dashboard` | Live-updating TUI dashboard that watches `.plans/` and renders task status in real time, mirroring `/plan-status` output. Run it from any project directory that contains a `.plans/` folder. |
+
+Run the live dashboard from a project directory that has a `.plans/` folder:
+
+```bash
+plans-cc-dashboard            # installed usage (after `npx plans-cc` + PATH setup)
+node bin/dashboard.js         # local dev from the plans-cc repo
+```
+
+`node bin/dev.js` wires up the `plans-cc-dashboard` launcher too, so dev-mode edits to `bin/dashboard.js` and the `lib/` helpers are live without reinstalling.
 
 ### Task Management
 

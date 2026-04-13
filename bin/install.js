@@ -10,6 +10,68 @@ const TARGET_DIR = path.join(HOME, ".claude", "skills");
 const SOURCE_DIR = path.join(__dirname, "..", "skills");
 const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
 const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
+const DASHBOARD_SOURCE = path.join(__dirname, "dashboard.js");
+const LIB_SOURCE = path.join(__dirname, "..", "lib");
+const RUNTIME_TARGET = path.join(HOME, ".claude", "plans-cc");
+const LAUNCHER_DIR = path.join(HOME, ".claude", "bin");
+const LAUNCHER_PATH = path.join(LAUNCHER_DIR, "plans-cc-dashboard");
+
+// Recursively collect a package and all of its runtime deps, resolved from
+// this package's own node_modules tree. Returns a map of pkgName -> dir.
+function collectRuntimeDeps(pkgName, seen) {
+  if (seen.has(pkgName)) return;
+  let pkgJsonPath;
+  try {
+    pkgJsonPath = require.resolve(`${pkgName}/package.json`);
+  } catch (err) {
+    throw new Error(`cannot resolve ${pkgName}: ${err.message}`);
+  }
+  const pkgDir = path.dirname(pkgJsonPath);
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+  seen.set(pkgName, pkgDir);
+  const deps = pkgJson.dependencies || {};
+  for (const dep of Object.keys(deps)) {
+    collectRuntimeDeps(dep, seen);
+  }
+}
+
+function installDashboardRuntime() {
+  // Remove prior install so upgrades are clean.
+  if (fs.existsSync(RUNTIME_TARGET)) {
+    fs.rmSync(RUNTIME_TARGET, { recursive: true, force: true });
+  }
+  fs.mkdirSync(RUNTIME_TARGET, { recursive: true });
+
+  // Copy dashboard entry point and lib helpers.
+  fs.cpSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"));
+  fs.cpSync(LIB_SOURCE, path.join(RUNTIME_TARGET, "lib"), { recursive: true });
+
+  // Walk runtime deps starting from blessed, copy each into node_modules/.
+  const nodeModulesTarget = path.join(RUNTIME_TARGET, "node_modules");
+  fs.mkdirSync(nodeModulesTarget, { recursive: true });
+  const pkgMap = new Map();
+  collectRuntimeDeps("blessed", pkgMap);
+  for (const [name, srcDir] of pkgMap.entries()) {
+    const destDir = path.join(nodeModulesTarget, name);
+    fs.mkdirSync(path.dirname(destDir), { recursive: true });
+    fs.cpSync(srcDir, destDir, { recursive: true, dereference: true });
+  }
+
+  // Write the launcher shim.
+  if (!fs.existsSync(LAUNCHER_DIR)) {
+    fs.mkdirSync(LAUNCHER_DIR, { recursive: true });
+  }
+  // fs.rmSync with force removes files/symlinks and ignores ENOENT.
+  fs.rmSync(LAUNCHER_PATH, { force: true });
+  const shim = `#!/usr/bin/env bash\nexec node "$HOME/.claude/plans-cc/dashboard.js" "$@"\n`;
+  fs.writeFileSync(LAUNCHER_PATH, shim);
+  fs.chmodSync(LAUNCHER_PATH, 0o755);
+}
+
+function launcherDirOnPath() {
+  const envPath = process.env.PATH || "";
+  return envPath.split(path.delimiter).includes(LAUNCHER_DIR);
+}
 
 function main() {
   console.log("\n  plans-cc — Installing skills to ~/.claude/skills/\n");
@@ -84,6 +146,20 @@ function main() {
       }
       console.log();
     }
+  }
+
+  // Install the dashboard runtime (dashboard.js + lib + blessed) to a
+  // persistent location so `plans-cc-dashboard` works after `npx plans-cc`.
+  try {
+    installDashboardRuntime();
+    console.log(`  Installed dashboard runtime to ~/.claude/plans-cc/`);
+    console.log(`  Launcher: ~/.claude/bin/plans-cc-dashboard\n`);
+    if (!launcherDirOnPath()) {
+      console.log("  Add ~/.claude/bin to your PATH to run `plans-cc-dashboard` from anywhere:");
+      console.log('    export PATH="$HOME/.claude/bin:$PATH"\n');
+    }
+  } catch (err) {
+    console.log(`  Dashboard runtime not installed: ${err.message}. Run 'npm install' in the plans-cc package directory, or reinstall via npx.\n`);
   }
 
   console.log("  Run /plan-help in Claude Code to get started.\n");

@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "description": "Lightweight task management for Claude Code",
   "bin": {
-    "plans-cc": "bin/install.js"
+    "plans-cc": "bin/install.js",
+    "plans-cc-dashboard": "bin/dashboard.js"
   },
   "files": [
     "bin",
+    "lib",
     "skills"
   ],
   "engines": {
@@ -22,5 +24,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/mattboldt/plans-cc"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
   }
 }

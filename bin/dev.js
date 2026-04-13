@@ -10,6 +10,38 @@ const TARGET_DIR = path.join(HOME, ".claude", "skills");
 const SOURCE_DIR = path.join(__dirname, "..", "skills");
 const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
 const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
+const REPO_ROOT = path.join(__dirname, "..");
+const DASHBOARD_SOURCE = path.join(__dirname, "dashboard.js");
+const LIB_SOURCE = path.join(REPO_ROOT, "lib");
+const NODE_MODULES_SOURCE = path.join(REPO_ROOT, "node_modules");
+const RUNTIME_TARGET = path.join(HOME, ".claude", "plans-cc");
+const LAUNCHER_DIR = path.join(HOME, ".claude", "bin");
+const LAUNCHER_PATH = path.join(LAUNCHER_DIR, "plans-cc-dashboard");
+
+function launcherDirOnPath() {
+  const envPath = process.env.PATH || "";
+  return envPath.split(path.delimiter).includes(LAUNCHER_DIR);
+}
+
+function linkDashboardRuntime() {
+  // Tear down any previous install/symlinks so reruns are idempotent.
+  fs.rmSync(RUNTIME_TARGET, { recursive: true, force: true });
+  fs.mkdirSync(RUNTIME_TARGET, { recursive: true });
+
+  // Symlink dashboard entry, lib dir, and node_modules back to the repo.
+  fs.symlinkSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"), "file");
+  fs.symlinkSync(LIB_SOURCE, path.join(RUNTIME_TARGET, "lib"), "dir");
+  fs.symlinkSync(NODE_MODULES_SOURCE, path.join(RUNTIME_TARGET, "node_modules"), "dir");
+
+  // Launcher shim.
+  if (!fs.existsSync(LAUNCHER_DIR)) {
+    fs.mkdirSync(LAUNCHER_DIR, { recursive: true });
+  }
+  fs.rmSync(LAUNCHER_PATH, { force: true });
+  const shim = `#!/usr/bin/env bash\nexec node "$HOME/.claude/plans-cc/dashboard.js" "$@"\n`;
+  fs.writeFileSync(LAUNCHER_PATH, shim);
+  fs.chmodSync(LAUNCHER_PATH, 0o755);
+}
 
 function main() {
   console.log("\n  plans-cc dev — Symlinking skills for development\n");
@@ -79,6 +111,22 @@ function main() {
       }
       console.log();
     }
+  }
+
+  // Wire up the dashboard runtime via symlinks so repo edits are live.
+  try {
+    linkDashboardRuntime();
+    console.log(`  Symlinked dashboard runtime:`);
+    console.log(`    ${RUNTIME_TARGET}/dashboard.js -> ${DASHBOARD_SOURCE}`);
+    console.log(`    ${RUNTIME_TARGET}/lib -> ${LIB_SOURCE}`);
+    console.log(`    ${RUNTIME_TARGET}/node_modules -> ${NODE_MODULES_SOURCE}`);
+    console.log(`  Launcher: ${LAUNCHER_PATH}\n`);
+    if (!launcherDirOnPath()) {
+      console.log("  Add ~/.claude/bin to your PATH to run `plans-cc-dashboard` from anywhere:");
+      console.log('    export PATH="$HOME/.claude/bin:$PATH"\n');
+    }
+  } catch (err) {
+    console.log(`  Dashboard runtime not linked: ${err.message}\n`);
   }
 
   console.log("  Edits to skills/ and agents/ are now live. No reinstall needed.\n");
