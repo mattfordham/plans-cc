@@ -513,6 +513,13 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    For each segment that is not yet complete:
 
+   **0. figma-port detection.** Before showing status or spawning the normal sub-agent, scan the segment's step descriptions (the raw text of each `- [ ]` line in the How section that belongs to this segment) for a figma-port invocation. Detection heuristic: a segment "invokes figma-port" if any step description contains the literal token `/figma-port` (the slash-command form) **and** does not also contain `init` within the same bullet (to exclude init-flow steps like `/figma-port init`, which don't have the 16-step pipeline and don't need the two-phase treatment).
+
+   - **If no figma-port invocation is detected:** proceed to step 1 below (the normal single-spawn flow). The new detection step is a no-op for segments that don't touch figma-port.
+   - **If a figma-port invocation IS detected:** do NOT use the normal single-spawn flow. Instead, run the **figma-port two-phase flow** documented at the end of section 11 (see "**f. figma-port two-phase flow**" below). That flow replaces steps 1–5 of the normal body for this one segment, then returns control to the segment loop. Steps 6 (observation handling), 7 (blocker handling), and 8 (escalation) of the normal body still apply after the two-phase flow returns — they operate on the final execution-phase sub-agent's response.
+
+   Only one figma-port invocation per segment is supported. If a segment contains multiple `/figma-port <url>` steps with different URLs, stop with an error: `"Segment N contains multiple /figma-port invocations; figma-port two-phase flow supports one invocation per segment. Re-segment the task so each /figma-port step lives in its own segment."` Re-segmentation is the user's job — the segmenter in section 10 doesn't know about this constraint, so catching it here is the current line of defense.
+
    1. Show status: `Executing segment N/M (steps X-Y)...`
 
    2. Spawn sub-agent using `Task` tool:
@@ -727,6 +734,115 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       Next: /plan-review NNN
       ```
       **STOP after "Next:" line. Do not add any other instructions, suggestions, or testing advice. `/plan-review` handles branch checkout automatically — the user does NOT need to merge or checkout anything manually.**
+
+   **f. figma-port two-phase flow** (only fires when step 0 of section b detected a `/figma-port` invocation in the current segment)
+
+   The figma-port skill is a 16-step pipeline with a mandatory human-review gate at Step 11 that uses `AskUserQuestion` to walk the user through the assembly plan. When plan-execute runs figma-port inside a plan-executor sub-agent, that `AskUserQuestion` fires inside the sub-agent context — where plan-execute's auto-accept behavior silently picks option 1, defeating the gate. The assembly plan ships to Steps 12–13 (paint compilation and code generation) without a real human looking at it, which is exactly the failure mode the gate exists to prevent.
+
+   This two-phase flow splits the port at the same seam the gate already lives on: **plan** (figma-port Steps 1–10) runs in one sub-agent with `--plan-only`, plan-execute surfaces the assembly plan to the user via a **top-level** `AskUserQuestion` (which is NOT auto-accepted because it runs in the main plan-execute context, not a sub-agent), and **execute** (figma-port Steps 11–16) runs in a second sub-agent with `--resume` only if the user approves. The plan artifact (`.figma-port/<hyphen-nodeId>/assembly.md`) is written by the first sub-agent and read by the second — the file is the hand-off channel, and the user can edit it between phases if they want to tweak the decomposition.
+
+   **Phase 1 — Planning sub-agent.**
+
+   1. Show status: `Executing segment N/M (steps X-Y) — figma-port planning phase...`
+
+   2. Spawn sub-agent using `Task` tool with the normal segment execution prompt template (section c below), **plus** the following appended to the end of the prompt:
+
+      ```markdown
+      ## Port Mode — Planning Phase
+
+      This segment contains a /figma-port invocation. Run it with the --plan-only flag:
+
+          /figma-port <url> --plan-only
+
+      This runs Steps 1–10 of the port pipeline and stops cleanly at the end of Step 10,
+      with the assembly plan written to .figma-port/<hyphen-nodeId>/assembly.md. Do NOT
+      run Steps 11–16. Do NOT run /figma-port without --plan-only. Do NOT attempt to
+      review or approve the assembly plan — that gate runs at the top level after you return.
+
+      In your response, include a line in this exact format so plan-execute can
+      locate the assembly plan:
+
+          FIGMA_PORT_NODE_ID: <hyphen-form node id>
+
+      (Example: `FIGMA_PORT_NODE_ID: 12048-52746`.)
+
+      Report all other segment work (other steps in this segment, test outcomes, deviations)
+      in the normal structured format.
+      ```
+
+   3. Parse the planning sub-agent's response:
+      - Extract `figmaPortNodeId` from the `FIGMA_PORT_NODE_ID:` line. If the line is missing or malformed, fall back to globbing `.figma-port/*/assembly.md` for entries modified in the last 5 minutes; if exactly one match, use that directory's basename as `figmaPortNodeId`; if zero or multiple matches, fail the segment with `"figma-port two-phase flow: could not determine node id from planning sub-agent response. Re-run the segment."`
+      - Extract normal sub-agent response fields: completed steps, key decisions, deviations, blockers, test status (same as section b step 3).
+      - **If the planning sub-agent reported a blocker:** follow the normal blocker-handling logic (section b step 7). Do not advance to Phase 2.
+
+   4. Update state file with a new marker line under the segment's entry:
+
+      ```markdown
+      - Segment N: figma-port planning phase complete (assembly.md at .figma-port/<figmaPortNodeId>/assembly.md, execution phase pending user approval)
+      ```
+
+      Do NOT mark the segment as complete yet — the segment is still mid-flight until Phase 3 finishes.
+
+   **Phase 2 — Top-level review gate.**
+
+   5. Issue an `AskUserQuestion` from the **top-level plan-execute context** (not from inside a sub-agent — this is the whole point of the flow). The question surfaces the assembly plan path and offers three resolutions:
+
+      ```
+      header: "Port review"
+      question: "figma-port planning phase complete for segment N. Review the assembly plan at .figma-port/<figmaPortNodeId>/assembly.md, then choose how to proceed."
+      options:
+        - label: "Approve — run execution phase"
+          description: "Spawn a second sub-agent to run /figma-port --resume and execute Steps 11–16 against the current assembly.md on disk."
+        - label: "I edited assembly.md — approve and run"
+          description: "Same as Approve. The execution phase's figma-port Step 11 re-parses assembly.md from disk, so your hand-edits are picked up automatically."
+        - label: "Cancel this task"
+          description: "Leave .figma-port/<figmaPortNodeId>/ artifacts in place for a later /plan-execute resume. Segment stays pending. Task is marked blocked."
+      ```
+
+      The question text must reference the exact `.figma-port/<figmaPortNodeId>/assembly.md` path resolved in step 3 — the user needs to know where to look. `multiSelect` is `false`.
+
+   6. Handle the user's choice:
+      - **"Approve — run execution phase"** or **"I edited assembly.md — approve and run"**: proceed to Phase 3. Record in state file: `- Segment N: user approved figma-port execution phase at <ISO timestamp>`. If the user picked the "edited" option, additionally record: `- Segment N: user reported edits to assembly.md before approval` (informational only — the execution phase's re-parse picks up edits automatically regardless).
+      - **"Cancel this task"**: record in state file: `- Segment N: user cancelled at figma-port review gate (assembly.md preserved at .figma-port/<figmaPortNodeId>/assembly.md)`. Mark the segment as `blocked` (not `complete`). Follow the normal blocker-handling logic (section b step 7) to decide whether to skip the task or stop the batch. A later `/plan-execute NNN` invocation will see the segment in `blocked` state, see the assembly.md still on disk, and can re-issue this same gate prompt at the start of the segment (no need to re-run Phase 1).
+
+   **Phase 3 — Execution sub-agent.**
+
+   7. Show status: `Executing segment N/M (steps X-Y) — figma-port execution phase...`
+
+   8. Spawn a second sub-agent using `Task` tool with the normal segment execution prompt template, **plus** the following appended to the prompt:
+
+      ```markdown
+      ## Port Mode — Execution Phase
+
+      This segment's /figma-port invocation had its planning phase completed in a prior
+      sub-agent, and the user has approved the assembly plan at
+      .figma-port/<figmaPortNodeId>/assembly.md via a top-level review gate.
+
+      Run the port with the --resume flag:
+
+          /figma-port <url> --resume
+
+      This enters figma-port at Step 11 (assembly review), re-parses the assembly plan
+      from disk, runs the 11c/11d walks if any unresolved items remain, and proceeds
+      through Steps 12–16 (paint compiler, code generation, asset download, hand-back,
+      commit). The main write surface for your segment is here — stylesheets, component
+      files, and assets will land under the project's componentsLocation and stylesheet
+      targets.
+
+      Do NOT re-run the planning phase. Do NOT drop the --resume flag.
+      ```
+
+      The prompt should reference the same `<url>` the planning-phase sub-agent used, extracted from the original step description. If the segment includes other steps besides the `/figma-port` invocation, those run in the execution-phase sub-agent too — it's the same segment, the two phases just split the one port invocation, not the whole segment's work.
+
+   9. Parse the execution sub-agent's response using the normal section-b step-3 logic. Update state file:
+
+      ```markdown
+      - Segment N: figma-port execution phase complete
+      ```
+
+   10. **Mark the segment as complete** (normal section-b step 4). Apply sections b-5 (update task file), b-6 (observation handling if the last step is an observation — unlikely for a figma-port segment but possible), b-7 (blocker handling), and b-8 (escalation) to the execution sub-agent's response. Return control to the main segment loop.
+
+   **State file resumability.** The two-phase flow introduces one new segment state beyond `pending`/`complete`/`skipped`: **`plan-approved`** (after Phase 2's approval, before Phase 3 spawns). If plan-execute is interrupted between Phases 2 and 3, a later resume should detect the `plan-approved` state in the state file and re-enter at Phase 3 (skipping Phases 1 and 2). If interrupted during Phase 1 or 2, the resume re-enters at Phase 1 (the planning sub-agent is cheap to re-run; the assembly.md on disk will be overwritten with a fresh plan, which is the intended behavior — the user hasn't yet approved anything, so there's nothing to preserve).
 
 12. **Run ONLY targeted tests before pausing**
     **CRITICAL: Never run the full test suite. Only run specific test files for code you changed.**

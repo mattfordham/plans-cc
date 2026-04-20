@@ -1,6 +1,6 @@
 ---
 name: plan-elaborate
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<id|description> [skip]"
 allowed-tools:
   - Read

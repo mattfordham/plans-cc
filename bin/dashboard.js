@@ -41,24 +41,46 @@ function main() {
 
   const widgets = buildLayout(screen);
 
-  let cachedBranch = null;
-  let cachedBranchAt = 0;
-  function getBranch() {
-    const now = Date.now();
-    if (cachedBranchAt && now - cachedBranchAt < BRANCH_CACHE_TTL_MS) {
-      return cachedBranch;
-    }
-    cachedBranchAt = now;
+  let cachedBranches = null;
+  let cachedBranchesAt = 0;
+  function readBranch(cwd) {
     try {
-      cachedBranch =
+      return (
         execSync("git branch --show-current", {
+          cwd,
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
-        }).trim() || null;
+        }).trim() || null
+      );
     } catch (_) {
-      cachedBranch = null;
+      return null;
     }
-    return cachedBranch;
+  }
+  function getBranches() {
+    const now = Date.now();
+    if (cachedBranchesAt && now - cachedBranchesAt < BRANCH_CACHE_TTL_MS) {
+      return cachedBranches;
+    }
+    cachedBranchesAt = now;
+    const root = readBranch(process.cwd());
+    const subRepos = [];
+    try {
+      const entries = fs.readdirSync(process.cwd(), { withFileTypes: true });
+      const names = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name)
+        .sort();
+      for (const name of names) {
+        const gitPath = path.join(process.cwd(), name, ".git");
+        if (!fs.existsSync(gitPath)) continue;
+        const branch = readBranch(path.join(process.cwd(), name));
+        subRepos.push({ name, branch });
+      }
+    } catch (_) {
+      // ignore — best effort
+    }
+    cachedBranches = { root, subRepos };
+    return cachedBranches;
   }
 
   let cachedProject = null;
@@ -90,7 +112,7 @@ function main() {
       updateLayout(widgets, {
         tasks,
         summary,
-        branch: getBranch(),
+        branches: getBranches(),
         project: getProject(),
       });
       screen.render();

@@ -91,19 +91,33 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    - Run rebase: `git rebase [rebase-target]`
    - **If rebase succeeds:** inform the user: "Rebased onto latest `[default-branch]` — review reflects current state."
    - **If rebase conflicts:**
-     - Abort the rebase: `git rebase --abort`
-     - Inform the user:
-       ```
-       ⚠ Rebase onto [default-branch] has conflicts. The branch is unchanged.
+     - **Do NOT abort yet.** Leave the rebase in progress so the user keeps the in-flight state if they want to resolve in place.
+     - Capture the conflicting file list from `git diff --name-only --diff-filter=U`.
+     - Tell the user the rebase is paused mid-flight and list the conflicting files.
 
-       Conflicting files:
-       [list conflicting files from rebase output]
+     **REQUIRED: You MUST call the `AskUserQuestion` tool here to let the user choose how to proceed.**
 
-       You can:
-       - Resolve conflicts manually and re-run `/plan-review NNN`
-       - `/plan-execute NNN` to continue working and resolve conflicts there
-       ```
-     - **Stop here** — do not proceed to the review summary
+     Call `AskUserQuestion` with:
+     - Header: "Rebase conflict"
+     - Question: "Rebase onto `[default-branch]` hit conflicts in: [files]. The rebase is currently paused. How would you like to proceed?"
+     - Options:
+       1. "Resolve for me" (description: "I'll resolve the conflicts, stage the files, and continue the rebase, then proceed to the review summary")
+       2. "Resolve in place" (description: "Leave the rebase paused — you'll resolve the conflicts and run `git rebase --continue` yourself")
+       3. "Abort rebase" (description: "Run `git rebase --abort` and stop — branch left unchanged, re-run `/plan-review` after resolving")
+       4. "Skip rebase" (description: "Abort the rebase and proceed to the review summary against the un-rebased branch (diff may be stale)")
+     - **After user responds:**
+       - If "Resolve for me":
+         - For each file in `git diff --name-only --diff-filter=U`:
+           - Read the file and resolve `<<<<<<<` / `=======` / `>>>>>>>` markers using judgment based on the task's intent (the task file's What/How sections describe what this branch is trying to achieve — favor the branch's changes for files central to the task, favor `[default-branch]` for unrelated drift).
+           - For ambiguous conflicts where intent is unclear, fall back to calling `AskUserQuestion` with the conflict hunk and let the user pick a side.
+           - `git add <file>` once resolved.
+         - Run `git rebase --continue`.
+         - If further conflicts surface (multi-commit rebase): repeat the resolve loop.
+         - If `git rebase --continue` fails for a non-conflict reason: report the error, leave the rebase paused, and stop.
+         - On success: tell the user "Resolved conflicts and rebased onto `[default-branch]`." and continue to step 6.5.
+       - If "Resolve in place": print the conflicting files and the next-step hints (`git add <file>`, `git rebase --continue`, or `git rebase --abort`), then **stop** — do not proceed to the review summary. The user will re-run `/plan-review NNN` after resolving.
+       - If "Abort rebase": run `git rebase --abort` and **stop** — do not proceed to the review summary.
+       - If "Skip rebase": run `git rebase --abort`, warn that the diff is against the branch's original base and may not reflect current `[default-branch]`, then continue to step 6.5.
 
 6.5. **Mark task as in-review**
    - If the original status from step 3 was `review`:
@@ -204,7 +218,7 @@ Review a task that has completed execution (typically via worktree workflow). Ch
 - **Task is pending/elaborated**: Error — must execute first
 - **Already on the task's branch**: Skip checkout, just display the summary
 - **Merge conflicts during checkout**: Report the conflict and suggest resolving manually
-- **Rebase conflicts**: Abort rebase, show conflicting files, and stop — don't show a stale review
+- **Rebase conflicts**: Leave the rebase paused, list conflicting files, and prompt the user to choose: have Claude resolve, resolve themselves, abort, or skip — never auto-abort
 - **Already up to date with main**: Skip rebase, proceed to observations/review summary
 - **Local main ahead of origin**: Rebase onto local main (handles merged-but-not-pushed tasks)
 - **No state file**: Skip observation walkthrough — no deferred observations to process
