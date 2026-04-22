@@ -100,6 +100,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
 
    Start working: `/plan-execute 2`
    Want isolation? `/plan-execute 2 use worktree`
+   Want to talk through it first? `/plan-discuss 2`
    ```
 
    **Section: Needs elaboration** (show if pending tasks exist)

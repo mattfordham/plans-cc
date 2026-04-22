@@ -190,6 +190,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-import` | Import tasks from a markdown document |
 | `/plan-elaborate` | Research and flesh out a task (auto-captures if given a description) |
 | `/plan-clarify` | Find ambiguities in an elaborated task and resolve them interactively |
+| `/plan-discuss` | Free-form discussion about an elaborated task; apply agreed changes on request |
 | `/plan-execute` | Start or continue work on a task (auto-captures/elaborates if needed) |
 | `/plan-issue` | Report an issue found during manual testing |
 | `/plan-complete` | Mark task done and archive |

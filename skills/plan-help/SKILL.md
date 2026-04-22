@@ -32,6 +32,7 @@ Display the complete command reference. Output the following help text:
 | `/plan-capture [description] [and elaborate\|execute\|go]` | Quick-capture a new task (optionally auto-proceed) |
 | `/plan-import <file>` | Import tasks from a markdown document |
 | `/plan-elaborate <id\|description>` | Research and flesh out a task (auto-captures if given description) |
+| `/plan-discuss <id> [topic]` | Free-form discussion about an elaborated task; apply changes on request |
 | `/plan-execute <id\|description>` | Start or continue work (auto-captures/elaborates if needed) |
 | `/plan-complete <id>` | Mark task done and archive it |
 | `/plan-review <id>` | Review a task's changes — checkout branch and show diff |
