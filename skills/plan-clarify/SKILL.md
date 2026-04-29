@@ -142,6 +142,7 @@ Complements `/plan-elaborate`: elaborate generates structure, clarify hardens it
 11. **Commit .plans/ changes**
     - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
     - If not a git repo: skip silently
+    - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`. If exit code 0 (ignored): skip silently.
     - Read `.plans/config.json` for `git_commits`. If not `true`: skip silently.
     - Check for uncommitted changes: `git status --porcelain .plans/`
     - If no changes: skip silently

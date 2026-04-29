@@ -80,7 +80,14 @@ The file is only edited when the user signals "update the plan" (or equivalent).
    - Otherwise invite the user's opening question.
 
 6. **Converse turn by turn**
-   - Respond in plain prose. **Do not use `AskUserQuestion`** — this is a free-form dialogue, not a scripted prompt loop.
+   - Respond in plain prose for substantive discussion (analysis, trade-offs, proposals).
+   - **When you need to ask the user a question, prefer the interactive `AskUserQuestion` UI over plain-text prompts.** This applies to:
+     - Multiple-choice trade-offs ("Should we A, B, or C?")
+     - Yes/no decisions on a specific proposal
+     - Picking among alternative orderings, scopes, or approaches
+     - Confirming whether to apply a drafted edit (step 7)
+   - Use plain prose (no `AskUserQuestion`) when the question is genuinely open-ended ("what are you most worried about here?") and a fixed set of options would constrain the user unhelpfully.
+   - **If you have a strong recommendation among the options, say so explicitly.** Mark it in the question text (e.g., "Which approach? (I'd recommend B — simpler and avoids the migration)") and/or label the recommended option clearly. Don't present options as if they're equally weighted when they aren't — the user benefits from your judgment, not just a menu.
    - Stay grounded in the task file: when relevant, quote the specific step, Why bullet, or Verification line you're discussing.
    - Offer substance: point out trade-offs, missing cases, alternative orderings, assumptions worth challenging. Don't just agree.
    - **Do NOT edit the task file during discussion.** Proposals stay in chat until the user signals an update.
@@ -97,7 +104,7 @@ The file is only edited when the user signals "update the plan" (or equivalent).
 
    On signal:
    1. **Draft the diff in chat first.** Show the old content and the new content side by side (quote the exact existing line(s), then show the proposed replacement). Do not call `Edit` yet.
-   2. **Wait for explicit confirmation.** Accept "yes", "apply", "go ahead", "do it", "looks good". Ambiguous or partial acknowledgment ("maybe", "sort of") → ask for clarification before applying.
+   2. **Wait for explicit confirmation.** Prefer `AskUserQuestion` with options like "Apply", "Revise", "Discard" rather than waiting for a free-text reply. Accept "yes", "apply", "go ahead", "do it", "looks good" if the user replies in prose. Ambiguous or partial acknowledgment ("maybe", "sort of") → ask for clarification before applying.
    3. **Apply the edit.** Use `Edit` with the exact existing text as `old_string`. Preserve:
       - Checkbox states (`[x]` stays `[x]`, `[ ]` stays `[ ]`) on unchanged steps.
       - Frontmatter fields.
@@ -133,6 +140,7 @@ The file is only edited when the user signals "update the plan" (or equivalent).
      Omit any section that is empty.
    - Commit `.plans/` changes:
      - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`. If not a git repo: skip silently.
+     - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`. If exit code 0 (ignored): skip silently.
      - Read `.plans/config.json` for `git_commits`. If not `true`: skip silently.
      - Check for uncommitted changes: `git status --porcelain .plans/`. If none: skip silently.
      - Commit:

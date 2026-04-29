@@ -100,6 +100,8 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - If not already on the default branch: `git checkout [default-branch]`
 
    **If the task has no branch:**
+   - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
+   - If exit code 0 (ignored): skip silently
    - Read `.plans/config.json` for `git_commits` setting
    - If `git_commits` is not `true`: skip silently
    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
