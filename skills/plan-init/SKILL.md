@@ -4,6 +4,7 @@ disable-model-invocation: true
 allowed-tools:
   - Read
   - Write
+  - Edit
   - Bash
   - Glob
 description: Bootstrap the .plans/ directory for task management
@@ -105,29 +106,53 @@ Initialize the `.plans/` directory structure for lightweight task management.
    }
    ```
 
-7. **Display confirmation**
+7. **Configure git tracking for `.plans/`**
+   - Skip if not inside a git repo (`git rev-parse --git-dir 2>/dev/null` fails).
+   - Skip if `.plans/` is already gitignored (`git check-ignore -q .plans/ 2>/dev/null` returns 0).
+   - Otherwise, ask the user via `AskUserQuestion`:
+     - Question: "How should `.plans/` be tracked in git?"
+     - Header: "Git tracking"
+     - Options:
+       1. **Ignore (recommended)** — Adds `.plans/` to `.gitignore`. Task state stays local; avoids conflicts when switching branches or using worktrees.
+       2. **Check in** — Leaves `.plans/` tracked. Useful for sharing task state across a team, but expect noise on branch switches.
+   - If **Ignore**:
+     - Ensure `.gitignore` exists; create it if missing.
+     - If it exists and does not end with a newline, append a newline first.
+     - Append `.plans/` followed by a newline.
+     - Remember for step 9 that `.gitignore` should be staged alongside the init commit.
+   - If **Check in**: do nothing.
+
+8. **Display confirmation**
    Show:
    - Confirmation that `.plans/` was created
    - List of files created
+   - Whichever applies: "Added `.plans/` to `.gitignore`" or "Tracking `.plans/` in git"
    - Suggest next steps:
      - `/plan-context` to set up project context
      - `/plan-capture <description>` to capture your first task
      - `/plan-help` to see all commands
 
-8. **Commit .plans/ changes**
+9. **Commit changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
-   - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
-   - If exit code 0 (ignored): skip silently
    - Read `.plans/config.json` for `git_commits` setting
    - If `git_commits` is not `true`: skip silently
-   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-   - If no changes: skip silently
-   - Commit:
-     ```bash
-     git add .plans/
-     git commit -m "plan: initialize .plans/"
-     ```
+   - Determine whether `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
+   - **If `.plans/` is gitignored** (ignore path was just taken in step 7, or was already ignored):
+     - If `.gitignore` was just modified in step 7, commit it:
+       ```bash
+       git add .gitignore
+       git commit -m "plan: gitignore .plans/"
+       ```
+     - Otherwise: skip silently (nothing to commit for `.plans/`).
+   - **If `.plans/` is tracked**:
+     - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
+     - If no changes: skip silently
+     - Commit:
+       ```bash
+       git add .plans/
+       git commit -m "plan: initialize .plans/"
+       ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
 ## Edge Cases
