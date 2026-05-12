@@ -95,6 +95,14 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    ## Impact Scope
    _To be filled during elaboration (if 3+ files affected)_
 
+   ## Assumptions
+
+   ### Initial (from elaboration)
+   _To be filled during elaboration_
+
+   ### Discovered during execution
+   _To be filled during execution_
+
    ## Changes
    _To be filled during execution_
 

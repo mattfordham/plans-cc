@@ -473,6 +473,33 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 14. **Update task file**
     - Fill in Why, How, Verification, and Impact Scope (if applicable) sections
     - Update Status to `elaborated`
+
+    **Skip-mode assumption tracking:** If `skip_mode` is true, every auto-accepted prompt in steps 11–12 (Path A confirmation, Path B Why/approach/open-questions/Verification, Path C intent, Path-C "Research more" auto-accept, step 12 validation confirmation) represents a decision made on the user's behalf without explicit input. Capture each such auto-pick as a bullet under the task's `## Assumptions > Initial (from elaboration)` subsection. If the subsection contains a `_To be filled..._` placeholder, replace it; otherwise append.
+
+    **Bullet format:**
+    ```
+    - [high|low] [short statement of what was decided]. **Why:** [brief rationale grounded in research]
+    ```
+
+    **Tagging heuristics — apply these consistently:**
+
+    Tag `- [high]` (clear pattern-match decision) when ANY of:
+    - Research returned ≥3 examples of the same pattern in the codebase
+    - Only one plausible library/approach surfaced in research
+    - Behavior is clearly documented in CLAUDE.md or referenced docs
+    - The chosen option had no plausible alternative in the research findings
+
+    Tag `- [low]` (judgement call worth flagging for review) when ANY of:
+    - Research returned <3 examples or conflicting examples
+    - Multiple plausible approaches surfaced and we picked the first
+    - The chosen path requires an assumption about an external API or data shape not present in the codebase
+    - It's a UX or scope decision the source description didn't specify
+    - The research "Open Questions" section had unresolved items relevant to this pick
+
+    Skip auto-picks that are pure formatting/process (e.g., "Yes, proceed" on the Path A confirmation when nothing substantive was decided) — only capture picks that represent a real design or scope decision.
+
+    If `skip_mode` is false, do not write any Initial assumptions — that subsection is reserved for skip-mode elaboration. Leave any existing placeholder text intact.
+
     - Write the updated file
 
 15. **Commit .plans/ changes**

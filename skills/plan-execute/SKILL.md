@@ -13,6 +13,7 @@ allowed-tools:
   - Task
   - WebFetch
   - WebSearch
+  - mcp__trello__get_card
 description: Start or continue working on a task (auto-captures/elaborates if needed)
 ---
 
@@ -30,9 +31,12 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - **Worktree keyword detection** (first) — set `worktree_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `worktree`, `use worktree`, `with worktree`
   - Strip worktree keywords from `$ARGUMENTS` before further parsing
   - `worktree_mode = true` implies `branch_mode = true` (worktrees always use branches)
-- **Branch keyword detection** (second) — set `branch_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `branch`, `get branch`, `use branch`, `yes branch`
+- **YOLO keyword detection** (second) — set `yolo_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `yolo`, `yolo mode`, `autonomous`
+  - Strip YOLO keywords from `$ARGUMENTS` before further parsing
+  - `yolo_mode = true` implies `worktree_mode = true` AND `branch_mode = true` (autonomous execution always runs in an isolated worktree on its own branch)
+- **Branch keyword detection** (third) — set `branch_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `branch`, `get branch`, `use branch`, `yes branch`
   - Strip branch keywords from `$ARGUMENTS` before further parsing
-- **Step filter detection** (third) — check for step selection directives. Set `step_filter` if found, and strip from `$ARGUMENTS` before further parsing.
+- **Step filter detection** (fourth) — check for step selection directives. Set `step_filter` if found, and strip from `$ARGUMENTS` before further parsing.
 
   **Explicit step references** (matched against argument string, case-insensitive):
   - `step N` or `steps N` → single step N (e.g., `step 3`)
@@ -77,6 +81,9 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - `/plan-execute 1 the diagnostic steps` → execute steps whose descriptions relate to diagnostics
 - `/plan-execute 1 next batch` → execute the next segment of uncompleted steps
 - `/plan-execute 1 last 2 steps` → execute the last 2 steps of task 1
+- `/plan-execute 1 yolo` → run task 1 in yolo mode (autonomous, worktree, low-confidence assumptions tracked)
+- `/plan-execute https://trello.com/c/abc123 yolo` → ingest Trello card and run autonomously
+- `/plan-execute "Some task" yolo` → autonomous execution on user-authored description
 
 ## Steps
 
@@ -87,6 +94,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 2. **Parse and resolve arguments**
    - Check for worktree keywords/phrases (see Arguments section) → store as `worktree_mode` flag (true/false). If true, also set `branch_mode = true`.
    - Strip worktree keywords from `$ARGUMENTS`
+   - Check for YOLO keywords/phrases (see Arguments section) → store as `yolo_mode` flag (true/false). If true, also set `worktree_mode = true` AND `branch_mode = true`.
+   - Strip YOLO keywords from `$ARGUMENTS`
    - Check for branch keywords/phrases (see Arguments section) → store as `branch_mode` flag (true/false)
    - Strip branch keywords from `$ARGUMENTS`
    - Check for step filter (see Arguments section) → store as `step_filter` (or null if none found)
@@ -98,6 +107,54 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
      - If ANY remaining token is non-numeric AND `step_filter` is NOT set → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
      - If ANY remaining token is non-numeric AND `step_filter` IS set → ambiguous. Discard `step_filter`, treat entire original remaining string as a description. Set `auto_capture = true`. (Step filters only work with existing task IDs.)
      - If nothing remains → `task_ids` is empty, `auto_capture = false`
+
+2.5. **Normalize external content** (only if `auto_capture` is true AND `task_ids` is empty)
+
+   When `capture_description` appears to be external content (a URL or pasted-text dump rather than a user-authored task description), fetch the source, extract a clean title + structured body, and rewrite `capture_description` before handing off to plan-capture. This step is skipped entirely when an existing task ID is being executed.
+
+   Detection (apply in order; first match wins):
+
+   - **Trello URL** — regex `https?://trello\.com/c/[a-zA-Z0-9]+`
+     - Extract the card ID from the URL (the segment after `/c/`)
+     - Call `mcp__trello__get_card` with that ID
+     - Title = card's `name` field
+     - Description = card's `desc` field, followed by checklist items (rendered as `- [ ]` / `- [x]` lines), followed by non-trivial comments. A "non-trivial comment" is one that is longer than ~20 characters and is not purely an acknowledgement (skip "+1", "thanks", emoji-only comments, and obviously bot-generated noise).
+     - Set `source_kind = "trello"`
+   - **GitHub issue URL** — regex `github\.com/[^/]+/[^/]+/issues/\d+`
+     - Use `WebFetch` to retrieve the page
+     - Extract the issue title and body from the returned content
+     - Set `source_kind = "github-issue"`
+   - **Linear URL** — regex `linear\.app/`
+     - Use `WebFetch` to retrieve the page
+     - Extract title and body from the returned content
+     - Set `source_kind = "linear"`
+   - **Pasted-text dump** — `capture_description` is more than 5 lines AND contains none of the recognized keywords (`branch`, `worktree`, `yolo`, `autonomous`, or any step-filter token). All URL detectors above must have already missed.
+     - Title = the first non-empty line, truncated to roughly 100 characters at a word boundary
+     - Description = the full original text
+     - Set `source_kind = "pasted-text"`
+
+   On any match, replace `capture_description` with:
+
+   ```
+   **Source:** [source_kind] [url-or-"pasted-text"]
+
+   **Title:** [extracted title]
+
+   [extracted description]
+   ```
+
+   `source_kind` is retained as a flag for downstream logging (state file entries, executor prompt context).
+
+   **Failure handling:**
+   - Trello fetch returns an error, empty card, or card with no usable description
+   - WebFetch fails or returns content from which no title/body can be extracted
+   - Any other extraction failure
+
+   If `yolo_mode` is true: print `YOLO bailing to interactive: [reason]. Run /plan-capture manually.`, unset `yolo_mode` (and the implied `worktree_mode` / `branch_mode` flags it set), and STOP.
+
+   If `yolo_mode` is false: print a warning like `Could not fetch external content ([reason]); passing raw description through.` and continue with the original unmodified `capture_description`.
+
+   If none of the detectors match, this step is a no-op — `capture_description` flows through unchanged.
 
 3. **Auto-capture and auto-elaborate** (only if `auto_capture` is true)
 
@@ -257,7 +314,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
           - Run `git checkout [default-branch]`
           - Print: `Current branch belongs to in-progress task #MMM. Switched to [default-branch] before creating new branch.`
         - If current branch does not match any in-progress task branch, do nothing — branch from the current checkout as before
-      - **Auto-accept shortcut:** If `branch_mode` is true (set in step 2), skip the question and immediately create the suggested branch — no `AskUserQuestion` needed.
+      - **Auto-accept shortcut:** If `branch_mode` is true OR `yolo_mode` is true (both set in step 2; yolo implies branch_mode but we list both for clarity), skip the question and immediately create the suggested branch — no `AskUserQuestion` needed.
       - **Otherwise, MUST use `AskUserQuestion` tool** to prompt user about branch creation:
         - Header: "Git branch"
         - Question: "Create a git branch for this task?"
@@ -537,6 +594,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       - Deviations from plan
       - Blockers (if any)
       - Test status
+      - **Assumptions written during execution:** Read the task file's `## Assumptions > Discovered during execution` subsection. Diff against any bullets that were already present before this segment ran (track the prior bullet count in the state file's `## Key Decisions` section as `assumptions_seen_before_segment_N: M`). Any newly-appended bullets are this segment's contribution — log a short summary line to the state file's `## Key Decisions` section, e.g. `- Segment N appended 2 assumption bullets (1 low, 1 high); see task file ## Assumptions for details.`
 
    4. Update state file:
       - Mark segment as complete
@@ -551,14 +609,15 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    6. **If segment's last step was an observation step:**
 
-      **If `worktree_mode` is true — defer observation to review:**
+      **If `worktree_mode` is true OR `yolo_mode` is true — defer observation to review:**
+      (yolo_mode implies worktree_mode transitively, but we list both explicitly so the deferral guarantee is self-documenting.)
       - Do NOT pause with AskUserQuestion
       - Check if later steps depend on this observation (instrumentation dependency rule applied during segmentation, or step language like "based on what you saw", "if the output shows"):
         - If dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review (⚠ later steps depend on this — agent proceeded with plan assumptions)`
         - If not dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review`
       - Continue to next segment
 
-      **If `worktree_mode` is false — MUST pause for user feedback:**
+      **If `worktree_mode` is false AND `yolo_mode` is false — MUST pause for user feedback:**
 
       **MUST use `AskUserQuestion` tool:**
       - Header: `"Observation"`
@@ -661,11 +720,29 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    that requires the user to manually verify something. Implement all prerequisites
    for the observation (add logging code, configure output, etc.) but do NOT mark
    the observation as verified — user verification happens outside this agent.
+
+   ## Assumptions to Track
+
+   As you work, watch for low-confidence decisions and write them into the task file's `## Assumptions > Discovered during execution` section. Append a bullet for each, tagged `- [high]` or `- [low]`:
+
+   Low-confidence triggers (write `- [low]`):
+   - You picked between 2+ plausible implementations
+   - You guessed at an API/field/data shape that wasn't documented in the task
+   - You made a UX call the task didn't specify
+   - You made a scope call (full fix vs. workaround, refactor scope, etc.)
+   - You used a library/pattern not already present in the project
+
+   High-confidence note (write `- [high]`):
+   - You made a clear pattern-match decision worth documenting (existing precedent in the codebase, single plausible path)
+
+   Format: `- [high|low] [what you decided]. **Why:** [reasoning]`
+
+   Write these BEFORE returning your structured response. The reviewer will see them at the top of `/plan-review NNN` output.
    ```
 
    **d. After all segments complete**
 
-   - **If `worktree_mode` is true:** proceed to worktree finish (step 11e) instead of showing the normal summary
+   - **If `worktree_mode` is true OR `yolo_mode` is true:** proceed to worktree finish (step 11e) instead of showing the normal summary. (yolo implies worktree transitively; listed explicitly so the review-status path is self-documenting.)
    - **Otherwise:** show completion summary:
      ```
      All segments complete for task #NNN
@@ -678,7 +755,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
      ```
    - Keep state file for reference (don't delete)
 
-   **e. Worktree finish** (only if `worktree_mode` is true — runs after all segments complete)
+   **e. Worktree finish** (only if `worktree_mode` is true OR `yolo_mode` is true — runs after all segments complete)
 
    **Single-repo path** (when `multi_repo_mode` is false):
 
@@ -698,7 +775,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    **Invariant after worktree removal:** You are now in the main project directory (`[project-root]`). The task's commits live on branch `[branch-name]` in the main repository — they are *not* lost when the worktree is removed. `git worktree add` only created a separate checkout; the branch and its commits remain in the main repo's `.git`. Subsequent commands (`/plan-review`, `/plan-complete`) operate on this branch from the main project directory — do NOT `cd` back into `.worktrees/NNN-slug` (it no longer exists) and do NOT assume the work needs to be "brought back" from anywhere.
 
    5. Remove `**Worktree:**` line from task file (branch metadata stays)
-   6. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`
+   6. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    7. Show worktree completion summary — print EXACTLY this format and STOP:
       ```
       All segments complete for task #NNN (worktree mode)
@@ -708,6 +785,10 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       Worktree: cleaned up
 
       Next: /plan-review NNN
+      ```
+      **If `yolo_mode` is true,** insert one additional line BEFORE the "Next:" line:
+      ```
+      YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
       **STOP after "Next:" line.** The branch `[branch-name]` exists in this repository and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
@@ -729,7 +810,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    5. Set task status to `review` (not `in-progress`)
    6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
-   7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`
+   7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    8. Show worktree completion summary — print EXACTLY this format and STOP:
       ```
       All segments complete for task #NNN (worktree mode)
@@ -740,6 +821,10 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       Worktree: cleaned up
 
       Next: /plan-review NNN
+      ```
+      **If `yolo_mode` is true,** insert one additional line BEFORE the "Next:" line:
+      ```
+      YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
       **STOP after "Next:" line.** The branch `[branch-name]` exists in each affected repo and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
@@ -1107,3 +1192,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 - **Some repos have no changes after execution**: Only commits where changes exist; deletes empty branches in repos with no changes
 - **Single relevant repo in multi-repo mode**: Still uses parent-level worktree directory for consistency (unified layout is maintained)
 - **Mixed git/non-git subdirs**: Non-git directories are symlinked as-is into the worktree directory; only git repos get actual worktrees
+- **Trello fetch fails (auth, private board, deleted card)**: Print `YOLO bailing to interactive: Trello fetch failed ([error]). Run /plan-capture manually.`, unset `yolo_mode` (and the implied `worktree_mode` / `branch_mode` it set), and stop. If `yolo_mode` was not set, just print a warning and pass the raw `$ARGUMENTS` through to plan-capture as-is.
+- **Empty Trello description**: Print `YOLO bailing to interactive: Trello card has no description. Run /plan-capture manually.`, unset yolo flags, and stop (same shape as the fetch-failure bail). If `yolo_mode` was not set, warn and pass raw description through.
+- **Research sub-agent reports zero relevant files in yolo mode**: Executing on a plan that can't find relevant code is a footgun. Bail out of autonomous mode: unset `yolo_mode`, fall back to interactive elaboration, and prompt the user for guidance on where the relevant code lives.
+- **`yolo` keyword with no external content**: `/plan-execute "Fix bug" yolo` is valid. Skips step 2.5 external-content normalization (no URL/dump detected) and runs the autonomous flow on user-authored text. No bail.
+- **`yolo` keyword with existing task ID**: `/plan-execute 5 yolo` is valid. Skips step 2.5 entirely (input is a task ID, not external content) and runs autonomous execution on the existing task. No bail.

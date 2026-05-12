@@ -110,7 +110,7 @@ brainstorm → expand → elaborate → execute → complete
           selected tasks
 ```
 
-**Shortcuts:** Any command auto-fills missing earlier steps. `/plan-execute Fix bug` auto-captures and auto-elaborates before executing. `/plan-elaborate Fix bug` auto-captures before elaborating. `/plan-capture Fix bug and go` chains all three with trailing phrases. Branch keywords (`branch`, `use branch`) and worktree keywords (`worktree`, `use worktree`) work across all entry points. Step filters (`steps 3-5`, `first 3 steps`, `the diagnostic steps`, `next batch`) let you execute a subset of steps within a task.
+**Shortcuts:** Any command auto-fills missing earlier steps. `/plan-execute Fix bug` auto-captures and auto-elaborates before executing. `/plan-elaborate Fix bug` auto-captures before elaborating. `/plan-capture Fix bug and go` chains all three with trailing phrases. Branch keywords (`branch`, `use branch`) and worktree keywords (`worktree`, `use worktree`) work across all entry points. The `yolo` keyword (or `autonomous`) on `/plan-execute` runs a task autonomously in a worktree with skip-mode elaboration, deferred observations, and low-confidence assumptions tracked for review (e.g. `/plan-execute https://trello.com/c/abc yolo`). Step filters (`steps 3-5`, `first 3 steps`, `the diagnostic steps`, `next batch`) let you execute a subset of steps within a task.
 
 ### Task IDs
 

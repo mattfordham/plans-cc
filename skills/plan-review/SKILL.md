@@ -186,7 +186,29 @@ Review a task that has completed execution (typically via worktree workflow). **
 
    Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
 
+   **9.a. Collect low-confidence assumptions (pre-render step)**
+
+   Before assembling the summary output, scan the task file for a `## Assumptions` section and extract any low-confidence bullets so they can be rendered at the top of the summary.
+
+   - Read the task file once. Locate the `## Assumptions` section heading.
+     - If the section is absent (older tasks captured before the `## Assumptions` template was added won't have it): treat as empty, skip the block entirely, and continue rendering the rest of the summary. No warning, no "nothing to verify" message.
+   - Within the `## Assumptions` section, scan both `### Initial (from elaboration)` and `### Discovered during execution` subsections.
+   - Filter lines matching the regex `^- \[low\]` (tolerate the lines exactly as written by plan-elaborate / plan-executor — no leading whitespace expected, since these are top-level bullets under a `###` heading). For a quick runtime sanity check the rough shape is:
+     ```bash
+     grep -E '^- \[low\]' .plans/pending/NNN-*.md
+     ```
+   - Preserve each matched line's text verbatim (including any inline `**Why:**` or `**Verify during execution:**` clauses). Render the whole bullet — the trailing context is often the point of flagging the assumption.
+   - High-confidence (`- [high]`) items are intentionally omitted from the default review summary to keep it uncluttered. A future flag (e.g., `/plan-review NNN --all-assumptions`) could surface them; not implemented today.
+   - If zero `- [low]` matches are found: omit the `⚠ Low-confidence assumptions to verify:` block entirely. Do not render an empty heading or a "no items" placeholder.
+
+   **9.b. Render the summary**
+
+   If the low-confidence collection in 9.a produced one or more bullets, prepend a `⚠ Low-confidence assumptions to verify:` block to the summary, BEFORE the `**Branch:**` / `**Type:**` metadata, the diff stats, and the completed steps. The block goes at the very top so the reviewer sees it first.
+
    ```
+   ⚠ Low-confidence assumptions to verify:
+   [matched - [low] lines, verbatim, one per line]
+
    # Review: Task #NNN — [Title]
 
    **Branch:** [branch-name]
@@ -232,3 +254,6 @@ Review a task that has completed execution (typically via worktree workflow). **
 - **No state file**: Skip observation walkthrough — no deferred observations to process
 - **No deferred observations in state file**: Skip observation walkthrough, proceed to review summary
 - **Fix sub-agent changes during observation**: Commit fixes to the branch before continuing to next observation
+- **Task file has no `## Assumptions` section**: Older tasks captured before assumption-tracking won't have the section. Step 9.a treats this as zero low-confidence items and omits the `⚠` block silently — never error or warn.
+- **`## Assumptions` section present but no `- [low]` lines**: Omit the `⚠` block entirely; do not render an empty heading or "no items" message.
+- **High-confidence (`- [high]`) assumptions**: Not surfaced by default. A future `--all-assumptions` flag could include them; for now, the default review summary stays uncluttered.

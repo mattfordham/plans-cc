@@ -127,7 +127,11 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-execute Fix the login timeout                 # Auto-capture → elaborate → execute
 /plan-execute Fix crash branch                      # Full pipeline with git branch
 /plan-execute Fix crash use worktree                # Full pipeline with worktree isolation
+/plan-execute https://trello.com/c/abc yolo         # Autonomous: fetch Trello card, worktree, skip-mode, land in review
+/plan-execute 5 yolo                                # Autonomous execution on existing task #5
 ```
+
+**Keywords on `/plan-execute`:** `branch` / `use branch`, `worktree` / `use worktree`, and `yolo` / `autonomous`. `yolo` implies `worktree` + `branch` + skip-mode elaboration + deferred observations + status → `review` on completion. Low-confidence assumptions surface at the top of `/plan-review`.
 
 **Switch between tasks:**
 ```
