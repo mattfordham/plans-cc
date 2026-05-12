@@ -694,6 +694,9 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    3. Return to project root: `cd [project-root]`
    4. Remove worktree: `git worktree remove .worktrees/NNN-slug`
       - If remove fails (dirty worktree), force it: `git worktree remove --force .worktrees/NNN-slug`
+
+   **Invariant after worktree removal:** You are now in the main project directory (`[project-root]`). The task's commits live on branch `[branch-name]` in the main repository — they are *not* lost when the worktree is removed. `git worktree add` only created a separate checkout; the branch and its commits remain in the main repo's `.git`. Subsequent commands (`/plan-review`, `/plan-complete`) operate on this branch from the main project directory — do NOT `cd` back into `.worktrees/NNN-slug` (it no longer exists) and do NOT assume the work needs to be "brought back" from anywhere.
+
    5. Remove `**Worktree:**` line from task file (branch metadata stays)
    6. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`
    7. Show worktree completion summary — print EXACTLY this format and STOP:
@@ -706,7 +709,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
       Next: /plan-review NNN
       ```
-      **STOP after "Next:" line. Do not add any other instructions, suggestions, or testing advice. `/plan-review` handles branch checkout automatically — the user does NOT need to merge or checkout anything manually.**
+      **STOP after "Next:" line.** The branch `[branch-name]` exists in this repository and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
    **Multi-repo path** (when `multi_repo_mode` is true):
 
@@ -721,6 +724,9 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
    4. Remove parent-level worktree directory: `rm -rf .worktrees/NNN-slug`
       - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
+
+   **Invariant after this step:** You are back in the parent project directory. For each repo in `relevant_repos`, the task's commits live on branch `[branch-name]` inside that repo's main checkout. The `.worktrees/NNN-slug/` tree has been fully removed. All subsequent commands run from the main project directory against those per-repo branches — do NOT assume work needs to be moved out of the (now-deleted) worktree.
+
    5. Set task status to `review` (not `in-progress`)
    6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
    7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`
@@ -735,7 +741,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
       Next: /plan-review NNN
       ```
-      **STOP after "Next:" line. Do not add any other instructions, suggestions, or testing advice. `/plan-review` handles branch checkout automatically — the user does NOT need to merge or checkout anything manually.**
+      **STOP after "Next:" line.** The branch `[branch-name]` exists in each affected repo and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
    **f. figma-port two-phase flow** (only fires when step 0 of section b detected a `/figma-port` invocation in the current segment)
 

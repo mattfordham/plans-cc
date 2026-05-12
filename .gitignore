@@ -1,3 +1,4 @@
 .plans/
 node_modules/
 .claude/scheduled_tasks.lock
+.worktrees/

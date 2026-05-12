@@ -16,7 +16,7 @@ description: Review a task's changes — checkout branch, walk through deferred 
 
 # plan-review
 
-Review a task that has completed execution (typically via worktree workflow). Checks out the task's branch and displays a summary of changes for the user to inspect and test manually.
+Review a task that has completed execution (typically via worktree workflow). **Runs in the main project directory** — by the time `/plan-review` is invoked, any execution worktree has already been removed by `/plan-execute` and the task's commits live on a branch in this repository (worktrees share `.git` with the main repo, so the branch survives worktree removal). This skill checks out that branch in the main checkout and displays a summary of changes for the user to inspect and test manually.
 
 ## Arguments
 
@@ -53,6 +53,11 @@ Review a task that has completed execution (typically via worktree workflow). Ch
    - Check for `**Branch:**` field:
      - If no branch: "Task #NNN has no branch. Nothing to review — the changes are in the current checkout."
 
+3.5. **Confirm working directory is the main repo (not a worktree)**
+   - Run `pwd` and verify it matches the project root (the directory containing `.plans/`). If it does not, `cd` to the project root before continuing.
+   - Run `git rev-parse --show-toplevel` and `git rev-parse --git-dir`. If `--git-dir` resolves to a path inside `.worktrees/` (e.g. `.git/worktrees/NNN-slug`), error out: "plan-review must run from the main project directory, not a worktree. cd to [project-root] and re-run `/plan-review NNN`."
+   - This guards against the case where a previous `/plan-execute` left the shell context positioned inside `.worktrees/NNN-slug/` (or where the agent assumed the work is still trapped in the worktree). The branch lives in the main repo's `.git`; all subsequent steps must run from there.
+
 4. **Check for uncommitted changes**
    - Run `git status --porcelain` to check for uncommitted changes in the current checkout
    - If uncommitted changes exist:
@@ -72,6 +77,7 @@ Review a task that has completed execution (typically via worktree workflow). Ch
        - If "Abort": stop and exit
 
 5. **Checkout branch**
+   - **All commands in this step run in the main project directory** (verified in step 3.5). The branch was created by `/plan-execute` inside this same repository — `git worktree add` shares the `.git` of the main repo, so removing the worktree does not remove the branch. There is no "bringing code back" step needed.
    - Get the branch name from the task file's `**Branch:**` field
    - Check if branch exists: `git branch --list [branch-name]`
    - If branch doesn't exist: "Branch '[branch-name]' not found. It may have been deleted."
