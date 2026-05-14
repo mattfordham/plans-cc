@@ -54,6 +54,7 @@ Display the complete command reference. Output the following help text:
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
 | `/plan-depends <id> [blocked by <id>\|clear\|show]` | Add or view task dependencies |
 | `/plan-guide` | Interactive contextual guide — what to do next |
+| `/plan-spawn <ids...>` | Fan out N tasks in parallel, each in its own worktree (always autonomous) |
 
 ### Task Lifecycle
 

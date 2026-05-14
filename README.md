@@ -14,7 +14,7 @@ Tasks are stored as markdown files in a `.plans/` directory within your project,
 npx plans-cc
 ```
 
-This copies 27 skill files to `~/.claude/skills/`. No dependencies are installed in your project.
+This copies 28 skill files to `~/.claude/skills/`. No dependencies are installed in your project.
 
 plans-cc also ships a second binary, `plans-cc-dashboard`, a live-updating TUI for watching task status in real time. `npx plans-cc` deploys the dashboard runtime (including the `blessed` runtime dependency) to `~/.claude/plans-cc/` and drops a launcher at `~/.claude/bin/plans-cc-dashboard` so it keeps working after the `npx` cache is cleaned up. Add `~/.claude/bin` to your PATH to run it from any project:
 
@@ -112,6 +112,7 @@ This auto-captures, auto-elaborates, and starts executing — all in one command
 | `/plan-execute <id> branch` | Execute with a dedicated git branch |
 | `/plan-execute <id> use worktree` | Execute in an isolated git worktree |
 | `/plan-review <id>` | Checkout a task's branch and display a diff summary for manual testing |
+| `/plan-spawn <ids...>` | Fan out N tasks in parallel, each in its own worktree (always autonomous) |
 
 **Branch mode** creates a feature branch (e.g., `fix/001-login-timeout`) and works on it. When you complete the task, Claude offers to merge it back.
 
