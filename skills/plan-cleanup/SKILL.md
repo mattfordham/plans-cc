@@ -192,6 +192,9 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
     System scan: <summary from step 8>
     ```
 
+    End-of-action marker (final line): `🟢 CLEANED UP · N issues resolved`
+    (N = total issues fixed across all categories; use `0 issues resolved` if nothing needed fixing)
+
 ## Edge Cases
 
 - **Not initialized**: Error suggesting `/plan-init`

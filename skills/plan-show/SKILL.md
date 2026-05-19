@@ -185,6 +185,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    - If How section is empty: show "No steps defined"
    - If Verification is empty: omit it from display
 
+9. **End-of-action marker**
+   - Output as the final line (read-only — no "Next:" tail): `🔵 SHOWN · Task #NNN`
+
 ## Edge Cases
 
 - **No ID argument**: List tasks and prompt for selection

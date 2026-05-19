@@ -218,6 +218,8 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
     - `/plan-status` for full dashboard
     ```
 
+    End-of-action marker (final line): `🟢 EXPANDED · Idea #NNN into N tasks → Next: /plan-elaborate <first-id>`
+
 ## Edge Cases
 
 - **No arguments**: Ask user for the idea ID

@@ -317,7 +317,10 @@ Spawn is **always** autonomous + worktree + branch. There is no interactive vari
    ```
 
    - If any task outcome is non-`ok`, surface it in the Outcome column (e.g. `malformed`, `branch-missing`, `status-not-review`, `blocked: [reason]`) — do not hide failures.
-   - **STOP after the summary.** Do not auto-invoke `/plan-review`. Reviewing each task is a deliberate user step.
+   - After the summary, add the end-of-action marker as the final line:
+     `🟣 SPAWNED · N tasks → Next: /plan-status`
+     (substitute N with the number of tasks spawned)
+   - **STOP after the marker line.** Do not auto-invoke `/plan-review`. Reviewing each task is a deliberate user step.
 
 ## Edge Cases
 

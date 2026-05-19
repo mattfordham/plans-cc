@@ -159,6 +159,8 @@ The file is only edited when the user signals "update the plan" (or equivalent).
     ```
     If no edits were applied, say `No changes applied.` instead of `Applied X edit(s).`
 
+    End-of-action marker (final line): `🟢 DISCUSSED · Task #NNN → Next: /plan-execute NNN`
+
 ## Edge Cases
 
 - **No arguments at all**: prompt for an ID (step 3).

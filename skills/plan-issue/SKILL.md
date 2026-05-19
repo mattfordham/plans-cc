@@ -111,6 +111,8 @@ Report an issue found during manual testing. Issues are attached to a task and m
    Resolve issues: /plan-execute NNN
    ```
 
+   End-of-action marker (final line): `🔴 ISSUE LOGGED · Task #NNN`
+
 ## Edge Cases
 
 - **No arguments**: Error with usage guidance

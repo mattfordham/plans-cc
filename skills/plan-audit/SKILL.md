@@ -140,6 +140,8 @@ Run a completeness audit on a task. Verifies that all affected files, tests, and
    [If no changes]: No changes made to task file.
    ```
 
+   End-of-action marker (final line): `🔵 AUDITED · Task #NNN`
+
 ## Edge Cases
 
 - **No ID argument**: List elaborated/in-progress tasks and ask which to audit

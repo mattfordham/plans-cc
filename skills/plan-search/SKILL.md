@@ -85,6 +85,9 @@ Search across all tasks and ideas by keyword. Searches titles and content of tas
    No tasks or ideas matching "[query]".
    ```
 
+7. **End-of-action marker**
+   - Output as the final line (read-only — no "Next:" tail): `🔵 SEARCHED · N matches`
+
 ## Edge Cases
 
 - **No arguments**: Error with usage hint

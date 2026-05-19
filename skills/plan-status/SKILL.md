@@ -104,6 +104,11 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
 
    Include every suggestion that applies.
 
+5. **End-of-action marker**
+   - Output as the final line (no "Next:" tail — this is a read-only query):
+     `🔵 STATUS · <total> tasks`
+   - `<total>` is the sum of all task counts.
+
 ## Edge Cases
 
 - **Not initialized**: short-circuit at step 1. Do not spawn subagent.

@@ -232,6 +232,8 @@ Analyze an idea, surface the highest-value components, and let the user select w
     All components from this idea have been picked. 🎉
     ```
 
+    End-of-action marker (final line): `🟢 PICKED · N tasks from Idea #NNN → Next: /plan-elaborate <first-id>`
+
 ## Edge Cases
 
 - **No arguments**: Ask user for the idea ID

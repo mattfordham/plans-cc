@@ -155,6 +155,9 @@ Initialize the `.plans/` directory structure for lightweight task management.
        ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
+10. **End-of-action marker**
+    - Output as the final line: `🟢 INITIALIZED · .plans/ ready → Next: /plan-capture`
+
 ## Edge Cases
 
 - **Already initialized**: If `.plans/config.json` exists, show error with suggestion to use `/plan-status`

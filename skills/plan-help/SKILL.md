@@ -171,4 +171,18 @@ capture this                    # Save the synthesized discussion
 /plan-expand 1                  # Decompose entire idea into tasks
 ```
 
+### End-of-Action Markers
+
+Every command ends with a single-line marker so it's obvious at a glance which action just finished when returning to a window:
+
+- 🟢 green — an action advanced a task (captured, elaborated, executed, etc.)
+- 🟡 yellow — task reviewed, ready to complete
+- ✅ check — task completed
+- ⏸️ — task paused
+- 🔵 blue — read-only query (status, list, show, search, …)
+- 🔴 red — destructive/warning (deleted, issue logged)
+- 🟣 purple — spawn fan-out
+
 ---
+
+🔵 HELP

@@ -169,6 +169,8 @@ Complements `/plan-elaborate`: elaborate generates structure, clarify hardens it
     - [Open Q] What happens on concurrent writes?
     ```
 
+    End-of-action marker (final line): `🟢 CLARIFIED · Task #NNN → Next: /plan-execute NNN`
+
 ## Edge Cases
 
 - **No arguments at all**: prompt for an ID (step 3).

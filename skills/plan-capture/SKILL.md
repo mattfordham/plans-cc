@@ -158,6 +158,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
    Next: /plan-elaborate NNN (recommended for bugs)
    ```
+   End-of-action marker (final line): `🟢 CAPTURED · Task #NNN → Next: /plan-elaborate NNN`
 
    **For all other types:**
    ```
@@ -167,6 +168,9 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
    Next: /plan-elaborate NNN to flesh it out
    ```
+   End-of-action marker (final line): `🟢 CAPTURED · Task #NNN → Next: /plan-elaborate NNN`
+
+   When `auto_elaborate` is true, do NOT emit a capture marker — the downstream elaborate/execute skill emits the final marker for the chain.
 
 11. **Auto-elaborate** (only if `auto_elaborate` is true)
 

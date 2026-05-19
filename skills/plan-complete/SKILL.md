@@ -297,7 +297,10 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     Next: /plan-status or /plan-capture
     ```
 
-    **STOP after "Next:" line. Do not add anything else.**
+    Then add the end-of-action marker as the final line:
+    `✅ COMPLETED · Task #NNN → Next: /plan-status`
+
+    **STOP after the marker line. Do not add anything else.**
 
 ## Edge Cases
 

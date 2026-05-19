@@ -145,6 +145,8 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
    - If user has ideas and tasks: "Tip: `/plan-search <keyword>` finds tasks and ideas by content"
    - Default: "Tip: `/plan-help` shows the full command reference"
 
+   **End-of-action marker** — output as the final line (read-only — no "Next:" tail): `🔵 GUIDE`
+
 ## Edge Cases
 
 - **Not initialized**: Provide setup guidance (step 1) — do NOT error

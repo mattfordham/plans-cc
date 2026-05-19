@@ -130,6 +130,8 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 
    If the task had no branch, omit the "Switched to branch:" line.
 
+   End-of-action marker (final line): `⏸️ PAUSED · Task #{id} → Next: /plan-execute {id} to resume`
+
    **Review flow:**
 
    Print EXACTLY this format (substitute values in {braces}):
@@ -145,7 +147,9 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 
    If the task had no branch, omit the "Switched to branch:" line.
 
-   **STOP after "Resume with:" line. Do not add anything else.**
+   End-of-action marker (final line): `⏸️ PAUSED · Task #{id} → Next: /plan-review {id} to resume`
+
+   **STOP after the marker line. Do not add anything else.**
 
 ## Edge Cases
 

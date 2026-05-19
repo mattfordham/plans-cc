@@ -753,6 +753,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
      Run `/plan-complete NNN` to finalize.
      ```
+     End-of-action marker (final line): `🟢 EXECUTED · Task #NNN → Next: /plan-complete NNN`
+     (If execution paused mid-task awaiting user input rather than finishing, emit `⏸️ PAUSED · Task #NNN → Next: /plan-execute NNN to resume` instead.)
    - Keep state file for reference (don't delete)
 
    **e. Worktree finish** (only if `worktree_mode` is true OR `yolo_mode` is true — runs after all segments complete)
@@ -790,7 +792,9 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
-      **STOP after "Next:" line.** The branch `[branch-name]` exists in this repository and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
+      Then add the end-of-action marker as the final line:
+      `🟢 EXECUTED · Task #NNN → Next: /plan-review NNN`
+      **STOP after the marker line.** The branch `[branch-name]` exists in this repository and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
    **Multi-repo path** (when `multi_repo_mode` is true):
 
@@ -826,7 +830,9 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
-      **STOP after "Next:" line.** The branch `[branch-name]` exists in each affected repo and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
+      Then add the end-of-action marker as the final line:
+      `🟢 EXECUTED · Task #NNN → Next: /plan-review NNN`
+      **STOP after the marker line.** The branch `[branch-name]` exists in each affected repo and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
 
    **f. figma-port two-phase flow** (only fires when step 0 of section b detected a `/figma-port` invocation in the current segment)
 
@@ -1136,6 +1142,8 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
     Next: /plan-complete 1 3
     ```
+
+    End-of-action marker (final line): `🟢 EXECUTED · N tasks → Next: /plan-complete <ids>`
 
 ## Edge Cases
 

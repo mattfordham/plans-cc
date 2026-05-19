@@ -168,7 +168,9 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     Next: /plan-elaborate 5 or /plan-execute 5
     ```
 
-    **STOP after "Next:" line. Do not add anything else.**
+    End-of-action marker (final line): `🟢 REOPENED · Task #{id} → Next: /plan-execute {id}`
+
+    **STOP after the marker line. Do not add anything else.**
 
 ## Edge Cases
 

@@ -237,6 +237,8 @@ Review a task that has completed execution (typically via worktree workflow). **
    - `/plan-reopen NNN` if it needs rework after completion
    ```
 
+   End-of-action marker (final line): `🟡 REVIEWED · Task #NNN → Next: /plan-complete NNN`
+
 ## Edge Cases
 
 - **No ID + one review/in-review task**: Auto-select it

@@ -160,6 +160,8 @@ Import a brainstorming or planning markdown document and split it into multiple 
    - `/plan-status` for full dashboard
    ```
 
+   End-of-action marker (final line): `🟢 IMPORTED · N tasks → Next: /plan-status`
+
 ## Edge Cases
 
 - **No arguments**: Ask user for the file path

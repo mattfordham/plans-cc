@@ -74,6 +74,9 @@ Draw from these sources, in priority order:
    - **Decisions**: Only include if there were meaningful choices (e.g., "Used X instead of Y because Z"). Omit the section entirely if nothing notable.
    - **Status**: Single line. Where things stand right now.
 
+5. **End-of-action marker**
+   - Output as the final line (read-only — no "Next:" tail): `🔵 SUMMARIZED · session`
+
 ## Edge Cases
 
 - **Nothing was done yet**: "No work completed in this session yet."

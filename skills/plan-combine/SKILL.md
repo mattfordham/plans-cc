@@ -230,6 +230,10 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
     Next: /plan-execute [ID]
     ```
 
+    End-of-action marker (final line):
+    - If pending: `🟢 COMBINED · Task #[ID] → Next: /plan-elaborate [ID]`
+    - If elaborated: `🟢 COMBINED · Task #[ID] → Next: /plan-execute [ID]`
+
 ## Edge Cases
 
 - **< 2 IDs provided**: Error "Need at least 2 task IDs to combine."

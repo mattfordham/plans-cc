@@ -542,6 +542,10 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     Next: /plan-execute NNN to start working
     ```
 
+    End-of-action marker (final line): `🟢 ELABORATED · Task #NNN → Next: /plan-execute NNN`
+
+    (When elaborate is running as part of an auto-chain that will immediately execute — e.g. `auto_execute` from `/plan-capture` — suppress this marker; the downstream execute skill emits the final marker.)
+
     **STOP after displaying this confirmation. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file and re-display this confirmation — but do NOT start executing the task.
 
 17. **Display multi-task summary**
@@ -562,6 +566,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     Next: /plan-execute 1 (or /plan-execute 3)
     ```
+
+    End-of-action marker (final line): `🟢 ELABORATED · N tasks → Next: /plan-execute <first-id>`
 
     **STOP after displaying this summary. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file(s) and re-display this summary — but do NOT start executing any task.
 

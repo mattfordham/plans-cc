@@ -112,6 +112,29 @@ brainstorm → expand → elaborate → execute → complete
 
 **Shortcuts:** Any command auto-fills missing earlier steps. `/plan-execute Fix bug` auto-captures and auto-elaborates before executing. `/plan-elaborate Fix bug` auto-captures before elaborating. `/plan-capture Fix bug and go` chains all three with trailing phrases. Branch keywords (`branch`, `use branch`) and worktree keywords (`worktree`, `use worktree`) work across all entry points. The `yolo` keyword (or `autonomous`) on `/plan-execute` runs a task autonomously in a worktree with skip-mode elaboration, deferred observations, and low-confidence assumptions tracked for review (e.g. `/plan-execute https://trello.com/c/abc yolo`). Step filters (`steps 3-5`, `first 3 steps`, `the diagnostic steps`, `next batch`) let you execute a subset of steps within a task.
 
+### End-of-Action Markers
+
+Every skill ends its output with a single-line marker so that, when returning to a window with a finished session, it's instantly obvious which action just completed. The marker is always the **very last line** of the response.
+
+Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
+
+- `ACTION_LABEL` is the past-tense verb in ALL CAPS.
+- `target` is `Task #NNN`, `Idea #NNN`, or a short noun phrase (`12 tasks`, `session`).
+- The `→ Next:` tail is included only when there's an obvious next step; read-only queries omit it.
+- The emoji is the color channel (Claude Code renders markdown, not raw ANSI):
+
+| Emoji | Category | Skills |
+|-------|----------|--------|
+| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, import, pick, expand, brainstorm, cleanup, context, init, depends |
+| 🟡 | Review state | review |
+| ✅ | Completion (terminal) | complete |
+| ⏸️ | Paused | pause |
+| 🔵 | Read-only / informational | status, list, show, search, ideas, guide, summary, help, audit |
+| 🔴 | Destructive / warning | delete, issue |
+| 🟣 | Spawn / fan-out | spawn |
+
+Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPLETED · Task #005 → Next: /plan-status`, `🔵 STATUS · 12 tasks`, `🔴 DELETED · Task #003`.
+
 ### Task IDs
 
 - 3-digit zero-padded format: `001`, `002`, etc.

@@ -118,6 +118,10 @@ Manage task dependencies. Mark tasks as blocked by other tasks, view dependency 
      ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
+8. **End-of-action marker** (final line)
+   - For `add` or `clear` actions: `🟢 DEPENDENCY · Task #NNN`
+   - For `show` / show-all (read-only): `🔵 DEPENDENCIES · Task #NNN` (or `🔵 DEPENDENCIES · N tasks` for show-all)
+
 ## Edge Cases
 
 - **Not initialized**: Error suggesting `/plan-init`

@@ -130,6 +130,9 @@ Display a filtered list of tasks in table format.
    - For status filters: suggest `/plan-capture` or relevant command
    - For type filters: note that no tasks of that type exist
 
+9. **End-of-action marker**
+   - Output as the final line (read-only — no "Next:" tail): `🔵 LISTED · N tasks`
+
 ## Edge Cases
 
 - **Search with no results**: "No tasks matching '[query]'. Try `/plan-search [query]` for full-text search including ideas."

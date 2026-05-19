@@ -146,6 +146,8 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    Review and edit CONTEXT.md if needed.
    ```
 
+   End-of-action marker (final line): `🟢 CONTEXT UPDATED`
+
 ## Edge Cases
 
 - **No project files found**: Write template with placeholder sections, note that auto-detection found nothing

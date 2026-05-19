@@ -77,6 +77,10 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
    Already expanded into tasks. Run /plan-expand NNN to add more tasks.
    ```
 
+7. **End-of-action marker** (read-only — final line)
+   - List mode: `🔵 IDEAS · N ideas`
+   - Detail mode: `🔵 IDEA · #NNN`
+
 ## Edge Cases
 
 - **No ideas directory**: "No ideas yet. Run `/plan-brainstorm` to start exploring."

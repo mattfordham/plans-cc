@@ -135,6 +135,8 @@ Permanently delete a task from the system.
     - Completed: X
     ```
 
+    End-of-action marker (final line): `🔴 DELETED · Task #NNN`
+
 ## Edge Cases
 
 - **No ID argument**: List all tasks (both pending and completed) and ask
