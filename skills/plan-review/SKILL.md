@@ -81,6 +81,10 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Get the branch name from the task file's `**Branch:**` field
    - Check if branch exists: `git branch --list [branch-name]`
    - If branch doesn't exist: "Branch '[branch-name]' not found. It may have been deleted."
+   - **Safety guard — protect the live `.plans/` directory before checkout:** A checkout that lays down a tracked `.plans` entry can delete the real untracked `.plans/` working directory. A self-referential `.plans` symlink is especially dangerous (causes an ELOOP and silently destroys task files).
+     - Check whether the target branch tracks anything named `.plans`: `git ls-tree -r --name-only [branch-name] | grep -E '^\.plans($|/)'`
+     - If it returns nothing: proceed normally.
+     - If it returns a match: **do not checkout.** Stop and warn the user: "Branch '[branch-name]' tracks a committed `.plans` entry. Checking it out would overwrite your local `.plans/` task directory. This usually means a stray `.plans` symlink was accidentally committed. Fix it by removing the tracked entry from that branch (`git rm --cached -r .plans` on the branch) and ensure `.gitignore` contains `.plans` (no trailing slash), then retry."
    - Checkout branch: `git checkout [branch-name]`
 
 6. **Rebase onto latest main**
@@ -169,7 +173,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 8. **Commit .plans/ changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
-   - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
+   - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
    - If exit code 0 (ignored): skip silently
    - Read `.plans/config.json` for `git_commits` setting
    - If `git_commits` is not `true`: skip silently

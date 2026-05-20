@@ -289,7 +289,7 @@ Spawn is **always** autonomous + worktree + branch. There is no interactive vari
 
    **d. Commit `.plans/` changes — once, gated on `git_commits`.**
    - Check inside a git repo: `git rev-parse --git-dir 2>/dev/null`. If not, skip.
-   - Check `.plans/` is not gitignored: `git check-ignore -q .plans/ 2>/dev/null`. If ignored, skip.
+   - Check `.plans/` is not gitignored: `git check-ignore -q .plans 2>/dev/null`. If ignored, skip.
    - If `git_commits` (read once in step 2) is not `true`, skip.
    - If `git status --porcelain .plans/` shows changes:
      ```bash

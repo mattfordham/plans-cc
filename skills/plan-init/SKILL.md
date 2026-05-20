@@ -108,17 +108,17 @@ Initialize the `.plans/` directory structure for lightweight task management.
 
 7. **Configure git tracking for `.plans/`**
    - Skip if not inside a git repo (`git rev-parse --git-dir 2>/dev/null` fails).
-   - Skip if `.plans/` is already gitignored (`git check-ignore -q .plans/ 2>/dev/null` returns 0).
+   - Skip if `.plans` is already gitignored (`git check-ignore -q .plans 2>/dev/null` returns 0).
    - Otherwise, ask the user via `AskUserQuestion`:
      - Question: "How should `.plans/` be tracked in git?"
      - Header: "Git tracking"
      - Options:
-       1. **Ignore (recommended)** — Adds `.plans/` to `.gitignore`. Task state stays local; avoids conflicts when switching branches or using worktrees.
+       1. **Ignore (recommended)** — Adds `.plans` to `.gitignore`. Task state stays local; avoids conflicts when switching branches or using worktrees.
        2. **Check in** — Leaves `.plans/` tracked. Useful for sharing task state across a team, but expect noise on branch switches.
    - If **Ignore**:
      - Ensure `.gitignore` exists; create it if missing.
      - If it exists and does not end with a newline, append a newline first.
-     - Append `.plans/` followed by a newline.
+     - Append `.plans` (no trailing slash) followed by a newline. **Do not use the trailing-slash form `.plans/`** — that pattern matches only directories, so a stray `.plans` symlink could slip past the ignore rule, get committed, and then clobber the real `.plans/` directory on a later `git checkout` (causing an ELOOP / lost task files). The slashless `.plans` ignores a directory, file, or symlink of that name.
      - Remember for step 9 that `.gitignore` should be staged alongside the init commit.
    - If **Check in**: do nothing.
 
@@ -137,12 +137,12 @@ Initialize the `.plans/` directory structure for lightweight task management.
    - If not a git repo: skip silently
    - Read `.plans/config.json` for `git_commits` setting
    - If `git_commits` is not `true`: skip silently
-   - Determine whether `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
-   - **If `.plans/` is gitignored** (ignore path was just taken in step 7, or was already ignored):
+   - Determine whether `.plans` is gitignored: `git check-ignore -q .plans 2>/dev/null`
+   - **If `.plans` is gitignored** (ignore path was just taken in step 7, or was already ignored):
      - If `.gitignore` was just modified in step 7, commit it:
        ```bash
        git add .gitignore
-       git commit -m "plan: gitignore .plans/"
+       git commit -m "plan: gitignore .plans"
        ```
      - Otherwise: skip silently (nothing to commit for `.plans/`).
    - **If `.plans/` is tracked**:

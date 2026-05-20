@@ -138,19 +138,31 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
      - If "Inspect each": for each dir, list contents (`ls`), then ask Delete/Keep with AskUserQuestion.
    - **Focused mode**: Report only — "System scan: unexpected directories found: [list]. Run `/plan-cleanup` to address."
 
+7.5. **Check git tracking integrity for `.plans`** *(skip if not in a git repo)*
+   - This guards against a known footgun: a stray `.plans` symlink (often self-referential) getting committed, which a later `git checkout` will use to **delete the real `.plans/` working directory** (ELOOP, lost task files).
+   - **Detect a tracked `.plans` entry:** `git ls-files | grep -E '^\.plans($|/)'`
+     - If anything is returned, this is a problem (the plans system expects `.plans/` to be untracked/local). Warn the user and, with `AskUserQuestion`, offer:
+       1. "Untrack it (recommended)" — run `git rm --cached -r .plans` (keeps the working files), then ensure `.gitignore` ignores it (see below).
+       2. "Leave it" — do nothing.
+   - **Detect the vulnerable ignore form:** check `.gitignore` for a line that is exactly `.plans/` (with trailing slash).
+     - If found, warn: "Your `.gitignore` uses `.plans/` (trailing slash), which only matches a directory and lets a stray `.plans` symlink slip through. Recommend changing it to `.plans` (no slash)." Offer to fix it by replacing the `.plans/` line with `.plans`.
+     - If `.plans` is not ignored at all (`git check-ignore -q .plans` returns non-zero) and the user is using local task state, suggest adding `.plans` (no slash) to `.gitignore`.
+   - Report what was found/fixed, or "Git tracking integrity: OK" if clean.
+
 8. **Silent system scan summary** *(focused mode only)*
-   - Briefly count (without prompting) orphaned state files, stale branches, orphaned worktrees, unexpected directories.
+   - Briefly count (without prompting) orphaned state files, stale branches, orphaned worktrees, unexpected directories. Also run the step-7.5 detection (tracked `.plans` entry, or trailing-slash `.plans/` ignore form) without prompting.
    - Report counts at the end:
      ```
      System scan: 2 orphaned state files, 1 stale branch, 0 orphaned worktrees, 1 unexpected directory.
      Run `/plan-cleanup` (no ID) to address.
      ```
+   - If a tracked `.plans` entry or vulnerable `.plans/` ignore form is detected, always surface it prominently (it risks data loss): "⚠️ `.plans` is tracked in git / ignored with a trailing slash — run `/plan-cleanup` to fix before your next branch checkout."
    - If everything is clean, report: "System scan: clean."
 
 9. **Commit .plans/ changes** *(both modes, if anything changed)*
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
-   - Check if `.plans/` is gitignored: `git check-ignore -q .plans/ 2>/dev/null`
+   - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
    - If exit code 0 (ignored): skip silently
    - Read `.plans/config.json` for `git_commits` setting
    - If `git_commits` is not `true`: skip silently
