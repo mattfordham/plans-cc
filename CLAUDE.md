@@ -15,7 +15,7 @@ plans-cc/
     install.js          # Installer (copies skills to ~/.claude/skills/)
     dev.js              # Development helper
   skills/
-    plan-*/SKILL.md     # Skill definitions (28 total)
+    plan-*/SKILL.md     # Skill definitions (31 total)
   .claude/
     settings.local.json # Local Claude settings
 ```
@@ -211,6 +211,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-context` | Update project context |
 | `/plan-capture` | Quick-capture a task (optionally auto-elaborate/execute with trailing phrases) |
 | `/plan-import` | Import tasks from a markdown document |
+| `/plan-extract` | Extract tasks from a meeting transcript or notes prose after discussion |
 | `/plan-elaborate` | Research and flesh out a task (auto-captures if given a description) |
 | `/plan-clarify` | Find ambiguities in an elaborated task and resolve them interactively |
 | `/plan-discuss` | Free-form discussion about an elaborated task; apply agreed changes on request |
