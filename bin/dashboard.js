@@ -56,6 +56,18 @@ function main() {
       return null;
     }
   }
+  function readDirty(cwd) {
+    try {
+      const out = execSync("git status --porcelain", {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      return out.trim().length > 0;
+    } catch (_) {
+      return null;
+    }
+  }
   function getBranches() {
     const now = Date.now();
     if (cachedBranchesAt && now - cachedBranchesAt < BRANCH_CACHE_TTL_MS) {
@@ -63,6 +75,7 @@ function main() {
     }
     cachedBranchesAt = now;
     const root = readBranch(process.cwd());
+    const rootDirty = root ? readDirty(process.cwd()) : null;
     const subRepos = [];
     try {
       const entries = fs.readdirSync(process.cwd(), { withFileTypes: true });
@@ -73,13 +86,15 @@ function main() {
       for (const name of names) {
         const gitPath = path.join(process.cwd(), name, ".git");
         if (!fs.existsSync(gitPath)) continue;
-        const branch = readBranch(path.join(process.cwd(), name));
-        subRepos.push({ name, branch });
+        const repoPath = path.join(process.cwd(), name);
+        const branch = readBranch(repoPath);
+        const dirty = readDirty(repoPath);
+        subRepos.push({ name, branch, dirty });
       }
     } catch (_) {
       // ignore — best effort
     }
-    cachedBranches = { root, subRepos };
+    cachedBranches = { root, rootDirty, subRepos };
     return cachedBranches;
   }
 
