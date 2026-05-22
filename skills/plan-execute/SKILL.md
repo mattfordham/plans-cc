@@ -21,6 +21,23 @@ description: Start or continue working on a task (auto-captures/elaborates if ne
 
 Execute a task — start it if pending/elaborated, or resume if already in-progress. If given a description instead of an ID, auto-captures and auto-elaborates first. If a task exists but hasn't been elaborated, auto-elaborates inline. The AI actively implements the steps, writing code and making changes. When the project has an existing test suite, follow TDD (Test-Driven Development) practices.
 
+## Execution Contract (read first — non-negotiable)
+
+These rules bind every invocation. They are not subject to your judgment about the task.
+
+1. **Follow the pipeline as written.** Never skip a step because the task seems trivial, small, or obvious — your sense of proportion is not an input. If `auto_capture` is set, you MUST run capture + elaborate (Step 3) before any implementation, even for a one-line change.
+2. **All implementation goes through the plan-executor sub-agent** (Step 10/11). Never write code, edit files, or make changes directly from this skill. No exceptions for "quick" edits.
+3. **`yolo` = run the full autonomous pipeline without the user.** It is NOT permission to take shortcuts. `yolo` implies `worktree_mode` + `branch_mode`: you MUST create the worktree (Step 11e). Doing *less* defeats the entire point.
+4. **Finishing a worktree/`yolo` run sets status to `review`, not `completed`.** Leave the task file in `.plans/pending/`. Only `/plan-complete` sets `completed` and moves the file to `.plans/completed/`.
+5. When in doubt, trust this skill over your own instinct about what "should" be necessary.
+
+**Status → folder convention** (this skill never produces `completed`):
+
+| Status | File location |
+|---|---|
+| pending, elaborated, in-progress, **review**, in-review | `.plans/pending/` |
+| completed | `.plans/completed/` (set only by `/plan-complete`) |
+
 > **RULE: Targeted tests only.** When running tests, ALWAYS scope to the specific files changed — never run the full test suite. Example: `rspec spec/models/user_spec.rb`, not `rspec`. `npm test -- user.test.js`, not `npm test`. The full suite is the user's responsibility.
 
 ## Arguments
@@ -96,6 +113,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
    - Strip worktree keywords from `$ARGUMENTS`
    - Check for YOLO keywords/phrases (see Arguments section) → store as `yolo_mode` flag (true/false). If true, also set `worktree_mode = true` AND `branch_mode = true`.
    - Strip YOLO keywords from `$ARGUMENTS`
+   - **`yolo` does NOT grant discretion to skip steps.** You do not get to judge a task "too trivial" for capture/elaborate or for the worktree. See Execution Contract #1 and #3.
    - Check for branch keywords/phrases (see Arguments section) → store as `branch_mode` flag (true/false)
    - Strip branch keywords from `$ARGUMENTS`
    - Check for step filter (see Arguments section) → store as `step_filter` (or null if none found)
@@ -477,9 +495,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
 10. **Prepare for segmented execution**
 
-   **IMPORTANT: ALL implementation work MUST use the plan-executor sub-agent.**
-   Never write code or make changes directly — always delegate to the executor agent.
-   This ensures fresh context and consistent execution quality.
+   **Reminder (Execution Contract #2): ALL implementation work goes through the plan-executor sub-agent — never edit directly.**
 
    **Resolve step filter** (if `step_filter` is set)
 
@@ -769,7 +785,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
       ```bash
       cd [worktree-path] && git commit -m "plan: complete work on task #NNN - [title]"
       ```
-   2. Set task status to `review` (not `in-progress`)
+   2. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
    3. Return to project root: `cd [project-root]`
    4. Remove worktree: `git worktree remove .worktrees/NNN-slug`
       - If remove fails (dirty worktree), force it: `git worktree remove --force .worktrees/NNN-slug`
@@ -812,7 +828,7 @@ Execute a task — start it if pending/elaborated, or resume if already in-progr
 
    **Invariant after this step:** You are back in the parent project directory. For each repo in `relevant_repos`, the task's commits live on branch `[branch-name]` inside that repo's main checkout. The `.worktrees/NNN-slug/` tree has been fully removed. All subsequent commands run from the main project directory against those per-repo branches — do NOT assume work needs to be moved out of the (now-deleted) worktree.
 
-   5. Set task status to `review` (not `in-progress`)
+   5. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
    6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
    7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    8. Show worktree completion summary — print EXACTLY this format and STOP:

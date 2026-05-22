@@ -20,6 +20,12 @@ description: Research and flesh out a task (auto-captures if given a description
 
 Research the codebase and flesh out a captured task with implementation details. If given a description instead of an ID, auto-captures the task first.
 
+## Execution Contract (read first — non-negotiable)
+
+1. **Skip mode auto-accepts prompts; it does NOT skip steps.** Research, assumption tracking (step 12), and the STOP barrier before execution all still run, even in skip mode.
+2. **Never proceed to execution from within this skill.** Elaboration ends at the confirmation/summary; starting work is `/plan-execute`'s job.
+3. An `elaborated` task stays in `.plans/pending/` — elaboration never moves task files.
+
 ## Arguments
 
 - `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a skip keyword
@@ -472,7 +478,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
 14. **Update task file**
     - Fill in Why, How, Verification, and Impact Scope (if applicable) sections
-    - Update Status to `elaborated`
+    - Update Status to `elaborated` (the file stays in `.plans/pending/`)
 
     **Skip-mode assumption tracking:** If `skip_mode` is true, every auto-accepted prompt in steps 11–12 (Path A confirmation, Path B Why/approach/open-questions/Verification, Path C intent, Path-C "Research more" auto-accept, step 12 validation confirmation) represents a decision made on the user's behalf without explicit input. Capture each such auto-pick as a bullet under the task's `## Assumptions > Initial (from elaboration)` subsection. If the subsection contains a `_To be filled..._` placeholder, replace it; otherwise append.
 

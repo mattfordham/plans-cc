@@ -22,6 +22,21 @@ Every task runs in its own isolated git worktree on its own branch, in autonomou
 
 Spawn is **always** autonomous + worktree + branch. There is no interactive variant. For a single task with prompts, use `/plan-execute NNN` instead. For a single task autonomously, use `/plan-execute NNN yolo worktree`.
 
+## Execution Contract (read first — non-negotiable)
+
+These rules bind every invocation; they are not subject to your judgment about how trivial a task looks.
+
+1. **Follow the pipeline as written** for every task — preflight, skip-mode elaboration, worktree creation, segmentation. Never skip a step because a task seems small.
+2. **All implementation goes through the `plan-executor` sub-agent.** Never write code or edit files directly from this skill.
+3. **Each task ends at status `review`, not `completed`.** Leave its file in `.plans/pending/`. Only `/plan-complete` sets `completed` and moves the file to `.plans/completed/`.
+
+**Status → folder convention** (this skill never produces `completed`):
+
+| Status | File location |
+|---|---|
+| pending, elaborated, in-progress, **review**, in-review | `.plans/pending/` |
+| completed | `.plans/completed/` (set only by `/plan-complete`) |
+
 ## Arguments
 
 - `$ARGUMENTS`: Two or more numeric task IDs separated by spaces (e.g. `1 3 5`, `001 002 007`).
@@ -263,7 +278,7 @@ Spawn is **always** autonomous + worktree + branch. There is no interactive vari
       cd [worktree-path] && git commit -m "plan: complete work on task #NNN - [title]"
       ```
    2. Set the task file Status:
-      - If the task completed all segments: set Status to `review`.
+      - If the task completed all segments: set Status to `review`. Leave the file in `.plans/pending/` — only `/plan-complete` moves it to `.plans/completed/`.
       - If the task was **blocked**: LEAVE Status at `in-progress` — a blocked task is not ready for review.
    3. Return to the project root: `cd [project-root]`.
    4. Remove the worktree: `git worktree remove .worktrees/NNN-slug`. If it fails because the worktree is dirty, force it: `git worktree remove --force .worktrees/NNN-slug`.
