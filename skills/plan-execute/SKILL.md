@@ -759,15 +759,20 @@ These rules bind every invocation. They are not subject to your judgment about t
    **d. After all segments complete**
 
    - **If `worktree_mode` is true OR `yolo_mode` is true:** proceed to worktree finish (step 11e) instead of showing the normal summary. (yolo implies worktree transitively; listed explicitly so the review-status path is self-documenting.)
-   - **Otherwise:** show completion summary:
+   - **Otherwise:** show completion summary.
+
+     Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Manually exercise the changes in this checkout`.
+
+     Print EXACTLY this format:
      ```
      All segments complete for task #NNN
 
-     Total: X/Y steps completed
-     Segments: N segments executed
-     Deviations: [count] (see state file for details)
+     Segments: N executed | Deviations: [count] (see state file)
 
-     Run `/plan-complete NNN` to finalize.
+     **How to verify:**
+     [bullets from Verification section, or fallback]
+
+     **Next:** /plan-complete NNN
      ```
      End-of-action marker (final line): `🟢 EXECUTED · Task #NNN → Next: /plan-complete NNN`
      (If execution paused mid-task awaiting user input rather than finishing, emit `⏸️ PAUSED · Task #NNN → Next: /plan-execute NNN to resume` instead.)
@@ -794,23 +799,29 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    5. Remove `**Worktree:**` line from task file (branch metadata stays)
    6. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
-   7. Show worktree completion summary — print EXACTLY this format and STOP:
+   7. Show worktree completion summary.
+
+      Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Run /plan-review NNN and walk through the diff`.
+
+      Print EXACTLY this format and STOP:
       ```
       All segments complete for task #NNN (worktree mode)
 
-      Total: X/Y steps completed
       Branch: [branch-name] (ready for review)
       Worktree: cleaned up
 
-      Next: /plan-review NNN
+      **How to verify:**
+      [bullets from Verification section, or fallback]
+
+      **Next:** /plan-review NNN
       ```
-      **If `yolo_mode` is true,** insert one additional line BEFORE the "Next:" line:
+      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after `Worktree: cleaned up`):
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
       Then add the end-of-action marker as the final line:
       `🟢 EXECUTED · Task #NNN → Next: /plan-review NNN`
-      **STOP after the marker line.** The branch `[branch-name]` exists in this repository and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
+      **STOP after the marker line.** The branch lives in this repo; /plan-review NNN handles the rest from the main project directory — no manual merge/checkout needed.
 
    **Multi-repo path** (when `multi_repo_mode` is true):
 
@@ -831,24 +842,30 @@ These rules bind every invocation. They are not subject to your judgment about t
    5. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
    6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
    7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
-   8. Show worktree completion summary — print EXACTLY this format and STOP:
+   8. Show worktree completion summary.
+
+      Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Run /plan-review NNN and walk through the diff`.
+
+      Print EXACTLY this format and STOP:
       ```
       All segments complete for task #NNN (worktree mode)
 
-      Total: X/Y steps completed
       Branch: [branch-name] (ready for review)
       Repos with changes: [repos_with_changes list, or "none"]
       Worktree: cleaned up
 
-      Next: /plan-review NNN
+      **How to verify:**
+      [bullets from Verification section, or fallback]
+
+      **Next:** /plan-review NNN
       ```
-      **If `yolo_mode` is true,** insert one additional line BEFORE the "Next:" line:
+      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after `Worktree: cleaned up`):
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
       Then add the end-of-action marker as the final line:
       `🟢 EXECUTED · Task #NNN → Next: /plan-review NNN`
-      **STOP after the marker line.** The branch `[branch-name]` exists in each affected repo and contains all task commits. `/plan-review NNN` will check it out from the main project directory — the user does NOT need to merge, checkout, or move code anywhere manually. Do not add any other instructions, suggestions, or testing advice.
+      **STOP after the marker line.** The branch lives in each affected repo; /plan-review NNN handles the rest from the main project directory — no manual merge/checkout needed.
 
    **f. figma-port two-phase flow** (only fires when step 0 of section b detected a `/figma-port` invocation in the current segment)
 

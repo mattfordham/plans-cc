@@ -209,6 +209,10 @@ Review a task that has completed execution (typically via worktree workflow). **
 
    If the low-confidence collection in 9.a produced one or more bullets, prepend a `⚠ Low-confidence assumptions to verify:` block to the summary, BEFORE the `**Branch:**` / `**Type:**` metadata, the diff stats, and the completed steps. The block goes at the very top so the reviewer sees it first.
 
+   Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Manually exercise the changes on this branch and confirm the verification criteria above hold`.
+
+   The full `## Verification Criteria` block that earlier versions of this skill rendered between Completed Steps and the footer has been removed — the `**How to verify:**` block at the bottom is the actionable distillation, positioned for cold-return readers. The Verification content still lives in the task file for anyone who wants the full spec.
+
    ```
    ⚠ Low-confidence assumptions to verify:
    [matched - [low] lines, verbatim, one per line]
@@ -229,16 +233,15 @@ Review a task that has completed execution (typically via worktree workflow). **
    - [x] Step 2 description
    - [x] Step 3 description
 
-   ## Verification Criteria
-   [Verification section content]
-
    ---
    You're now on branch `[branch-name]`.
-   Test the changes, then:
-   - `/plan-complete NNN` to merge and archive
-   - `/plan-execute NNN` to continue working
-   - `/plan-pause NNN` to commit changes, revert status to `review`, and switch back to main
-   - `/plan-reopen NNN` if it needs rework after completion
+
+   **How to verify:**
+   [bullets from Verification section, or fallback]
+
+   **Next:** /plan-complete NNN to merge and archive
+
+   _Other options:_ `/plan-execute NNN` to continue working · `/plan-pause NNN` to switch back to main · `/plan-reopen NNN` if rework needed
    ```
 
    End-of-action marker (final line): `🟡 REVIEWED · Task #NNN → Next: /plan-complete NNN`

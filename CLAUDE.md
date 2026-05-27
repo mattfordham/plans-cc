@@ -135,6 +135,8 @@ Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
 
 Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPLETED · Task #005 → Next: /plan-status`, `🔵 STATUS · 12 tasks`, `🔴 DELETED · Task #003`.
 
+**Cold-return optimization:** For action-producing skills (execute, review, complete), the marker is the very last line; the two lines directly above it should be `**Next:** /plan-...` and (above that) a `**How to verify:**` block of 2-4 bullets. This reflects that the user often returns to the tab after a long break with no fresh context — the bottom-of-scrollback real estate should answer "what just happened, what do I do next, and how do I check it works" without scrolling. Read-only / informational skills (status, list, show) don't need this — they ARE the answer to "what's happening."
+
 ### Task IDs
 
 - 3-digit zero-padded format: `001`, `002`, etc.
