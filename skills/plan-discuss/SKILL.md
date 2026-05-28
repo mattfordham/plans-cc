@@ -1,7 +1,7 @@
 ---
 name: plan-discuss
 disable-model-invocation: false
-argument-hint: "<id> [topic]"
+argument-hint: "[id] [topic]"
 allowed-tools:
   - Read
   - Write
@@ -9,28 +9,38 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-description: Free-form discussion about an elaborated task; apply agreed changes to the plan on request
+description: Free-form discussion about a task, or the whole backlog when no ID is given; apply agreed changes on request
 ---
 
 # plan-discuss
 
-Have an open, turn-by-turn conversation about an already-elaborated task. Unlike `/plan-clarify` (a scripted scan for ambiguities) or `/plan-elaborate` (which generates structure from scratch), this skill is for thinking out loud with the user about an existing plan — questioning approach, weighing trade-offs, surfacing missing cases — and capturing any agreed changes back into the task file on explicit user signal.
+Have an open, turn-by-turn conversation about your plans. This skill runs in one of two modes:
 
-The file is only edited when the user signals "update the plan" (or equivalent). Conversation alone does not modify the task.
+- **Task mode** (an ID is given) — think out loud about a single already-elaborated task: questioning approach, weighing trade-offs, surfacing missing cases, and capturing agreed changes back into that task file.
+- **Backlog mode** (no ID given) — discuss the backlog as a whole: redundancy and overlap between tasks, gaps, sequencing/prioritization, scope creep, whether tasks should be combined or split. Loads project context, history, and all active tasks so the conversation is grounded in the full picture.
+
+Unlike `/plan-clarify` (a scripted scan for ambiguities in one task), `/plan-elaborate` (generates structure from scratch), or `/plan-status` / `/plan-guide` (read-only one-shot dashboards), this skill is a turn-by-turn conversation that can apply agreed changes back to task files.
+
+Files are only edited when the user signals "update the plan" (or equivalent). Conversation alone does not modify any task.
 
 ## Arguments
 
-- `$ARGUMENTS`: A task ID (required), optionally followed by an opening topic/question.
+- `$ARGUMENTS`: An optional task ID, optionally followed by an opening topic/question. With no ID, runs in backlog mode.
 
 **Parsing rules:**
-- **Task ID** — first whitespace-separated token, must be numeric. Zero-pad to 3 digits.
-- **Opening topic** — everything after the ID is the opening topic/question. Optional.
-- If no numeric token is present at the start → no ID (will prompt).
+- **Mode** — if the first whitespace-separated token is numeric → **task mode** (that token is the task ID, zero-padded to 3 digits). Otherwise → **backlog mode**.
+- **Opening topic** —
+  - Task mode: everything after the ID.
+  - Backlog mode: the entire argument string.
+  - Optional in both modes.
 
 **Examples:**
-- `/plan-discuss 1` — open a discussion on task 1, let the user lead
-- `/plan-discuss 1 should we split step 3?` — open with a specific question
-- `/plan-discuss 3 what am I missing in verification` — topic-led opening
+- `/plan-discuss 1` — task mode: discuss task 1, let the user lead
+- `/plan-discuss 1 should we split step 3?` — task mode, opened with a specific question
+- `/plan-discuss 3 what am I missing in verification` — task mode, topic-led
+- `/plan-discuss` — backlog mode: discuss the backlog as a whole
+- `/plan-discuss is there redundancy in our pending plans?` — backlog mode, topic-led
+- `/plan-discuss what should I work on next?` — backlog mode, topic-led
 
 ## Steps
 
@@ -38,22 +48,34 @@ The file is only edited when the user signals "update the plan" (or equivalent).
    - Use Glob or Read to check `.plans/config.json` exists. Do NOT skip this check.
    - If missing: error: "Not initialized. Run `/plan-init` first."
 
-2. **Parse arguments**
-   - Extract leading numeric token → `task_id` (zero-padded to 3 digits).
-   - Remaining text → `opening_topic` (may be empty).
+2. **Parse arguments and pick mode**
+   - If the leading whitespace-separated token is numeric → **task mode**: that token is `task_id` (zero-padded to 3 digits); remaining text → `opening_topic` (may be empty). Continue at step 4.
+   - Otherwise → **backlog mode**: the entire argument string → `opening_topic` (may be empty). Continue at step 3b.
 
-3. **Handle missing ID**
-   - If `task_id` is empty, list tasks in statuses `elaborated`, `in-progress`, `review`, `in-review`:
+3b. **Backlog mode: load the backlog and open**
+   - Gather the full picture (use Glob / Read; keep it to what you need):
+     - Read `.plans/CONTEXT.md` if it exists (project overview, tech stack).
+     - Read `.plans/HISTORY.md` if it exists (skim — completed work informs redundancy/overlap judgments).
+     - Glob `.plans/pending/*.md` and read each active task. For each parse: id, title, type, status, a one-line gist of Why, step count + checkbox progress, and any `**Blocked by:**` field. Include statuses `pending`, `elaborated`, `in-progress`, `review`, `in-review`.
+     - Optionally glance at `.plans/completed/*.md` titles to spot "already done" overlaps, but do not read them all in full.
+   - If there are **no active tasks**, say so and suggest `/plan-capture` or `/plan-brainstorm`, then stop (no discussion to have).
+   - Display a compact backlog header:
      ```
-     Tasks available to discuss:
-     #001 - Fix login timeout bug (elaborated)
-     #003 - Add dark mode (in-progress)
+     Discussing the backlog — N active task(s)
 
-     Which task ID would you like to discuss?
+     · #001 Update docs [chore] (pending)
+     ○ #002 Add dark mode [feature] (elaborated, 0/4)
+     ▶ #003 Fix login timeout [bug] (in-progress, 3/5)
+     ★ #004 Add search [feature] (review, 4/4)
+
+     Ask anything about the backlog — redundancy, overlap, gaps, sequencing, what to work
+     on next, whether to combine or split tasks. To change a specific task, name it and say
+     "update #N" (or "apply that to #N"). Say "done" to wrap up.
      ```
-   - Parse the user's response as a numeric ID.
+   - If `opening_topic` is non-empty, respond to it directly as the first turn (grounded in the loaded tasks). Otherwise invite the user's opening question.
+   - Then converse per step 6, applying the backlog-mode notes there. Skip step 4.
 
-4. **Load and validate task**
+4. **Task mode: load and validate task**
    - Find the task file: `.plans/pending/NNN-*.md` (Glob).
    - If not found: `Task #NNN not found. Run /plan-list to see available tasks.` — stop.
    - Read the file; parse the `**Status:**` field:
@@ -63,7 +85,7 @@ The file is only edited when the user signals "update the plan" (or equivalent).
      - `pending` → `Task #NNN hasn't been elaborated. Run /plan-elaborate NNN first.` — stop.
      - `completed` → `Task #NNN is completed. Run /plan-reopen NNN first if you want to discuss it.` — stop.
 
-5. **Open the discussion**
+5. **Task mode: open the discussion**
    - Display a compact header:
      ```
      Discussing #NNN: [Title]  (status: elaborated)
@@ -88,9 +110,10 @@ The file is only edited when the user signals "update the plan" (or equivalent).
      - Confirming whether to apply a drafted edit (step 7)
    - Use plain prose (no `AskUserQuestion`) when the question is genuinely open-ended ("what are you most worried about here?") and a fixed set of options would constrain the user unhelpfully.
    - **If you have a strong recommendation among the options, say so explicitly.** Mark it in the question text (e.g., "Which approach? (I'd recommend B — simpler and avoids the migration)") and/or label the recommended option clearly. Don't present options as if they're equally weighted when they aren't — the user benefits from your judgment, not just a menu.
-   - Stay grounded in the task file: when relevant, quote the specific step, Why bullet, or Verification line you're discussing.
+   - Stay grounded in the loaded files: when relevant, quote the specific step, Why bullet, or Verification line you're discussing (task mode), or the specific task ids/titles you're comparing (backlog mode).
    - Offer substance: point out trade-offs, missing cases, alternative orderings, assumptions worth challenging. Don't just agree.
-   - **Do NOT edit the task file during discussion.** Proposals stay in chat until the user signals an update.
+   - **Backlog mode** — focus on cross-task analysis: redundancy/overlap (tasks that do the same thing or have overlapping scope), gaps (work implied by context/history but not captured), sequencing and dependencies (what unblocks what; what to do next and why), scope creep, and candidates to combine (`/plan-combine`) or split. When you identify a concrete restructuring, name the exact task ids and what you'd do. Cite specifics rather than generalities.
+   - **Do NOT edit any task file during discussion.** Proposals stay in chat until the user signals an update.
    - Periodically (every 4–6 exchanges) note any threads that feel unresolved — this helps the user decide when to wrap.
 
 7. **Detect update signals**
@@ -102,6 +125,8 @@ The file is only edited when the user signals "update the plan" (or equivalent).
    - "amend step N", "edit step N", "change step N"
    - "put that in", "save that to the plan"
 
+   **Backlog mode note:** an update signal must name a specific task (e.g. "update #3", "apply that to #5"). Determine the target id, then apply the same draft-confirm-edit flow below to that task's file (read it fresh if you only loaded a gist earlier). A bare "update the plan" with no task named → ask which task. For structural changes that span tasks — merging two tasks or splitting one — do NOT hand-edit files; instead point the user to the dedicated skill (`/plan-combine <ids>` to merge, `/plan-elaborate` or a fresh `/plan-capture` to split out new work) and let them run it.
+
    On signal:
    1. **Draft the diff in chat first.** Show the old content and the new content side by side (quote the exact existing line(s), then show the proposed replacement). Do not call `Edit` yet.
    2. **Wait for explicit confirmation.** Prefer `AskUserQuestion` with options like "Apply", "Revise", "Discard" rather than waiting for a free-text reply. Accept "yes", "apply", "go ahead", "do it", "looks good" if the user replies in prose. Ambiguous or partial acknowledgment ("maybe", "sort of") → ask for clarification before applying.
@@ -110,8 +135,8 @@ The file is only edited when the user signals "update the plan" (or equivalent).
       - Frontmatter fields.
       - Unrelated content in other sections.
       - Any `👁` review tags or step annotations.
-   4. **Confirm briefly** in chat: `Updated step 4.` or `Added Verification bullet.` Then return to discussion.
-   5. Track the applied edit in an in-memory `applied_edits` list for the final summary.
+   4. **Confirm briefly** in chat: `Updated step 4.` (task mode) or `Updated #3: rewrote step 2.` (backlog mode). Then return to discussion.
+   5. Track the applied edit in an in-memory `applied_edits` list (record the task id it touched) for the final summary and commit.
 
 8. **Detect exit signals**
 
@@ -122,7 +147,7 @@ The file is only edited when the user signals "update the plan" (or equivalent).
    On signal, proceed to step 9.
 
 9. **Summarize and commit**
-   - Print a brief recap:
+   - Print a brief recap. **Task mode:**
      ```
      Discussion summary for #NNN: [Title]
 
@@ -137,7 +162,8 @@ The file is only edited when the user signals "update the plan" (or equivalent).
      Follow-ups you mentioned:
      - Confirm rate-limit policy with backend team
      ```
-     Omit any section that is empty.
+   - **Backlog mode:** title the recap `Backlog discussion summary` and, under Applied, prefix each item with the task it touched (e.g. `- #003: rewrote step 2`). Use the other sections for cross-task observations — redundancy/overlap spotted, suggested merges or splits (with the skill to run), sequencing recommendations, and follow-ups.
+   - Omit any section that is empty.
    - Commit `.plans/` changes:
      - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`. If not a git repo: skip silently.
      - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`. If exit code 0 (ignored): skip silently.
@@ -146,25 +172,37 @@ The file is only edited when the user signals "update the plan" (or equivalent).
      - Commit:
        ```bash
        git add .plans/
-       git commit -m "plan: discuss #NNN - [title]"
+       git commit -m "<message>"
        ```
+       Message — task mode: `plan: discuss #NNN - [title]`. Backlog mode: `plan: backlog discussion` (append `- updated #N, #M` if specific tasks were edited).
      - If commit fails (hooks etc.): warn but do not fail the skill.
 
 10. **Display confirmation**
-    ```
-    Discussion closed for #NNN: [Title]
-    Applied X edit(s).
+    - **Task mode:**
+      ```
+      Discussion closed for #NNN: [Title]
+      Applied X edit(s).
 
-    Next: /plan-execute NNN
-    ```
-    If no edits were applied, say `No changes applied.` instead of `Applied X edit(s).`
+      Next: /plan-execute NNN
+      ```
+      If no edits were applied, say `No changes applied.` instead of `Applied X edit(s).`
+      End-of-action marker (final line): `🟢 DISCUSSED · Task #NNN → Next: /plan-execute NNN`
+    - **Backlog mode:**
+      ```
+      Backlog discussion closed.
+      Applied X edit(s) across the backlog.
 
-    End-of-action marker (final line): `🟢 DISCUSSED · Task #NNN → Next: /plan-execute NNN`
+      Next: /plan-status
+      ```
+      If no edits were applied, say `No changes applied.` instead. Pick the `Next:` suggestion that best fits the conversation — `/plan-status` by default, or a more specific one if it emerged (e.g. `/plan-combine 3 5` if you recommended a merge, `/plan-execute N` if a clear next task surfaced).
+      End-of-action marker (final line): `🟢 DISCUSSED · Backlog → Next: /plan-status` (swap in the chosen Next command if different).
 
 ## Edge Cases
 
-- **No arguments at all**: prompt for an ID (step 3).
-- **Non-numeric leading token**: error: `Usage: /plan-discuss <id> [topic]`.
+- **No arguments at all**: backlog mode (step 3b) — do NOT prompt for an ID or error.
+- **Non-numeric leading token**: backlog mode, treating the whole string as the opening topic (e.g. `/plan-discuss is there redundancy?`).
+- **Backlog mode with no active tasks**: say there's nothing to discuss yet and suggest `/plan-capture` or `/plan-brainstorm`; stop.
+- **Backlog mode, user wants to merge/split tasks**: don't hand-edit — point to `/plan-combine <ids>` (merge) or `/plan-capture` + `/plan-elaborate` (split), then let the user run it.
 - **Task not found**: error with `/plan-list` suggestion.
 - **Pending task**: direct to `/plan-elaborate`.
 - **Completed task**: direct to `/plan-reopen`.

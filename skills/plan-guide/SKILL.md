@@ -140,6 +140,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
    **Section: Tips** (always show one relevant tip based on state)
    Choose one tip that's most relevant:
    - If user has 5+ pending tasks: "Tip: Use `/plan-list` to filter by type (bug, feature, refactor, chore)"
+   - If user has 4+ active tasks (any status): "Tip: `/plan-discuss` (no ID) talks through the whole backlog — redundancy, gaps, what to work on next"
    - If user has completed tasks but never used summary: "Tip: `/plan-summary` gives you a recap of work done this session"
    - If user has multiple in-progress tasks: "Tip: `/plan-pause` lets you switch between tasks without losing progress"
    - If user has ideas and tasks: "Tip: `/plan-search <keyword>` finds tasks and ideas by content"
