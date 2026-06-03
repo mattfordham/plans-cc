@@ -1,7 +1,7 @@
 ---
 name: plan-capture
 disable-model-invocation: false
-argument-hint: "[description] [and elaborate|execute|go]"
+argument-hint: "[description] [elaborate | and execute|go]"
 allowed-tools:
   - Read
   - Write
@@ -41,12 +41,12 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    | `(and\|then\|&) go (with\|on) branch` | `auto_elaborate=true, auto_execute=true, auto_branch=true` |
    | `(and\|then\|&) execute (with\|on) branch` | `auto_elaborate=true, auto_execute=true, auto_branch=true` |
    | `(and\|then\|&) (execute\|go)` | `auto_elaborate=true, auto_execute=true` |
-   | `(and\|then\|&) elaborate` | `auto_elaborate=true` |
+   | `(and\|then\|&)? elaborate` | `auto_elaborate=true` |
 
    - Strip the matched phrase from the end; the remainder is the task description
    - If no phrase matched: `auto_elaborate=false, auto_execute=false, auto_branch=false, auto_worktree=false` — original behavior
    - If description is empty after stripping (or no `$ARGUMENTS` at all), ask: "What task do you want to capture?"
-   - **Important:** Phrases only match at the END of arguments — "Fix the elaborate system" does NOT trigger auto-elaborate because "elaborate" is mid-sentence, not preceded by "and/then/&"
+   - **Important:** Phrases only match at the END of arguments — "Fix the elaborate system" does NOT trigger auto-elaborate because "elaborate" is mid-sentence, not the final word. The trailing `elaborate` keyword stands alone (no `and/then/&` connector required); the `execute`/`go` phrases still need a connector to avoid swallowing descriptions that end in those words.
 
 3. **Read config and generate ID**
    - Read `.plans/config.json`
@@ -216,6 +216,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 - **Very long description**: Truncate slug at word boundary, keep full description in the file
 - **`execute` implies `elaborate`**: Auto-execute always runs auto-elaborate first
 - **`with branch` / `with worktree` only recognized after a go/execute phrase**: "Fix bug with branch" alone does NOT trigger branch mode
-- **Phrases only match at END**: "Fix the elaborate system" has no trailing phrase — "elaborate" is part of the description
+- **Phrases only match at END**: "Fix the elaborate system" has no trailing phrase — "elaborate" is mid-sentence, not the final word, so it's part of the description
+- **Trailing `elaborate` needs no connector**: "Fix login bug elaborate" triggers auto-elaborate on its own — unlike `execute`/`go`, the `elaborate` keyword does not require a preceding `and/then/&`
 - **Elaboration failure stops the chain**: Task is still captured successfully, but auto-execute is skipped
 - **No trailing phrase**: Fully backwards-compatible with original behavior
