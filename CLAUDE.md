@@ -156,6 +156,25 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   ideas/          # Brainstorm session documents
 ```
 
+### Machine-Wide Project Registry
+
+plans-cc maintains a machine-wide index of every project that uses it, written to
+`~/.claude/plans-cc/projects.json`. Projects **self-register on touch** — there is
+no filesystem scan and no manual register step. The touchpoints are: a per-project
+dashboard launch (`bin/dashboard.js`), `/plan-init`, and `/plan-capture`; other
+skills piggyback on these.
+
+- **Schema:** `{ version: 1, projects: [{ path, lastSeen }] }`, where `path` is an
+  absolute project-root path and `lastSeen` is an ISO 8601 timestamp.
+- Reads **live-prune** entries whose `<path>/.plans/` no longer exists, and
+  tolerate a missing/empty/corrupt file (treated as zero projects, rewritten fresh
+  on next write).
+- See `lib/registry.js` (producer) and `bin/plan-touch.js` (CLI touch).
+
+The registry is the contract consumed by a separate macOS desktop app (a menu bar
+glance plus a cross-project browser), built outside this repo from the handoff
+spec at `.plans/artifacts/desktop-app-spec.md`.
+
 ### Task Statuses
 
 - `pending` — Captured but not elaborated

@@ -6,6 +6,7 @@ const { execSync } = require("child_process");
 
 const { parseTasks } = require("../lib/parse-tasks");
 const { buildLayout, updateLayout } = require("../lib/render-dashboard");
+const { registerProject } = require("../lib/registry");
 
 const PLANS_DIR = path.resolve(process.cwd(), ".plans");
 const CONTEXT_FILE = path.join(PLANS_DIR, "CONTEXT.md");
@@ -20,6 +21,14 @@ function main() {
         "  Run `/plan-init` in Claude Code first.\n\n"
     );
     process.exit(1);
+  }
+
+  // Self-register this project in the system-wide registry. Best-effort —
+  // registerProject never throws, but guard anyway so the dashboard can't break.
+  try {
+    registerProject(process.cwd());
+  } catch (_) {
+    // ignore
   }
 
   let blessed;

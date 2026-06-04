@@ -11,6 +11,7 @@ const SOURCE_DIR = path.join(__dirname, "..", "skills");
 const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
 const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
 const DASHBOARD_SOURCE = path.join(__dirname, "dashboard.js");
+const PLAN_TOUCH_SOURCE = path.join(__dirname, "plan-touch.js");
 const LIB_SOURCE = path.join(__dirname, "..", "lib");
 const RUNTIME_TARGET = path.join(HOME, ".claude", "plans-cc");
 const LAUNCHER_DIR = path.join(HOME, ".claude", "bin");
@@ -45,6 +46,10 @@ function installDashboardRuntime() {
   // Copy dashboard entry point and lib helpers.
   fs.cpSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"));
   fs.cpSync(LIB_SOURCE, path.join(RUNTIME_TARGET, "lib"), { recursive: true });
+
+  // Copy the project-registration helper and make it executable.
+  fs.cpSync(PLAN_TOUCH_SOURCE, path.join(RUNTIME_TARGET, "plan-touch.js"));
+  fs.chmodSync(path.join(RUNTIME_TARGET, "plan-touch.js"), 0o755);
 
   // Walk runtime deps starting from blessed, copy each into node_modules/.
   const nodeModulesTarget = path.join(RUNTIME_TARGET, "node_modules");

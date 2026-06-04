@@ -118,7 +118,12 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    - Count pending tasks in `.plans/pending/`
    - Update the Stats section
 
-9. **Commit .plans/ changes**
+9. **Register project (best-effort telemetry)**
+   - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
+   - This registers the project in the system-wide plans registry for the desktop dashboard.
+   - Ignore any error and do NOT surface output to the user. Never let this break the skill.
+
+10. **Commit .plans/ changes**
    - If `auto_elaborate` or `auto_execute` is true: skip this step (the chained skill will commit)
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
@@ -135,7 +140,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
      ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-10. **Display confirmation**
+11. **Display confirmation**
 
    **If `auto_elaborate` is true** (about to chain into elaboration):
    ```
@@ -172,7 +177,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
    When `auto_elaborate` is true, do NOT emit a capture marker — the downstream elaborate/execute skill emits the final marker for the chain.
 
-11. **Auto-elaborate** (only if `auto_elaborate` is true)
+12. **Auto-elaborate** (only if `auto_elaborate` is true)
 
     Print: `--- Auto-elaborating task #NNN ---`
 
@@ -197,7 +202,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
     Next: /plan-execute NNN to start working
     ```
 
-12. **Auto-execute** (only if `auto_execute` is true)
+13. **Auto-execute** (only if `auto_execute` is true)
 
     Print: `--- Auto-executing task #NNN ---`
 

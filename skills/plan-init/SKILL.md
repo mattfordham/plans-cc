@@ -155,7 +155,12 @@ Initialize the `.plans/` directory structure for lightweight task management.
        ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-10. **End-of-action marker**
+10. **Register project (best-effort telemetry)**
+    - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
+    - This registers the project in the system-wide plans registry for the desktop dashboard.
+    - Ignore any error and do NOT surface output to the user. Never let this break the skill.
+
+11. **End-of-action marker**
     - Output as the final line: `🟢 INITIALIZED · .plans/ ready → Next: /plan-capture`
 
 ## Edge Cases
