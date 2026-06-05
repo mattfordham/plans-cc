@@ -161,8 +161,8 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
 plans-cc maintains a machine-wide index of every project that uses it, written to
 `~/.claude/plans-cc/projects.json`. Projects **self-register on touch** — there is
 no filesystem scan and no manual register step. The touchpoints are: a per-project
-dashboard launch (`bin/dashboard.js`), `/plan-init`, and `/plan-capture`; other
-skills piggyback on these.
+dashboard launch (`bin/dashboard.js`), `/plan-init`, `/plan-capture`,
+`/plan-elaborate`, and `/plan-review`; other skills piggyback on these.
 
 - **Schema:** `{ version: 1, projects: [{ path, lastSeen }] }`, where `path` is an
   absolute project-root path and `lastSeen` is an ISO 8601 timestamp.

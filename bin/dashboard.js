@@ -13,6 +13,7 @@ const CONTEXT_FILE = path.join(PLANS_DIR, "CONTEXT.md");
 const DEBOUNCE_MS = 100;
 const BRANCH_CACHE_TTL_MS = 5000;
 const PROJECT_CACHE_TTL_MS = 5000;
+const GIT_POLL_INTERVAL_MS = 2000;
 
 function main() {
   if (!fs.existsSync(PLANS_DIR)) {
@@ -169,7 +170,19 @@ function main() {
     }
   }
 
-  screen.key(["q", "escape", "C-c"], () => process.exit(0));
+  // Git state (branch / dirty marks) changes via `git checkout`, commits, and
+  // staging never touch .plans/, so fs.watch never fires for them and the cached
+  // git info goes stale. Poll on a timer: invalidate the branch cache and nudge
+  // the existing debounced render path so getBranches() re-reads fresh git state.
+  const gitPollTimer = setInterval(() => {
+    cachedBranchesAt = 0;
+    scheduleRender();
+  }, GIT_POLL_INTERVAL_MS);
+
+  screen.key(["q", "escape", "C-c"], () => {
+    clearInterval(gitPollTimer);
+    process.exit(0);
+  });
 }
 
 main();

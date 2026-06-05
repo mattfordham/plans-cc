@@ -170,7 +170,12 @@ Review a task that has completed execution (typically via worktree workflow). **
         - Update state file Observations section: replace `⏳ Deferred to review` with `⊘ Skipped`
         - Continue to next observation
 
-8. **Commit .plans/ changes**
+8. **Register project (best-effort telemetry)**
+   - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
+   - This registers the project in the system-wide plans registry for the desktop dashboard.
+   - Ignore any error and do NOT surface output to the user. Never let this break the skill.
+
+9. **Commit .plans/ changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
    - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
@@ -186,7 +191,7 @@ Review a task that has completed execution (typically via worktree workflow). **
      ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-9. **Display review summary**
+10. **Display review summary**
 
    Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
 

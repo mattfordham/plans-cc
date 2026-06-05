@@ -508,7 +508,12 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     - Write the updated file
 
-15. **Commit .plans/ changes**
+15. **Register project (best-effort telemetry)**
+    - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
+    - This registers the project in the system-wide plans registry for the desktop dashboard.
+    - Ignore any error and do NOT surface output to the user. Never let this break the skill.
+
+16. **Commit .plans/ changes**
     - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
     - If not a git repo: skip silently
     - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
@@ -524,7 +529,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
       ```
     - If commit fails (e.g. hooks): warn but do not fail the skill
 
-16. **Display confirmation**
+17. **Display confirmation**
 
     **If part of multi-task loop (multiple `task_ids`):** show abbreviated confirmation:
     ```
@@ -554,7 +559,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     **STOP after displaying this confirmation. Do not proceed to execution.** The user must explicitly invoke `/plan-execute` to begin implementation. If the user responds with feedback or tweaks to the elaboration, apply the changes to the task file and re-display this confirmation — but do NOT start executing the task.
 
-17. **Display multi-task summary**
+18. **Display multi-task summary**
 
     Only shown when multiple tasks were processed. If only one task was processed, skip this step entirely.
 
