@@ -1,6 +1,6 @@
 ---
 name: plan-execute
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<id|description> [steps N-M] [branch|worktree]"
 allowed-tools:
   - Read
