@@ -43,6 +43,7 @@ Display the complete command reference. Output the following help text:
 | `/plan-issue [id] <description>` | Report an issue found during testing |
 | `/plan-delete <id>` | Remove a task |
 | `/plan-combine <id> <id> [id...]` | Merge multiple tasks into one |
+| `/plan-merge-reviews <id> <id> [id...]` | Consolidate review-state tasks onto one integration branch for a combined-diff review |
 | `/plan-audit <id>` | Audit task completeness — verify all affected files |
 | `/plan-ideas [id]` | List ideas or show details of a specific idea |
 | `/plan-pick <idea-id>` | Pick high-value components from an idea to create tasks |

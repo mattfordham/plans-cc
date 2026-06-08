@@ -125,7 +125,7 @@ Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
 
 | Emoji | Category | Skills |
 |-------|----------|--------|
-| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, import, pick, expand, brainstorm, cleanup, context, init, depends |
+| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, merge-reviews, import, pick, expand, brainstorm, cleanup, context, init, depends |
 | 🟡 | Review state | review |
 | ✅ | Completion (terminal) | complete |
 | ⏸️ | Paused | pause |
@@ -247,6 +247,7 @@ For development iteration, use `node bin/dev.js` to reinstall from local source.
 | `/plan-summary` | Summarize work completed in the current session |
 | `/plan-delete` | Remove a task |
 | `/plan-combine` | Merge multiple tasks into a single task |
+| `/plan-merge-reviews` | Consolidate multiple review-state tasks onto one integration branch for a single combined-diff review |
 | `/plan-audit` | Audit task completeness — verify all affected files |
 | `/plan-ideas` | List captured ideas or show details of a specific idea |
 | `/plan-pick` | Pick high-value components from an idea to create tasks |
