@@ -1,7 +1,7 @@
 ---
 name: plan-execute
 disable-model-invocation: false
-argument-hint: "<id|description> [steps N-M] [branch|worktree]"
+argument-hint: "<id|description> [steps N-M] [branch|worktree] [discuss]"
 allowed-tools:
   - Read
   - Write
@@ -28,8 +28,9 @@ These rules bind every invocation. They are not subject to your judgment about t
 1. **Follow the pipeline as written.** Never skip a step because the task seems trivial, small, or obvious — your sense of proportion is not an input. If `auto_capture` is set, you MUST run capture + elaborate (Step 3) before any implementation, even for a one-line change.
 2. **All implementation goes through the plan-executor sub-agent** (Step 10/11). Never write code, edit files, or make changes directly from this skill. No exceptions for "quick" edits.
 3. **`yolo` = run the full autonomous pipeline without the user.** It is NOT permission to take shortcuts. `yolo` implies `worktree_mode` + `branch_mode`: you MUST create the worktree (Step 11e). Doing *less* defeats the entire point.
-4. **Finishing a worktree/`yolo` run sets status to `review`, not `completed`.** Leave the task file in `.plans/pending/`. Only `/plan-complete` sets `completed` and moves the file to `.plans/completed/`.
-5. When in doubt, trust this skill over your own instinct about what "should" be necessary.
+4. **`yolo discuss` is intentionally NOT fully unattended.** When `discuss_mode` is set alongside `yolo`, the upfront clarifying gate (Step 3) runs FIRST as an open-ended, turn-by-turn conversation and pauses for the user until they say "go" (or "done" / "proceed"). Only after the gate exits does the autonomous pipeline run unattended. This is the one sanctioned pause before autonomy begins — it does not grant any other shortcuts.
+5. **Finishing a worktree/`yolo` run sets status to `review`, not `completed`.** Leave the task file in `.plans/pending/`. Only `/plan-complete` sets `completed` and moves the file to `.plans/completed/`.
+6. When in doubt, trust this skill over your own instinct about what "should" be necessary.
 
 **Status → folder convention** (this skill never produces `completed`):
 
@@ -53,6 +54,7 @@ These rules bind every invocation. They are not subject to your judgment about t
   - `yolo_mode = true` implies `worktree_mode = true` AND `branch_mode = true` (autonomous execution always runs in an isolated worktree on its own branch)
 - **Branch keyword detection** (third) — set `branch_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `branch`, `get branch`, `use branch`, `yes branch`
   - Strip branch keywords from `$ARGUMENTS` before further parsing
+- **Discuss keyword detection** (after worktree/yolo/branch/step-filter detection) — set `discuss_mode = true` if any remaining token in `$ARGUMENTS` is (case-insensitive) `discuss`. This is a per-token flag, not an end-anchored phrase: strip the matched `discuss` token from `$ARGUMENTS` before further parsing. `discuss` composes freely with `worktree` / `branch` / `yolo` (e.g. `yolo discuss`).
 - **Step filter detection** (fourth) — check for step selection directives. Set `step_filter` if found, and strip from `$ARGUMENTS` before further parsing.
 
   **Explicit step references** (matched against argument string, case-insensitive):
@@ -101,6 +103,9 @@ These rules bind every invocation. They are not subject to your judgment about t
 - `/plan-execute 1 yolo` → run task 1 in yolo mode (autonomous, worktree, low-confidence assumptions tracked)
 - `/plan-execute https://trello.com/c/abc123 yolo` → ingest Trello card and run autonomously
 - `/plan-execute "Some task" yolo` → autonomous execution on user-authored description
+- `/plan-execute Fix bug discuss` → auto-capture, hold an upfront clarifying conversation, then auto-elaborate and execute
+- `/plan-execute Fix bug yolo discuss` → auto-capture, run the clarifying gate first (pauses for the user), then the full autonomous yolo run
+- `/plan-execute Fix bug branch discuss` → auto-capture, clarifying gate, then execute on a git branch
 
 ## Steps
 
@@ -120,6 +125,7 @@ These rules bind every invocation. They are not subject to your judgment about t
      - Check explicit patterns first: `steps? N`, `steps N-M`, `steps N,M,P`, `steps N-M,P`
      - Then check natural language patterns: `first/last/next N steps`, `first/last/next batch`, `the [topic] steps`, `up to step N`, `from step N`, `starting at step N`, `everything after step N`
      - Strip matched step filter text from `$ARGUMENTS`
+   - Check for the `discuss` keyword (see Arguments section) → store as `discuss_mode` flag (true/false). It is a per-token, case-insensitive flag — set `discuss_mode = true` if any remaining token is `discuss`, then strip that token from `$ARGUMENTS`. `discuss` composes with `worktree` / `branch` / `yolo`.
    - Examine remaining tokens:
      - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits, deduplicate → store as `task_ids` list. Set `auto_capture = false`.
      - If ANY remaining token is non-numeric AND `step_filter` is NOT set → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
@@ -188,9 +194,59 @@ These rules bind every invocation. They are not subject to your judgment about t
    Type: [type] | Status: pending
    ```
 
+   **Clarifying discussion gate** (only if `discuss_mode` is true)
+
+   This runs BETWEEN auto-capture and auto-elaborate. It is the front-loaded,
+   options-first conversation. It runs INLINE in this session (NOT a spawned
+   sub-agent — a sub-agent cannot hold a live turn-by-turn with the user) and is
+   **EPHEMERAL**: it writes NOTHING to the task file. The agreed direction is
+   carried in-context only, into the auto-elaborate step below.
+
+   > **Canonical clarifying-gate spec** (embedded verbatim; the identical block
+   > also lives in `plan-capture`'s chain — keep the two copies in sync):
+   >
+   > 1. **Scope guard** — the gate runs ONLY after a fresh auto-capture (v1). It is
+   >    never offered for an existing task id; those are discussed with the standalone
+   >    `/plan-discuss <id>`. (In this skill the guard is `auto_capture == true`; an
+   >    existing task id never reaches the gate.)
+   > 2. **Open with a compact pending-idea header** — there is no Why/How/Verification
+   >    to quote yet (the task is freshly captured), so show only Title + What:
+   >    ```
+   >    Let's talk through #NNN before we plan it: [Title]
+   >
+   >    What: [the What / original description]
+   >
+   >    Here's what I think you're solving for — does that match? I'll float a couple
+   >    of rough directions; push back on any of them. Say "go" (or "done" / "proceed")
+   >    when you're ready and I'll fold what we settled into the plan.
+   >    ```
+   > 3. **Converse open-endedly** — reuse `plan-discuss` **step 6** (turn-by-turn;
+   >    lead with options, not agreement; use `AskUserQuestion` for multiple-choice
+   >    trade-offs and yes/no decisions; state a recommendation when you have one;
+   >    don't just agree — surface trade-offs, missing cases, and alternative
+   >    directions). Stay grounded in the raw idea. **Do NOT edit the task file.**
+   > 4. **Detect exit signals** — reuse `plan-discuss` **step 8**, extended with the
+   >    front-load exit words: "go", "proceed", "done", "that's enough", "let's plan
+   >    it", "wrap up". On any exit signal, stop conversing and proceed.
+   > 5. **Carry the agreed direction forward in-context** — summarize, for your own
+   >    use only (do not write it anywhere), the direction the conversation settled on:
+   >    scope decisions, chosen approach, rejected alternatives, constraints. This
+   >    summary becomes starting context for the elaborate step.
+
+   Print: `--- Discussing task #NNN before planning ---`, then run the gate per the
+   spec above. When the user exits (says "go" / "done" / "proceed"), continue to
+   auto-elaborate below. **For `yolo discuss`:** the gate is the one sanctioned pause
+   — it runs open-ended until the user exits, and ONLY then does yolo's autonomy
+   proceed unchanged (worktree creation at step 11e, deferred observations, ending in
+   `review`). See Execution Contract #4.
+
    Then immediately auto-elaborate:
 
    Print: `--- Auto-elaborating task #NNN ---`
+
+   If `discuss_mode` was true, feed the agreed direction from the gate above into
+   elaboration as starting context — so the generated Why/How reflect what the
+   conversation settled, not a cold read of the raw description.
 
    Read `skills/plan-elaborate/SKILL.md` and follow its steps 1–15 for the new task ID, with `skip_mode = true`:
    - Research sub-agent spawns normally
@@ -1122,3 +1178,6 @@ These rules bind every invocation. They are not subject to your judgment about t
 - **Research sub-agent reports zero relevant files in yolo mode**: Executing on a plan that can't find relevant code is a footgun. Bail out of autonomous mode: unset `yolo_mode`, fall back to interactive elaboration, and prompt the user for guidance on where the relevant code lives.
 - **`yolo` keyword with no external content**: `/plan-execute "Fix bug" yolo` is valid. Skips step 2.5 external-content normalization (no URL/dump detected) and runs the autonomous flow on user-authored text. No bail.
 - **`yolo` keyword with existing task ID**: `/plan-execute 5 yolo` is valid. Skips step 2.5 entirely (input is a task ID, not external content) and runs autonomous execution on the existing task. No bail.
+- **`discuss` only fires with auto-capture**: The clarifying gate (step 3) runs ONLY when `auto_capture` is true — i.e. a fresh description was given (v1 scope). `discuss` with an existing task id (`/plan-execute 5 discuss`) does NOT trigger the gate; the flag is effectively a no-op. Point the user to the standalone `/plan-discuss 5` to discuss an existing task.
+- **`yolo discuss`**: Valid and intentional. The clarifying gate runs FIRST (open-ended, turn-by-turn, until the user says "go"/"done"/"proceed"), THEN the full autonomous yolo pipeline proceeds unchanged (worktree at step 11e, deferred observations, ending in `review`). This is the one sanctioned pause before autonomy — `yolo discuss` is intentionally NOT fully unattended. See Execution Contract #4.
+- **`discuss` composes with `branch` / `worktree`**: `/plan-execute Fix bug branch discuss` and `/plan-execute Fix bug worktree discuss` both run the gate after auto-capture, then carry the agreed direction into auto-elaborate, then execute with the requested branch/worktree mode. Keyword order does not matter.

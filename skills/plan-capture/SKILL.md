@@ -1,7 +1,7 @@
 ---
 name: plan-capture
 disable-model-invocation: false
-argument-hint: "[description] [elaborate | and execute|go]"
+argument-hint: "[description] [discuss | elaborate | and execute|go]"
 allowed-tools:
   - Read
   - Write
@@ -22,7 +22,9 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
 ## Arguments
 
-- `$ARGUMENTS`: Optional task description, optionally followed by an auto-proceed phrase (e.g., "Fix login timeout bug", "Fix login bug and elaborate", "Fix login bug and go with branch")
+- `$ARGUMENTS`: Optional task description, optionally followed by an auto-proceed phrase (e.g., "Fix login timeout bug", "Fix login bug and elaborate", "Fix login bug and go with branch", "Add dark mode discuss", "Add dark mode discuss and go")
+
+  The trailing `discuss` keyword front-loads a short, options-first clarifying conversation about the freshly-captured idea before any plan is committed, then chains into elaboration. It implies `elaborate` (like `execute` implies `elaborate`) and composes with the execute/go/branch/worktree phrases.
 
 ## Steps
 
@@ -36,6 +38,14 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
    | Pattern (at end of `$ARGUMENTS`) | Result |
    |---|---|
+   | `discuss (and\|then\|&) go (with\|on) worktree` | `discuss_mode=true, auto_elaborate=true, auto_execute=true, auto_worktree=true` |
+   | `discuss (and\|then\|&) execute (with\|on) worktree` | `discuss_mode=true, auto_elaborate=true, auto_execute=true, auto_worktree=true` |
+   | `discuss (and\|then\|&) go (with\|on) branch` | `discuss_mode=true, auto_elaborate=true, auto_execute=true, auto_branch=true` |
+   | `discuss (and\|then\|&) execute (with\|on) branch` | `discuss_mode=true, auto_elaborate=true, auto_execute=true, auto_branch=true` |
+   | `discuss (and\|then\|&) (execute\|go)` | `discuss_mode=true, auto_elaborate=true, auto_execute=true` |
+   | `discuss (with\|on)? worktree` | `discuss_mode=true, auto_elaborate=true, auto_worktree=true` |
+   | `discuss (with\|on)? branch` | `discuss_mode=true, auto_elaborate=true, auto_branch=true` |
+   | `(and\|then\|&)? discuss` | `discuss_mode=true, auto_elaborate=true` |
    | `(and\|then\|&) go (with\|on) worktree` | `auto_elaborate=true, auto_execute=true, auto_worktree=true` |
    | `(and\|then\|&) execute (with\|on) worktree` | `auto_elaborate=true, auto_execute=true, auto_worktree=true` |
    | `(and\|then\|&) go (with\|on) branch` | `auto_elaborate=true, auto_execute=true, auto_branch=true` |
@@ -44,9 +54,10 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    | `(and\|then\|&)? elaborate` | `auto_elaborate=true` |
 
    - Strip the matched phrase from the end; the remainder is the task description
-   - If no phrase matched: `auto_elaborate=false, auto_execute=false, auto_branch=false, auto_worktree=false` — original behavior
+   - If no phrase matched: `discuss_mode=false, auto_elaborate=false, auto_execute=false, auto_branch=false, auto_worktree=false` — original behavior
    - If description is empty after stripping (or no `$ARGUMENTS` at all), ask: "What task do you want to capture?"
-   - **Important:** Phrases only match at the END of arguments — "Fix the elaborate system" does NOT trigger auto-elaborate because "elaborate" is mid-sentence, not the final word. The trailing `elaborate` keyword stands alone (no `and/then/&` connector required); the `execute`/`go` phrases still need a connector to avoid swallowing descriptions that end in those words.
+   - **Important:** Phrases only match at the END of arguments — "Fix the elaborate system" does NOT trigger auto-elaborate because "elaborate" is mid-sentence, not the final word. The trailing `elaborate` and `discuss` keywords stand alone (no `and/then/&` connector required); the `execute`/`go` phrases still need a connector to avoid swallowing descriptions that end in those words.
+   - **`discuss` implies elaborate**: a trailing `discuss` always sets `auto_elaborate=true` (the conversation is a front-loaded gate that then chains into elaboration), exactly as `execute`/`go` imply elaborate. Because the `discuss …` rows are listed first, they take priority over the plain `execute`/`go`/`elaborate` rows — e.g. "Add dark mode discuss and go" matches the `discuss (and\|then\|&) (execute\|go)` row, not the bare `(and\|then\|&) (execute\|go)` row.
 
 3. **Read config and generate ID**
    - Read `.plans/config.json`
@@ -175,11 +186,58 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    ```
    End-of-action marker (final line): `🟢 CAPTURED · Task #NNN → Next: /plan-elaborate NNN`
 
-   When `auto_elaborate` is true, do NOT emit a capture marker — the downstream elaborate/execute skill emits the final marker for the chain.
+   When `auto_elaborate` is true, do NOT emit a capture marker — the downstream gate/elaborate/execute skill emits the final marker for the chain.
+
+11.5. **Clarifying discussion gate** (only if `discuss_mode` is true)
+
+    This is the front-loaded, options-first conversation. It runs INLINE in this
+    session (NOT a spawned sub-agent — a sub-agent cannot hold a live turn-by-turn
+    with the user) and is **EPHEMERAL**: it writes NOTHING to the task file. The
+    agreed direction is carried in-context only, into the auto-elaborate step below.
+
+    > **Canonical clarifying-gate spec** (embedded verbatim; the identical block
+    > also lives in `plan-execute`'s chain — keep the two copies in sync):
+    >
+    > 1. **Scope guard** — the gate runs ONLY after a fresh auto-capture (v1). It is
+    >    never offered for an existing task id; those are discussed with the standalone
+    >    `/plan-discuss <id>`. (In this skill we always just auto-captured, so the guard
+    >    is satisfied.)
+    > 2. **Open with a compact pending-idea header** — there is no Why/How/Verification
+    >    to quote yet (the task is freshly captured), so show only Title + What:
+    >    ```
+    >    Let's talk through #NNN before we plan it: [Title]
+    >
+    >    What: [the What / original description]
+    >
+    >    Here's what I think you're solving for — does that match? I'll float a couple
+    >    of rough directions; push back on any of them. Say "go" (or "done" / "proceed")
+    >    when you're ready and I'll fold what we settled into the plan.
+    >    ```
+    > 3. **Converse open-endedly** — reuse `plan-discuss` **step 6** (turn-by-turn;
+    >    lead with options, not agreement; use `AskUserQuestion` for multiple-choice
+    >    trade-offs and yes/no decisions; state a recommendation when you have one;
+    >    don't just agree — surface trade-offs, missing cases, and alternative
+    >    directions). Stay grounded in the raw idea. **Do NOT edit the task file.**
+    > 4. **Detect exit signals** — reuse `plan-discuss` **step 8**, extended with the
+    >    front-load exit words: "go", "proceed", "done", "that's enough", "let's plan
+    >    it", "wrap up". On any exit signal, stop conversing and proceed.
+    > 5. **Carry the agreed direction forward in-context** — summarize, for your own
+    >    use only (do not write it anywhere), the direction the conversation settled on:
+    >    scope decisions, chosen approach, rejected alternatives, constraints. This
+    >    summary becomes starting context for the elaborate step.
+
+    Print: `--- Discussing task #NNN before planning ---`, then run the gate per the
+    spec above. When the user exits, continue to step 12; do NOT emit a marker here.
 
 12. **Auto-elaborate** (only if `auto_elaborate` is true)
 
     Print: `--- Auto-elaborating task #NNN ---`
+
+    If `discuss_mode` was true, feed the agreed direction from the gate (step 11.5)
+    into elaboration as starting context — so the generated Why/How reflect what the
+    conversation settled, not a cold read of the raw description. Elaboration still
+    runs with `skip_mode = true` (no interactive prompts) — the gate already did the
+    talking.
 
     Read `skills/plan-elaborate/SKILL.md` and follow its steps 1–15 for the newly captured task ID, with `skip_mode = true`:
     - Research sub-agent spawns normally
@@ -220,8 +278,10 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 - **ID collision** (file already exists): Scan directories for actual max ID and use that + 1
 - **Very long description**: Truncate slug at word boundary, keep full description in the file
 - **`execute` implies `elaborate`**: Auto-execute always runs auto-elaborate first
-- **`with branch` / `with worktree` only recognized after a go/execute phrase**: "Fix bug with branch" alone does NOT trigger branch mode
-- **Phrases only match at END**: "Fix the elaborate system" has no trailing phrase — "elaborate" is mid-sentence, not the final word, so it's part of the description
+- **`discuss` implies `elaborate`**: A trailing `discuss` always runs the clarifying gate and then auto-elaborate — the conversation front-loads the chain, it is never a standalone destination
+- **`with branch` / `with worktree` only recognized after a go/execute phrase** (or directly after `discuss`): "Fix bug with branch" alone does NOT trigger branch mode, but "Fix bug discuss with branch" does (the gate runs, then elaborate, then execute with a branch)
+- **Phrases only match at END**: "Fix the elaborate system" has no trailing phrase — "elaborate" is mid-sentence, not the final word, so it's part of the description. Likewise "Refactor the discuss skill" does NOT trigger the gate — "discuss" is mid-sentence
 - **Trailing `elaborate` needs no connector**: "Fix login bug elaborate" triggers auto-elaborate on its own — unlike `execute`/`go`, the `elaborate` keyword does not require a preceding `and/then/&`
+- **Trailing `discuss` needs no connector**: "Add dark mode discuss" triggers the clarifying gate on its own — like `elaborate`, the `discuss` keyword does not require a preceding `and/then/&`. To also execute, append a connector + go/execute ("Add dark mode discuss and go")
 - **Elaboration failure stops the chain**: Task is still captured successfully, but auto-execute is skipped
 - **No trailing phrase**: Fully backwards-compatible with original behavior

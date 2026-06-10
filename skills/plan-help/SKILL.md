@@ -29,7 +29,7 @@ Display the complete command reference. Output the following help text:
 | `/plan-init` | Bootstrap `.plans/` directory structure |
 | `/plan-help` | Show this command reference |
 | `/plan-context` | Update project context (tech stack, patterns) |
-| `/plan-capture [description] [and elaborate\|execute\|go]` | Quick-capture a new task (optionally auto-proceed) |
+| `/plan-capture [description] [discuss \| and elaborate\|execute\|go]` | Quick-capture a new task (optionally discuss, elaborate, and/or execute) |
 | `/plan-import <file>` | Import tasks from a markdown document |
 | `/plan-elaborate <id\|description>` | Research and flesh out a task (auto-captures if given description) |
 | `/plan-discuss [id] [topic]` | Free-form discussion about a task (with id), or the whole backlog (no id) — redundancy, gaps, sequencing; apply changes on request |
@@ -131,9 +131,13 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-execute Fix crash use worktree                # Full pipeline with worktree isolation
 /plan-execute https://trello.com/c/abc yolo         # Autonomous: fetch Trello card, worktree, skip-mode, land in review
 /plan-execute 5 yolo                                # Autonomous execution on existing task #5
+/plan-capture Add dark mode discuss                 # Capture → clarifying conversation → elaborate
+/plan-execute Fix bug yolo discuss                  # Capture → clarifying gate → autonomous yolo run
 ```
 
 **Keywords on `/plan-execute`:** `branch` / `use branch`, `worktree` / `use worktree`, and `yolo` / `autonomous`. `yolo` implies `worktree` + `branch` + skip-mode elaboration + deferred observations + status → `review` on completion. Low-confidence assumptions surface at the top of `/plan-review`.
+
+**The `discuss` keyword** (on `/plan-capture <desc> discuss` and `/plan-execute <desc> yolo discuss`) front-loads a short, options-first clarifying conversation about a freshly-captured idea *before* a plan is committed, then chains into elaboration. It only fires after an auto-capture (v1 scope) — an existing task id like `/plan-execute 5 discuss` does NOT trigger it; use the standalone `/plan-discuss 5` to discuss an existing task. Because the gate is open-ended (it runs until you say "go"), `yolo discuss` is intentionally NOT fully unattended — it pauses for the upfront conversation before autonomy begins.
 
 **Switch between tasks:**
 ```
