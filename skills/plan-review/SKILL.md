@@ -58,6 +58,13 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Run `git rev-parse --show-toplevel` and `git rev-parse --git-dir`. If `--git-dir` resolves to a path inside `.worktrees/` (e.g. `.git/worktrees/NNN-slug`), error out: "plan-review must run from the main project directory, not a worktree. cd to [project-root] and re-run `/plan-review NNN`."
    - This guards against the case where a previous `/plan-execute` left the shell context positioned inside `.worktrees/NNN-slug/` (or where the agent assumed the work is still trapped in the worktree). The branch lives in the main repo's `.git`; all subsequent steps must run from there.
 
+3.6. **Enforce single-occupancy of `in-review`** (only when the original status from step 3 was `review` — i.e. this task is about to *enter* review)
+   - Only one task may be `in-review` at a time, because `in-review` means that task's branch is the one checked out in the single main working directory. Two tasks cannot both have their branch checked out at once.
+   - Scan `.plans/pending/*.md` for any **other** task (different ID) with `**Status:** in-review`.
+   - If one is found, **stop now — before any checkout or status mutation** — and error:
+     `Task #MMM ([title]) is already in review — its branch is checked out in the working directory. Pause it with /plan-pause MMM (returns it to the review queue), or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
+   - This guard does not apply when the original status was `in-review` (resuming the same task) or `in-progress` (reviewing mid-execution) — neither creates a new `in-review` occupant.
+
 4. **Check for uncommitted changes**
    - Run `git status --porcelain` to check for uncommitted changes in the current checkout
    - If uncommitted changes exist:
@@ -253,6 +260,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 ## Edge Cases
 
+- **Another task already `in-review`**: Block before checkout (step 3.6). Only one task can be `in-review` at a time because its branch occupies the single working-directory checkout. Tell the user to `/plan-pause` or `/plan-complete` the current occupant first. Does not apply when resuming the same `in-review` task or reviewing an `in-progress` one.
 - **No ID + one review/in-review task**: Auto-select it
 - **No ID + no review/in-review tasks**: Check for in-progress tasks with branches, list those
 - **No ID + no eligible tasks**: Error suggesting `/plan-execute`
