@@ -97,6 +97,9 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    ## Why
    _To be filled during elaboration_
 
+   ## How Summary
+   _To be filled during elaboration_
+
    ## How
    _To be filled during elaboration_
 

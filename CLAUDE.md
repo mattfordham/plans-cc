@@ -184,6 +184,14 @@ spec at `.plans/artifacts/desktop-app-spec.md`.
 - `in-review` — Actively being walked through with `/plan-review` (worktree workflow)
 - `completed` — Done and archived
 
+### How Summary Section
+
+Task files include a `## How Summary` section positioned **between `## Why` and `## How`**. It is a scan-friendly technical "in a nutshell": a 1-3 sentence overview of the approach followed by a `**Files of note:**` bullet list naming the load-bearing files. It lets a reader grasp the shape of the work and the files in play without reading every How step.
+
+- Generated automatically during `/plan-elaborate` (never prompted) and regenerated whenever the How steps change, so the two stay in sync.
+- `/plan-capture` seeds it as a `_To be filled during elaboration_` placeholder.
+- `/plan-show` renders it after Why and before the How/Progress checkboxes, and omits it when empty or still a placeholder.
+
 ### Checkbox Progress Tracking
 
 The How section uses markdown checkboxes to track step-by-step progress:

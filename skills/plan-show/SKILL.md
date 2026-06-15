@@ -52,6 +52,7 @@ Display a focused overview of a single task: what it is, current progress, and w
    - Completed (from `**Completed:**` line, if present)
    - What section content
    - Why section content
+   - How Summary section content (overview + "Files of note" list)
    - How section content (including checkboxes)
    - Verification section content
 
@@ -90,6 +91,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## Why
    [Why section content]
 
+   ## How Summary
+   [How Summary section content — overview + "Files of note" list]
+
    ## Progress: 0/N steps (not started)
    - [ ] Step 1 description
    - [ ] Step 2 description
@@ -113,6 +117,9 @@ Display a focused overview of a single task: what it is, current progress, and w
 
    ## Why
    [Why section content]
+
+   ## How Summary
+   [How Summary section content — overview + "Files of note" list]
 
    ## Progress: X/N steps ████░░ XX%
 
@@ -141,6 +148,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## Summary
    [First sentence or two from What section]
 
+   ## How Summary
+   [How Summary section content — overview + "Files of note" list]
+
    ## Completed Steps (X/N)
    - [x] Step 1 description
    - [x] Step 2 description
@@ -166,6 +176,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## Why
    [Why section content]
 
+   ## How Summary
+   [How Summary section content — overview + "Files of note" list]
+
    ## Completed Steps (N/N)
    - [x] Step 1 description
    - [x] Step 2 description
@@ -182,6 +195,7 @@ Display a focused overview of a single task: what it is, current progress, and w
 
 8. **Handle sparse task files**
    - If Why section is empty: omit it from display
+   - If How Summary section is empty or still the `_To be filled during elaboration_` placeholder: omit it from display (don't render an empty section)
    - If How section is empty: show "No steps defined"
    - If Verification is empty: omit it from display
 

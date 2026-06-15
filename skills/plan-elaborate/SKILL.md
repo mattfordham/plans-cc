@@ -228,6 +228,10 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
        **Tag observation steps** with `👁` (see tagging rules below).
 
+       **Auto-generate the How Summary** per the `### How Summary Generation`
+       rules below — derive the overview and "Files of note" list from these How
+       steps plus the research "Relevant Files". No confirmation needed.
+
     3. **Auto-generate Verification** based on task type:
        - Bug: "Verify the issue no longer occurs; existing tests pass"
        - Feature: "Verify the new functionality works as expected; tests pass"
@@ -324,6 +328,12 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     - Include file paths where relevant: `- [ ] Update timeout handling in \`src/auth/login.ts\``
     - **Tag observation steps** with `👁` (see tagging rules below)
 
+    **How Summary:** Once the How steps are agreed, generate the `## How Summary`
+    section per the `### How Summary Generation` rules below — a 1-3 sentence
+    overview plus the "Files of note" list, derived from the How steps and research
+    "Relevant Files". In skip mode this is auto-accepted; interactively you may show
+    it for confirmation, but keep it lightweight (no separate question is required).
+
     **Verification section:**
 
     **Skip mode shortcut:** If `skip_mode` is true, auto-select the first option (suggested verification) and continue without calling `AskUserQuestion`.
@@ -408,6 +418,11 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        - Do NOT reset any checkboxes
        - Only add to or refine existing content
 
+    5. **Refresh the How Summary:** Whenever How steps are added or refined,
+       regenerate the `## How Summary` per the `### How Summary Generation` rules
+       below so its overview and "Files of note" list stay in sync with the updated
+       How steps. (Leave it untouched if only the Verification section changed.)
+
     ---
 
     ### Observation Step Tagging Rules
@@ -431,6 +446,41 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     - [ ] 👁 Step 3: Add request logging to track API response times (observation needed before optimization)
     - [ ] Step 4: Optimize slow endpoints based on logging results
     ```
+
+    ---
+
+    ### How Summary Generation
+
+    The `## How Summary` section is a scan-friendly technical "in a nutshell" that
+    sits **strictly between `## Why` and `## How`** in the task file. It lets a
+    reader grasp the approach and the files in play without reading every step.
+
+    **Format (exactly this shape):**
+    ```markdown
+    ## How Summary
+    [1-3 sentence technical overview of the approach — what changes and how, at a high level.]
+
+    **Files of note:**
+    - `path/to/file.ext` — [one-line role in this change]
+    - `path/to/other.ext` — [one-line role in this change]
+    ```
+
+    **Generation rules:**
+    - **Auto-derived, never prompted.** The How Summary is authored automatically
+      from material already gathered — there is NO separate user question for it.
+      In skip mode it is generated without confirmation (same as the How steps).
+    - **Overview line(s):** 1-3 sentences describing the approach at a high level.
+      Summarize the *shape* of the work, not the steps. Do NOT restate the How
+      checkboxes one-for-one — the step-by-step detail lives in `## How`.
+    - **Files of note:** auto-derive the bullet list from (a) the file paths
+      referenced in the How checkboxes and (b) the research "Relevant Files" from
+      the sub-agent findings. De-duplicate, list the most load-bearing files (aim
+      for the handful that matter, not an exhaustive dump), and give each a terse
+      one-line role. If no concrete files are known yet, omit the bullet list and
+      keep just the overview line.
+    - **Stay in sync with How.** The How Summary must always reflect the current
+      How steps and their files. Whenever the How section is generated, regenerated,
+      or refined, regenerate the How Summary so the two never drift apart.
 
 12. **Validate How steps against codebase**
 
@@ -477,7 +527,10 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     - If fewer than 3 files: skip this section entirely
 
 14. **Update task file**
-    - Fill in Why, How, Verification, and Impact Scope (if applicable) sections
+    - Fill in Why, How Summary, How, Verification, and Impact Scope (if applicable) sections
+    - Write the `## How Summary` section **between the `## Why` and `## How` sections**
+      (replacing its `_To be filled during elaboration_` placeholder), per the
+      `### How Summary Generation` rules
     - Update Status to `elaborated` (the file stays in `.plans/pending/`)
 
     **Skip-mode assumption tracking:** If `skip_mode` is true, every auto-accepted prompt in steps 11–12 (Path A confirmation, Path B Why/approach/open-questions/Verification, Path C intent, Path-C "Research more" auto-accept, step 12 validation confirmation) represents a decision made on the user's behalf without explicit input. Capture each such auto-pick as a bullet under the task's `## Assumptions > Initial (from elaboration)` subsection. If the subsection contains a `_To be filled..._` placeholder, replace it; otherwise append.
