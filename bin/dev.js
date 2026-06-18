@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 const SKILLS_PREFIX = "plan-";
+const MANAGED_SKILL_PREFIXES = ["plan-", "des-"];
 const AGENTS_PREFIX = "plan-";
 const HOME = require("os").homedir();
 const TARGET_DIR = path.join(HOME, ".claude", "skills");
@@ -51,14 +52,14 @@ function main() {
     fs.mkdirSync(TARGET_DIR, { recursive: true });
   }
 
-  // Remove existing plan-* skill directories (real or symlinks)
-  const existing = fs.readdirSync(TARGET_DIR).filter((d) => d.startsWith(SKILLS_PREFIX));
+  // Remove existing managed skill directories (plan-* and des-*, real or symlinks)
+  const existing = fs.readdirSync(TARGET_DIR).filter((d) => MANAGED_SKILL_PREFIXES.some((p) => d.startsWith(p)));
   for (const dir of existing) {
     const fullPath = path.join(TARGET_DIR, dir);
     fs.rmSync(fullPath, { recursive: true, force: true });
   }
   if (existing.length > 0) {
-    console.log(`  Removed ${existing.length} existing plan-* skill(s)`);
+    console.log(`  Removed ${existing.length} existing managed skill(s)`);
   }
 
   // Symlink skills from source to target

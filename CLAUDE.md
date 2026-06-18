@@ -231,6 +231,19 @@ Skills are declarative, not executable code. No automated tests — test manuall
 
 For development iteration, use `node bin/dev.js` to reinstall from local source.
 
+## Design-System Skills (`des-*`)
+
+This repo also hosts a second, separate skill family: a Figma→code workflow whose source of truth is **reviewed markdown** under a consuming project's `design-system/` directory, NOT live Figma. The markdown is authored once, reviewed by a human, then drives every build.
+
+This is intentionally distinct from the user's global `figma-*` skills (`figma-build`/`figma-port`/`figma-tokens`), which extract from live Figma at build time — the opposite philosophy. The `des-*` family does not touch `figma-*`.
+
+| Skill | Purpose |
+|-------|---------|
+| `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, layout). Stops for human review before any code. |
+| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
+
+The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.
+
 ## All Skills
 
 | Skill | Purpose |
