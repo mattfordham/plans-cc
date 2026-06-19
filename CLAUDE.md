@@ -237,17 +237,21 @@ This repo also hosts a second, separate skill family: a Figma→code workflow wh
 
 This is intentionally distinct from the user's global `figma-*` skills (`figma-build`/`figma-port`/`figma-tokens`), which extract from live Figma at build time — the opposite philosophy. The `des-*` family does not touch `figma-*`.
 
-The family runs an **author → sync → build** loop:
+The family runs an **author → sync → build** loop, with an optional on-demand **styleguide** view hanging off it (`/des-styleguide`):
 
-- **author** (`/des-author`) writes the reviewed markdown, including two *global* Tailwind artifacts: the `@theme` token block in `tokens.md` and an `@layer components` / `@utility` block of named global classes in `design-system/global-classes.md` (only cross-page recurring *structural* chrome — header/footer/page-shell/card — is promoted; one-offs and vertical rhythm stay inline in `composition.md`).
+- **author** (`/des-author`) writes the reviewed markdown, including two *global* Tailwind artifacts: the `@theme` token block in `tokens.md` and an `@layer components` / `@utility` block of named global classes in `design-system/global-classes.md` (only cross-page recurring *structural* chrome — header/footer/page-shell/card — is promoted; one-offs and vertical rhythm stay inline in `composition.md`). It also *offers* (never forces) the optional styleguide opt-in, seeding `design-system/config.md` with a `styleguide:` flag if the user accepts.
 - **sync** (`/des-sync`) applies those two global blocks into the project's live Tailwind layer (e.g. `app/globals.css`), wrapping each in stable sentinel markers — `/* des-sync:theme start|end */` and `/* des-sync:components start|end */` — so re-runs replace in place (idempotent) and never touch hand-written CSS. Authoring documents the blocks; only `/des-sync` applies them, so tokens/classes referenced by a build actually resolve.
 - **build** (`/des-build`) reads the markdown, may use the named global classes, and *flags* (never performs) drift when either managed block is missing/stale in the live layer, pointing the user to `/des-sync`.
+- **styleguide** (`/des-styleguide`, optional/on-demand) generates a single human-openable page rendering the whole system at once — every token swatch, named global class, and built component — resolving against the live Tailwind layer. It is a **generated/derived artifact** (never hand-edited; regenerated from the markdown), exactly like the rest of the family.
+
+**The `design-system/config.md` `styleguide:` opt-in flag.** The styleguide is **opt-in** and lives behind a single flag: a fenced `yaml` block in `design-system/config.md` with a `styleguide: <page path>` key (e.g. `styleguide: app/styleguide/page.tsx`). All four skills read it the same way. **Presence = opt-in**; when the flag is absent, every styleguide-aware behavior across the family silently no-ops. **Flag-only discipline (load-bearing):** only `/des-styleguide` ever creates or modifies the styleguide page. `/des-sync` and `/des-build` NEVER write it — they only emit a one-line staleness FLAG pointing the user to `/des-styleguide` (preserving des-sync's author-nothing / CSS-only contract and des-build's single responsibility, the same way des-build flags but never performs global-CSS drift).
 
 | Skill | Purpose |
 |-------|---------|
-| `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, global classes, layout). Stops for human review before any code. |
-| `/des-sync` | Apply step: write the `@theme` token block (`tokens.md`) and `@layer components` / `@utility` class block (`global-classes.md`) into the live Tailwind layer between sentinel markers, idempotently — never touching hand-written CSS. |
-| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
+| `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, global classes, layout). Offers the optional styleguide opt-in (`config.md`). Stops for human review before any code. |
+| `/des-sync` | Apply step: write the `@theme` token block (`tokens.md`) and `@layer components` / `@utility` class block (`global-classes.md`) into the live Tailwind layer between sentinel markers, idempotently — never touching hand-written CSS. Flags (never writes) styleguide staleness when opted in. |
+| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync` and styleguide staleness to `/des-styleguide`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
+| `/des-styleguide` | Optional/on-demand: generate (never hand-edit) a single human-openable styleguide page from the reviewed `design-system/` markdown — every token swatch, named global class, and built component rendered at once against the live layer, plus a sync/coverage drift panel. Opt-in via the `config.md` `styleguide:` flag; the only skill that writes the page. |
 
 The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.
 
@@ -287,3 +291,4 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
 | `/plan-guide` | Interactive contextual guide — what to do next |
 | `/plan-spawn` | Fan out N tasks in parallel, each in its own worktree (always autonomous) |
+| `/des-styleguide` | Generate (on demand, opt-in) a single human-openable styleguide page from `design-system/` — token swatches, global classes, and built components rendered at once against the live Tailwind layer |

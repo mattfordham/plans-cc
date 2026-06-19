@@ -62,6 +62,7 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
 6. **Close the feedback loop**
    - After building, list which tokens/patterns were used and anything that should be added to the design system.
    - This is the loop that converges the system over time — surface every gap and one-off you hit.
+   - **Styleguide staleness flag (flag only — never build the page).** Read `design-system/config.md`; if it declares a `styleguide:` flag, the project has opted into a styleguide page. After a build, **FLAG** that the newly built component is not yet reflected in the styleguide and tell the user to run `/des-styleguide` to regenerate it. `des-build` NEVER creates or modifies the styleguide page itself — same flag-only discipline as the Step 2 global-CSS drift check (which flags but never syncs). If `config.md` is absent or has no `styleguide:` key, emit nothing.
 
 7. **`verify` mode (Phase 3 self-verify)**
    - Run when invoked with `verify` (or optionally right after a build). Compare the build against the Figma frame using the DevTools-style checklist below.
@@ -96,3 +97,4 @@ When a human verifies a render against the Figma frame in browser DevTools:
 - **Non-linear desktop↔mobile reflow unresolved**: confirm your interpretation + breakpoint plan (AskUserQuestion) before building.
 - **`verify` with no build present**: build the component first, or compare the existing render if one already exists.
 - **Recurring pattern discovered mid-build**: build with it, but note it for folding back into `composition.md` / `components.md`.
+- **`styleguide:` flag set in `design-system/config.md`**: after a build, FLAG that the new component is not yet reflected in the styleguide and point the user to `/des-styleguide`. `des-build` only flags; it NEVER creates or edits the styleguide page (same flag-only discipline as the Step 2 drift check). If `config.md` is absent or has no `styleguide:` key, emit nothing.

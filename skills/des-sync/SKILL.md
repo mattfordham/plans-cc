@@ -51,6 +51,8 @@ Run this after authoring/refining the design system, and again whenever the `@th
    - List, per block: whether it was **created** (markers appended) or **updated in place** (markers already present), and whether the content actually changed vs. was already current.
    - Name the live file written and the markers used.
    - If the `@theme` block or class block was missing from the markdown, say so and point to `/des-author`.
+   - **Styleguide staleness reminder (flag only — never touch the page).** Read `design-system/config.md`; if it declares a `styleguide:` flag, the project has opted into a styleguide page. After a sync that changed either managed block, append a **one-line** reminder that the styleguide may now be stale and how to refresh it. `des-sync` NEVER creates or modifies the styleguide page — that is `/des-styleguide`'s job exclusively; this preserves des-sync's author-nothing / CSS-only contract. If `config.md` is absent or has no `styleguide:` key, emit nothing (silent no-op). The exact line:
+     > Styleguide may now be stale — run `/des-styleguide` to regenerate it.
 
 5. **End-of-action marker**
    - Output as the final line: `🟢 SYNCED · design-system → live Tailwind → Next: /des-build <component>`
@@ -64,3 +66,4 @@ Run this after authoring/refining the design system, and again whenever the `@th
 - **Markers absent**: append the marked block(s) after existing content / `@import "tailwindcss"`.
 - **Hand-written CSS near a managed block**: leave it untouched — only content strictly between `des-sync:*` markers is rewritten.
 - **Partial / corrupted markers** (a `start` without its matching `end`, or vice versa): do NOT rewrite in place — flag the malformed marker pair to the user and ask whether to re-append a fresh marked block, rather than risk eating hand-written CSS.
+- **`styleguide:` flag set in `design-system/config.md`**: after a sync that changed a managed block, append the one-line "Styleguide may now be stale — run `/des-styleguide`" reminder. `des-sync` only flags; it NEVER creates or edits the styleguide page (author-nothing / CSS-only contract). If `config.md` is absent or has no `styleguide:` key, emit nothing.

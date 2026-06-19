@@ -59,9 +59,11 @@ Run this once per new project, or whenever the design system materially changes.
        composition.md
        global-classes.md      # global @layer components / @utility classes (synced live by /des-sync)
        layout-and-responsive.md
+       config.md              # OPTIONAL — cross-skill settings; home of the styleguide: opt-in flag (see Step 9)
        components/            # per-component detail as the system grows
      ```
    - If `design-system/` already exists, refine in place. If invoked with `refresh`, re-derive from Figma.
+   - `config.md` is **optional** and only written if the user opts into a styleguide (Step 9). Its absence is a valid state.
 
 4. **Author `tokens.md`**
    - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) that bears on tokens — the apparent color strategy, type voice, and base spacing unit — and confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
@@ -105,11 +107,23 @@ Run this once per new project, or whenever the design system materially changes.
      - For **LINEAR** reflow — state the reflow rules directly.
      - For **NON-LINEAR** reflow (reorder / hide / re-nest / restructure) — DO NOT guess. List each under a `## Needs confirmation` heading with your best interpretation plus the specific ambiguity.
 
-9. **Summarize and STOP for review**
+9. **Offer the optional styleguide (opt-in — never forced)**
+   - The `des-*` family can generate a single human-openable **styleguide page** (every token swatch, global class, and built component rendered at once) via `/des-styleguide`. It is **opt-in** and **on-demand** — not a mandatory authoring artifact.
+   - The opt-in lives in `design-system/config.md` as a fenced `yaml` block with a `styleguide:` key whose value is the project-root-relative page path:
+     ````markdown
+     ```yaml
+     styleguide: app/styleguide/page.tsx
+     ```
+     ````
+   - **Read first.** If `config.md` already declares a `styleguide:` flag, the project has already opted in — leave it as-is (don't re-prompt) and just note it's set.
+   - **Otherwise OFFER, don't force.** Consistent with this skill's checkpoint style, use `AskUserQuestion` to ask whether the user wants a styleguide page, and if so at what path (suggest `app/styleguide/page.tsx`). On opt-in, write `design-system/config.md` with the `styleguide: <path>` yaml block. On decline, write **nothing** — no `config.md`, which is a valid no-opt-in state.
+   - Authoring only **seeds/reads the flag** — it never generates the page. Generation is always `/des-styleguide`'s job, consistent with "source of truth lives in `design-system/` markdown; derived artifacts are generated on demand."
+
+10. **Summarize and STOP for review**
    - After writing all files, summarize what you are confident about vs. the open "Needs confirmation" items across every file.
    - WAIT for the user's review before any components are generated. Do not proceed to building.
 
-10. **End-of-action marker**
+11. **End-of-action marker**
    - Output as the final line: `🟢 AUTHORED · design-system/ → Next: /des-sync` (then `/des-build <component>` once the global blocks are applied to the live Tailwind layer).
 
 ## Edge Cases
@@ -123,3 +137,4 @@ Run this once per new project, or whenever the design system materially changes.
 - **Missing mobile (or desktop) frame**: note the gap under "Needs confirmation"; do not invent the responsive behavior.
 - **Sparse Figma variables**: capture what exists, infer the base unit/rhythm from screenshots, and flag low-confidence inferences for review.
 - **Global-class promotion uncertain**: be conservative — promote ONLY cross-page recurring *structural* elements (header/footer/page-shell/card chrome) to `global-classes.md`, flag each candidate for human confirmation, and leave one-off adjacencies / vertical rhythm inline in `composition.md`. If the system warrants no global classes yet, say so in `global-classes.md` (a valid state — `/des-sync` then syncs only `@theme`).
+- **User declines the styleguide** (Step 9): write **no** `config.md`. Absence of the `styleguide:` flag is a valid no-opt-in state — `/des-styleguide` and the styleguide reminders in `/des-sync` / `/des-build` then silently no-op. The user can opt in later by adding `config.md` themselves or re-running `/des-author`.
