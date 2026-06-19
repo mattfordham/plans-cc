@@ -27,10 +27,10 @@ Run this once per new project, or whenever the design system materially changes.
 ## Arguments
 
 - `$ARGUMENTS`: Optional. A scope hint (e.g. a section name to focus on) or the keyword `refresh`.
-  - No argument: author the full system, refining any existing files in place. This runs the **full interactive experience** — the Step 2 survey plus all four per-area checkpoints (one before each authoring step).
+  - No argument: author the full system, refining any existing files in place. This runs the **full interactive experience** — the Step 2 survey plus all five per-area checkpoints (one before each authoring step).
   - `refresh`: re-derive the system from Figma from scratch (still preserving human-added notes where sensible).
   - A scope phrase: focus authoring on that slice (e.g. "tokens", "the marketing pages").
-  - **Loop length.** A scope phrase or `refresh` **shortens the upfront loop**: collapse the Step 2 survey and the four per-area checkpoints into a **single quick classify-confirm gate** up front, then author without pausing at every area. Bare no-arg gets the full per-area walk.
+  - **Loop length.** A scope phrase or `refresh` **shortens the upfront loop**: collapse the Step 2 survey and the five per-area checkpoints into a **single quick classify-confirm gate** up front, then author without pausing at every area. Bare no-arg gets the full per-area walk.
 
 ## Steps
 
@@ -48,7 +48,7 @@ Run this once per new project, or whenever the design system materially changes.
    - Note explicitly that the design *system* — and **especially composition** — is rarely drawn in one place. It is **inferred across the page frames** (the relationships between real elements on real screens) far more than it is explicitly defined on a style-guide frame. Treat page frames as the primary evidence for the system, with style-guide frames as corroboration.
    - State the broad hypothesis: what kind of system this looks like (density, type voice, color strategy, layout philosophy) and which frames you'll lean on for which areas.
    - Present this classification + broad hypothesis to the user via `AskUserQuestion` for validation or correction BEFORE any authoring begins. Fold the user's answer into how you author every file below.
-   - **Loop length.** On a bare no-arg invocation this survey is followed by the full per-area checkpoint walk (a checkpoint before each of Steps 4–7). With a scope phrase or `refresh`, collapse this survey *and* those per-area checkpoints into a single quick classify-confirm gate here, then author the in-scope file(s) without pausing at every area.
+   - **Loop length.** On a bare no-arg invocation this survey is followed by the full per-area checkpoint walk (a checkpoint before each of Steps 4–8). With a scope phrase or `refresh`, collapse this survey *and* those per-area checkpoints into a single quick classify-confirm gate here, then author the in-scope file(s) without pausing at every area.
 
 3. **Create / locate the directory layout**
    - Create or update files under `design-system/`:
@@ -57,6 +57,7 @@ Run this once per new project, or whenever the design system materially changes.
        tokens.md
        components.md
        composition.md
+       global-classes.md      # global @layer components / @utility classes (synced live by /des-sync)
        layout-and-responsive.md
        components/            # per-component detail as the system grows
      ```
@@ -90,27 +91,35 @@ Run this once per new project, or whenever the design system materially changes.
      - (f) **Interactive / state composition** — flag under "Needs confirmation" if absent from static frames.
      - (g) **Responsive composition deltas** — capture only the delta from the base.
 
-7. **Author `layout-and-responsive.md` (spend the MOST care)**
+7. **Author `global-classes.md` (be conservative — promote sparingly)**
+   - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) about which recurring *structural* elements (header, footer, page-shell, card chrome) repeat across page frames, and confirm the promotion candidates (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
+   - Author a global **`@layer components` / `@utility` block** of reusable named classes (e.g. a responsive `.site-header`). This is a deliberate philosophy extension: the system gains *named* global classes alongside inline utilities — but it stays markdown-only here (still "ready-to-paste", still stops for review, generates no code). The block is applied to the live Tailwind layer later by `/des-sync`, not here.
+   - **Promotion rule (conservative by design).** Promote ONLY cross-page recurring **structural** elements — header, footer, page-shell, card chrome — to named global classes. One-off adjacencies and vertical-rhythm rules stay INLINE in `composition.md` and are emitted as utilities by `/des-build`. Do not globalize against utility-first: when in doubt, leave it inline.
+   - **Flag candidates for human confirmation.** List each class you are proposing to promote with the page frames that evidence its recurrence, and confirm via `AskUserQuestion` rather than promoting silently. Anything the user does not confirm stays inline in `composition.md`.
+   - Each class resolves to concrete Tailwind classes / declarations, consistent with the tokens in `tokens.md`. If the system warrants no global classes yet, write the file noting that explicitly (valid state) — `/des-sync` will then sync only the `@theme` block.
+
+8. **Author `layout-and-responsive.md` (spend the MOST care)**
    - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) about the layout and responsive philosophy — mobile-first vs. desktop-first, the desktop/mobile frame pairs you'll compare — and confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
    - State an explicit **responsive philosophy**: mobile-first? container max-widths, grid collapse (3→1 vs 3→2), nav behavior, breakpoint values.
    - Compare each desktop frame to its mobile counterpart:
      - For **LINEAR** reflow — state the reflow rules directly.
      - For **NON-LINEAR** reflow (reorder / hide / re-nest / restructure) — DO NOT guess. List each under a `## Needs confirmation` heading with your best interpretation plus the specific ambiguity.
 
-8. **Summarize and STOP for review**
+9. **Summarize and STOP for review**
    - After writing all files, summarize what you are confident about vs. the open "Needs confirmation" items across every file.
    - WAIT for the user's review before any components are generated. Do not proceed to building.
 
-9. **End-of-action marker**
-   - Output as the final line: `🟢 AUTHORED · design-system/ → Next: /des-build <component>`
+10. **End-of-action marker**
+   - Output as the final line: `🟢 AUTHORED · design-system/ → Next: /des-sync` (then `/des-build <component>` once the global blocks are applied to the live Tailwind layer).
 
 ## Edge Cases
 
 - **Figma MCP not connected**: instruct the user to connect the Figma Dev Mode MCP or supply exported variable JSON + full-frame screenshots, then proceed with whatever is available.
 - **`design-system/` already exists**: refine in place. The `refresh` scope re-derives the system from Figma.
 - **User's Step 2 validation contradicts the hypothesis**: adjust to the user's read and re-survey on that basis — do NOT author any file on a hypothesis the user rejected.
-- **Scope phrase or `refresh` invocation**: collapse the Step 2 survey and the four per-area checkpoints into a single quick classify-confirm gate up front, then author without pausing at every area (bare no-arg keeps the full per-area walk).
+- **Scope phrase or `refresh` invocation**: collapse the Step 2 survey and the five per-area checkpoints into a single quick classify-confirm gate up front, then author without pausing at every area (bare no-arg keeps the full per-area walk).
 - **Auto-picked composition frames insufficient**: when auto-selecting representative page frames (Step 6) can't ground an inferred rule, ask the user via `AskUserQuestion` for specific frame/node references; whatever stays unresolved goes to `## Needs confirmation` rather than being guessed.
 - **Non-linear reflow ambiguity**: it goes under "Needs confirmation" with your best interpretation and the specific open question — never guess it into a concrete rule.
 - **Missing mobile (or desktop) frame**: note the gap under "Needs confirmation"; do not invent the responsive behavior.
 - **Sparse Figma variables**: capture what exists, infer the base unit/rhythm from screenshots, and flag low-confidence inferences for review.
+- **Global-class promotion uncertain**: be conservative — promote ONLY cross-page recurring *structural* elements (header/footer/page-shell/card chrome) to `global-classes.md`, flag each candidate for human confirmation, and leave one-off adjacencies / vertical rhythm inline in `composition.md`. If the system warrants no global classes yet, say so in `global-classes.md` (a valid state — `/des-sync` then syncs only `@theme`).

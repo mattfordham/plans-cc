@@ -237,10 +237,17 @@ This repo also hosts a second, separate skill family: a Figma→code workflow wh
 
 This is intentionally distinct from the user's global `figma-*` skills (`figma-build`/`figma-port`/`figma-tokens`), which extract from live Figma at build time — the opposite philosophy. The `des-*` family does not touch `figma-*`.
 
+The family runs an **author → sync → build** loop:
+
+- **author** (`/des-author`) writes the reviewed markdown, including two *global* Tailwind artifacts: the `@theme` token block in `tokens.md` and an `@layer components` / `@utility` block of named global classes in `design-system/global-classes.md` (only cross-page recurring *structural* chrome — header/footer/page-shell/card — is promoted; one-offs and vertical rhythm stay inline in `composition.md`).
+- **sync** (`/des-sync`) applies those two global blocks into the project's live Tailwind layer (e.g. `app/globals.css`), wrapping each in stable sentinel markers — `/* des-sync:theme start|end */` and `/* des-sync:components start|end */` — so re-runs replace in place (idempotent) and never touch hand-written CSS. Authoring documents the blocks; only `/des-sync` applies them, so tokens/classes referenced by a build actually resolve.
+- **build** (`/des-build`) reads the markdown, may use the named global classes, and *flags* (never performs) drift when either managed block is missing/stale in the live layer, pointing the user to `/des-sync`.
+
 | Skill | Purpose |
 |-------|---------|
-| `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, layout). Stops for human review before any code. |
-| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
+| `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, global classes, layout). Stops for human review before any code. |
+| `/des-sync` | Apply step: write the `@theme` token block (`tokens.md`) and `@layer components` / `@utility` class block (`global-classes.md`) into the live Tailwind layer between sentinel markers, idempotently — never touching hand-written CSS. |
+| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
 
 The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.
 
