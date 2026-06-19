@@ -38,11 +38,32 @@ function collectRuntimeDeps(pkgName, seen) {
 }
 
 function installDashboardRuntime() {
+  // Preserve the machine-wide project registry across reinstall: it lives
+  // inside RUNTIME_TARGET but is user data (written by lib/registry.js via
+  // project touches), not runtime code. Wiping the dir to refresh the
+  // dashboard runtime must not reset which projects are registered.
+  const registryPath = path.join(RUNTIME_TARGET, "projects.json");
+  let preservedRegistry = null;
+  if (fs.existsSync(registryPath)) {
+    try {
+      preservedRegistry = fs.readFileSync(registryPath);
+    } catch (err) {
+      // If it can't be read, treat as absent — the registry self-heals on
+      // next touch. Never let this abort the install.
+      preservedRegistry = null;
+    }
+  }
+
   // Remove prior install so upgrades are clean.
   if (fs.existsSync(RUNTIME_TARGET)) {
     fs.rmSync(RUNTIME_TARGET, { recursive: true, force: true });
   }
   fs.mkdirSync(RUNTIME_TARGET, { recursive: true });
+
+  // Restore the preserved registry into the freshly recreated runtime dir.
+  if (preservedRegistry !== null) {
+    fs.writeFileSync(registryPath, preservedRegistry);
+  }
 
   // Copy dashboard entry point and lib helpers.
   fs.cpSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"));
