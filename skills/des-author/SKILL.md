@@ -27,9 +27,10 @@ Run this once per new project, or whenever the design system materially changes.
 ## Arguments
 
 - `$ARGUMENTS`: Optional. A scope hint (e.g. a section name to focus on) or the keyword `refresh`.
-  - No argument: author the full system, refining any existing files in place.
+  - No argument: author the full system, refining any existing files in place. This runs the **full interactive experience** — the Step 2 survey plus all four per-area checkpoints (one before each authoring step).
   - `refresh`: re-derive the system from Figma from scratch (still preserving human-added notes where sensible).
   - A scope phrase: focus authoring on that slice (e.g. "tokens", "the marketing pages").
+  - **Loop length.** A scope phrase or `refresh` **shortens the upfront loop**: collapse the Step 2 survey and the four per-area checkpoints into a **single quick classify-confirm gate** up front, then author without pausing at every area. Bare no-arg gets the full per-area walk.
 
 ## Steps
 
@@ -41,7 +42,15 @@ Run this once per new project, or whenever the design system materially changes.
    - If the MCP is not connected, tell the user to connect the Figma Dev Mode MCP, OR to supply exported variable JSON plus full-frame screenshots. Then proceed with whatever input is available — do not block.
    - Always favor full-frame screenshots for the "big picture" that raw token extraction loses. Extraction gives you values; screenshots give you the system.
 
-2. **Create / locate the directory layout**
+2. **Survey & hypothesize (style-guide vs. page frames)**
+   - Before authoring anything, get the lay of the land. Pull big-picture `get_screenshot` captures plus `get_metadata` of the connected Figma file to see every frame at once.
+   - Form a broad hypothesis that **classifies the frames into two buckets**: explicit *style-guide* frames (swatches, type ramps, component sheets) vs. actual *page* frames (real screens that use the system).
+   - Note explicitly that the design *system* — and **especially composition** — is rarely drawn in one place. It is **inferred across the page frames** (the relationships between real elements on real screens) far more than it is explicitly defined on a style-guide frame. Treat page frames as the primary evidence for the system, with style-guide frames as corroboration.
+   - State the broad hypothesis: what kind of system this looks like (density, type voice, color strategy, layout philosophy) and which frames you'll lean on for which areas.
+   - Present this classification + broad hypothesis to the user via `AskUserQuestion` for validation or correction BEFORE any authoring begins. Fold the user's answer into how you author every file below.
+   - **Loop length.** On a bare no-arg invocation this survey is followed by the full per-area checkpoint walk (a checkpoint before each of Steps 4–7). With a scope phrase or `refresh`, collapse this survey *and* those per-area checkpoints into a single quick classify-confirm gate here, then author the in-scope file(s) without pausing at every area.
+
+3. **Create / locate the directory layout**
    - Create or update files under `design-system/`:
      ```
      design-system/
@@ -53,19 +62,23 @@ Run this once per new project, or whenever the design system materially changes.
      ```
    - If `design-system/` already exists, refine in place. If invoked with `refresh`, re-derive from Figma.
 
-3. **Author `tokens.md`**
+4. **Author `tokens.md`**
+   - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) that bears on tokens — the apparent color strategy, type voice, and base spacing unit — and confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
    - **UNIT CONVENTION block at the very top.** Designers/Figma express sizes in px; Tailwind uses rem. Annotate every size with BOTH, e.g. `space-4 = 1rem (16px)`.
    - **ROOT FONT-SIZE CONTRACT.** Default is 16px. The px↔rem mapping is only valid while this holds — state it explicitly so downstream builds and verification can rely on it.
    - **Colors** → semantic Tailwind token names + literal hex + a ready-to-paste `@theme` block.
    - **Type scale** → family, size (px+rem), line-height, weight, letter-spacing, and any responsive shifts.
    - **Spacing / radii / shadows** → capture the rhythm actually in use; call out the base unit in px+rem.
 
-4. **Author `components.md`**
+5. **Author `components.md`**
+   - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) about which recurring elements make up the system and the page frames you'll infer them from, then confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
    - For each recurring element: its variants, its states (hover/focus/disabled/active), and how padding/size scale.
    - This is JUDGMENT, not extraction — infer the *system* behind the instances rather than transcribing one-offs.
    - Individual elements only. How elements combine belongs in `composition.md`, not here.
 
-5. **Author `composition.md` (spend real care)**
+6. **Author `composition.md` (spend real care)**
+   - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) about the system's grammar — the composition you inferred *across the page frames* and which frames evidence it — and confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
+   - **Ground each inferred rule in real frames (auto-pick, then ask).** Composition is inferred *across* page frames, so when resolving an inferred rule, (a) **auto-select representative page frames from `get_metadata`** — pick the ones that best evidence the relationship and inspect them (`get_design_context` / `get_screenshot`) to confirm the inference; (b) when your own auto-pick is insufficient or ambiguous, **fall back to asking the user** via `AskUserQuestion` to supply or select specific Figma frame/node references; (c) anything still unresolved after that flows to the `## Needs confirmation` section below — never guess it into a rule.
    - This is the grammar of the system. Every rule must be a CONDITIONAL that resolves to concrete Tailwind classes: "When [element] [relationship] [other], apply [classes]."
    - Anything that can't be resolved to concrete classes moves to a `## Needs confirmation` section — never guess it into a rule.
    - Organize BY RELATIONSHIP TYPE, covering:
@@ -77,23 +90,27 @@ Run this once per new project, or whenever the design system materially changes.
      - (f) **Interactive / state composition** — flag under "Needs confirmation" if absent from static frames.
      - (g) **Responsive composition deltas** — capture only the delta from the base.
 
-6. **Author `layout-and-responsive.md` (spend the MOST care)**
+7. **Author `layout-and-responsive.md` (spend the MOST care)**
+   - **Checkpoint first.** Restate the slice of the broad hypothesis (Step 2) about the layout and responsive philosophy — mobile-first vs. desktop-first, the desktop/mobile frame pairs you'll compare — and confirm it (or let the user adjust) via `AskUserQuestion` BEFORE writing the file.
    - State an explicit **responsive philosophy**: mobile-first? container max-widths, grid collapse (3→1 vs 3→2), nav behavior, breakpoint values.
    - Compare each desktop frame to its mobile counterpart:
      - For **LINEAR** reflow — state the reflow rules directly.
      - For **NON-LINEAR** reflow (reorder / hide / re-nest / restructure) — DO NOT guess. List each under a `## Needs confirmation` heading with your best interpretation plus the specific ambiguity.
 
-7. **Summarize and STOP for review**
+8. **Summarize and STOP for review**
    - After writing all files, summarize what you are confident about vs. the open "Needs confirmation" items across every file.
    - WAIT for the user's review before any components are generated. Do not proceed to building.
 
-8. **End-of-action marker**
+9. **End-of-action marker**
    - Output as the final line: `🟢 AUTHORED · design-system/ → Next: /des-build <component>`
 
 ## Edge Cases
 
 - **Figma MCP not connected**: instruct the user to connect the Figma Dev Mode MCP or supply exported variable JSON + full-frame screenshots, then proceed with whatever is available.
 - **`design-system/` already exists**: refine in place. The `refresh` scope re-derives the system from Figma.
+- **User's Step 2 validation contradicts the hypothesis**: adjust to the user's read and re-survey on that basis — do NOT author any file on a hypothesis the user rejected.
+- **Scope phrase or `refresh` invocation**: collapse the Step 2 survey and the four per-area checkpoints into a single quick classify-confirm gate up front, then author without pausing at every area (bare no-arg keeps the full per-area walk).
+- **Auto-picked composition frames insufficient**: when auto-selecting representative page frames (Step 6) can't ground an inferred rule, ask the user via `AskUserQuestion` for specific frame/node references; whatever stays unresolved goes to `## Needs confirmation` rather than being guessed.
 - **Non-linear reflow ambiguity**: it goes under "Needs confirmation" with your best interpretation and the specific open question — never guess it into a concrete rule.
 - **Missing mobile (or desktop) frame**: note the gap under "Needs confirmation"; do not invent the responsive behavior.
 - **Sparse Figma variables**: capture what exists, infer the base unit/rhythm from screenshots, and flag low-confidence inferences for review.
