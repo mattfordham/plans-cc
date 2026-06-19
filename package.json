@@ -6,6 +6,9 @@
     "plans-cc": "bin/install.js",
     "plans-cc-dashboard": "bin/dashboard.js"
   },
+  "scripts": {
+    "test": "node --test"
+  },
   "files": [
     "bin",
     "lib",
