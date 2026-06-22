@@ -25,9 +25,31 @@ function launcherDirOnPath() {
 }
 
 function linkDashboardRuntime() {
+  // Preserve the machine-wide project registry across re-link: it lives inside
+  // RUNTIME_TARGET but is user data (written by lib/registry.js via project
+  // touches), not runtime code. Wiping the dir to refresh the dev symlinks must
+  // not reset which projects are registered. This mirrors install.js — without
+  // it, every `node bin/dev.js` run silently empties projects.json.
+  const registryPath = path.join(RUNTIME_TARGET, "projects.json");
+  let preservedRegistry = null;
+  if (fs.existsSync(registryPath)) {
+    try {
+      preservedRegistry = fs.readFileSync(registryPath);
+    } catch (err) {
+      // If it can't be read, treat as absent — the registry self-heals on
+      // next touch. Never let this abort the re-link.
+      preservedRegistry = null;
+    }
+  }
+
   // Tear down any previous install/symlinks so reruns are idempotent.
   fs.rmSync(RUNTIME_TARGET, { recursive: true, force: true });
   fs.mkdirSync(RUNTIME_TARGET, { recursive: true });
+
+  // Restore the preserved registry into the freshly recreated runtime dir.
+  if (preservedRegistry !== null) {
+    fs.writeFileSync(registryPath, preservedRegistry);
+  }
 
   // Symlink dashboard entry, lib dir, and node_modules back to the repo.
   fs.symlinkSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"), "file");
