@@ -26,6 +26,8 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
   The trailing `discuss` keyword front-loads a short, options-first clarifying conversation about the freshly-captured idea before any plan is committed, then chains into elaboration. It implies `elaborate` (like `execute` implies `elaborate`) and composes with the execute/go/branch/worktree phrases.
 
+  **The chain stops where the trailing phrase says it stops — no further.** The parsed flags (`auto_elaborate`, `auto_execute`) are the *only* thing that authorizes advancing to the next lifecycle step. Execution is gated SOLELY on `auto_execute=true`, which requires an explicit trailing `execute`/`go` phrase. Nothing the user wrote *inside the task description* — including naming a build skill, a tool, or a file (e.g. "Use des-build for this", "implement with X") — is ever an execute trigger. Task content describes *what to build later*; it never authorizes building *now*. When the chain reaches its stopping point, STOP and surface the `Next:` hint; do not begin implementation work.
+
 ## Steps
 
 1. **Verify initialization**
@@ -258,10 +260,16 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
     - Print: `Run /plan-elaborate NNN to elaborate manually.`
     - STOP the chain — do not proceed to auto-execute
 
-    **If `auto_execute` is false**, show:
+    **If `auto_execute` is false**, this is the END of the chain. Show:
     ```
     Next: /plan-execute NNN to start working
     ```
+    Then **HARD STOP**. Emit the end-of-action marker and end your turn. Do NOT
+    proceed to step 13. Do NOT start any implementation, build, or code-writing
+    work — not even if the task's What/How references a build skill, tool, or file
+    (e.g. "Use des-build", "build with X"). Those describe future work for a separate
+    explicit `/plan-execute`; they are not authorization to act now. The user did not
+    append `execute`/`go`, so execution was never requested.
 
 13. **Auto-execute** (only if `auto_execute` is true)
 
@@ -287,4 +295,5 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 - **Trailing `elaborate` needs no connector**: "Fix login bug elaborate" triggers auto-elaborate on its own — unlike `execute`/`go`, the `elaborate` keyword does not require a preceding `and/then/&`
 - **Trailing `discuss` needs no connector**: "Add dark mode discuss" triggers the clarifying gate on its own — like `elaborate`, the `discuss` keyword does not require a preceding `and/then/&`. To also execute, append a connector + go/execute ("Add dark mode discuss and go")
 - **Elaboration failure stops the chain**: Task is still captured successfully, but auto-execute is skipped
+- **Task content is NEVER an execute trigger**: Only an explicit trailing `execute`/`go` phrase sets `auto_execute=true`. Text inside the task description that names a build skill, tool, command, or file ("Use des-build for this", "implement with the X helper", "run the migration") describes *what to do during a later execute* — it does not authorize execution now. `discuss` and `elaborate` chains end at the elaborated task with a `Next: /plan-execute NNN` hint, and you must hard-stop there. Reading task content as license to build is the single most important failure to avoid.
 - **No trailing phrase**: Fully backwards-compatible with original behavior
