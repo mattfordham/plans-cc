@@ -194,6 +194,19 @@ Task files include a `## How Summary` section positioned **between `## Why` and 
 - `/plan-capture` seeds it as a `_To be filled during elaboration_` placeholder.
 - `/plan-show` renders it after Why and before the How/Progress checkboxes, and omits it when empty or still a placeholder.
 
+### The `**Build:**` task-header field
+
+An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`) that routes a task's component build through a dedicated build skill rather than the generic `plan-executor` sub-agent. Format:
+
+```
+**Build:** des-build · CaseStudyCarousel, ContentModule
+```
+
+- The token before `·` is the build skill (only `des-build` is wired in v1; the format reserves room for future build skills). After it is a comma-separated list of component/section unit names, each becoming one `des-build` invocation in listed order.
+- **Absence = no routing** — the default, fully backwards-compatible. Most tasks have no `**Build:**` field.
+- **Set deliberately, never inferred from body text.** `/plan-elaborate` may *propose* it when a task clearly builds design-system components and a `design-system/` directory exists; `/plan-capture` may *seed* it only when the description is an explicit routing directive ("Use des-build to build the Hero"). `/plan-execute` reads the field from the header only — it never re-derives it from the task body (consistent with the hardened "task content never drives routing/execution" rule).
+- `/plan-execute` reads it in Step 9, surfaces a `Build route:` line in the presented state, and in Step 11 invokes the build skill via the Skill tool once per unit (the orchestrator's one sanctioned exception to "all implementation goes through plan-executor"). Under autonomous (`yolo`/`worktree`) mode, des-build is told not to pause for non-linear-reflow confirmation — it records the interpretation as an assumption and defers it to review.
+
 ### Checkbox Progress Tracking
 
 The How section uses markdown checkboxes to track step-by-step progress:
@@ -256,6 +269,8 @@ The family runs an **author → sync → build** loop, with an optional on-deman
 | `/des-styleguide` | Optional/on-demand: generate (never hand-edit) a single human-openable styleguide page from the reviewed `design-system/` markdown — every token swatch, named global class, and built component rendered at once against the live layer, plus a sync/coverage drift panel. Opt-in via the `config.md` `styleguide:` flag; the only skill that writes the page. |
 
 The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.
+
+**Plan-execute → des-build routing.** A plan task can be routed to the real `/des-build` skill via an explicit `**Build:**` field in its header (see "The `**Build:**` task-header field" below). When set, `/plan-execute` invokes `des-build` once per named component instead of routing the build through the generic `plan-executor` sub-agent — which is necessary because a sub-agent has no Skill tool and structurally cannot invoke another skill, whereas the top-level `/plan-execute` orchestrator can. The field is read only from the task header, never inferred from task body content.
 
 ## All Skills
 

@@ -533,6 +533,12 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
       `### How Summary Generation` rules
     - Update Status to `elaborated` (the file stays in `.plans/pending/`)
 
+    **Propose a build-skill route (only when warranted, never auto-applied):** If the task clearly describes building one or more design-system components/sections AND the project has a `design-system/` directory, propose adding a `**Build:**` field to the task header so `/plan-execute` will route the build through the real `des-build` skill instead of the generic executor. Format (alongside `**Type:**` / `**Status:**`):
+    ```
+    **Build:** des-build · <Component1>, <Component2>
+    ```
+    The unit list is the component/section name(s) to build, each becoming one des-build invocation. **This is a deliberate gate, not inference:** surface the suggestion in the normal elaboration interaction and only write the field once the user agrees (in `skip_mode`, you may auto-pick it like any other elaboration decision, but record it as a `- [low]` assumption per the tracking rules below). Never sniff this from task-body keywords on later runs — `/plan-execute` reads the field only, never the body.
+
     **Skip-mode assumption tracking:** If `skip_mode` is true, every auto-accepted prompt in steps 11–12 (Path A confirmation, Path B Why/approach/open-questions/Verification, Path C intent, Path-C "Research more" auto-accept, step 12 validation confirmation) represents a decision made on the user's behalf without explicit input. Capture each such auto-pick as a bullet under the task's `## Assumptions > Initial (from elaboration)` subsection. If the subsection contains a `_To be filled..._` placeholder, replace it; otherwise append.
 
     **Bullet format:**

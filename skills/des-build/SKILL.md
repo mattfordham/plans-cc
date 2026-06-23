@@ -56,7 +56,7 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
 5. **Build (Next.js + Tailwind)**
    - Follow the existing project's component/file conventions.
    - Apply the responsive rules from `layout-and-responsive.md`.
-   - If desktop↔mobile differ NON-LINEARLY and it is not already resolved in the system, SHOW your interpretation + breakpoint plan BEFORE building — use AskUserQuestion to confirm.
+   - If desktop↔mobile differ NON-LINEARLY and it is not already resolved in the system, SHOW your interpretation + breakpoint plan BEFORE building — use AskUserQuestion to confirm. **Autonomous exception:** when the invocation prompt signals a non-interactive/autonomous context (e.g. driven by `/plan-execute` under yolo/worktree mode), do NOT pause — pick the most faithful interpretation, record it as a noted assumption in your output, and continue building so the choice surfaces at review instead of blocking.
    - If you discover a recurring pattern not yet captured in the system, note it for folding back in.
 
 6. **Close the feedback loop**
@@ -94,7 +94,7 @@ When a human verifies a render against the Figma frame in browser DevTools:
 - **`design-system/` missing**: instruct the user to run `/des-author` first. Do NOT extract from live Figma here.
 - **Global blocks missing/stale in the live Tailwind layer**: the live entry lacks current `des-sync:theme` / `des-sync:components` marker blocks matching the markdown — FLAG it and tell the user to run `/des-sync`. `des-build` never syncs; it builds and surfaces the drift.
 - **Token / value not in the system**: escalate — propose adding it to the system, don't hardcode it.
-- **Non-linear desktop↔mobile reflow unresolved**: confirm your interpretation + breakpoint plan (AskUserQuestion) before building.
+- **Non-linear desktop↔mobile reflow unresolved**: confirm your interpretation + breakpoint plan (AskUserQuestion) before building. In an autonomous/non-interactive context (signalled by the invocation prompt, e.g. when `/plan-execute` invokes this under yolo/worktree mode), do NOT pause — choose the most faithful interpretation, record it as a noted assumption, and continue so it surfaces at review.
 - **`verify` with no build present**: build the component first, or compare the existing render if one already exists.
 - **Recurring pattern discovered mid-build**: build with it, but note it for folding back into `composition.md` / `components.md`.
 - **`styleguide:` flag set in `design-system/config.md`**: after a build, FLAG that the new component is not yet reflected in the styleguide and point the user to `/des-styleguide`. `des-build` only flags; it NEVER creates or edits the styleguide page (same flag-only discipline as the Step 2 drift check). If `config.md` is absent or has no `styleguide:` key, emit nothing.

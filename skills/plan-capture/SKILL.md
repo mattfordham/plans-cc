@@ -93,6 +93,11 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    **Type:** [inferred type]
    **Status:** pending
 
+   <!-- Optional, OMITTED by default. Only add when the description is an explicit
+        build-skill routing directive (see the "Seeding the **Build:** field" edge case):
+        **Build:** des-build · Component1, Component2
+        Absence = no build-skill routing (the default). -->
+
    ## What
    [Original description]
 
@@ -296,4 +301,5 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 - **Trailing `discuss` needs no connector**: "Add dark mode discuss" triggers the clarifying gate on its own — like `elaborate`, the `discuss` keyword does not require a preceding `and/then/&`. To also execute, append a connector + go/execute ("Add dark mode discuss and go")
 - **Elaboration failure stops the chain**: Task is still captured successfully, but auto-execute is skipped
 - **Task content is NEVER an execute trigger**: Only an explicit trailing `execute`/`go` phrase sets `auto_execute=true`. Text inside the task description that names a build skill, tool, command, or file ("Use des-build for this", "implement with the X helper", "run the migration") describes *what to do during a later execute* — it does not authorize execution now. `discuss` and `elaborate` chains end at the elaborated task with a `Next: /plan-execute NNN` hint, and you must hard-stop there. Reading task content as license to build is the single most important failure to avoid.
+- **Seeding the `**Build:**` field (the one narrow exception, and ONLY a field — never an execute trigger)**: If the description is an explicit routing directive that names a build skill (e.g. begins "Use des-build to build the Hero…"), you MAY seed a `**Build:**` field in the task header so a later `/plan-execute` routes that build through the real skill (format: `**Build:** des-build · Hero`, listing the component/section unit(s)). This is the sole sanctioned place task body text influences the field, and it happens **only at capture time, deliberately** — `/plan-execute` later reads the field, never re-derives it from the body. Seeding the field does NOT change the execution gate one bit: the task is still only captured (the hard-stop rule above stands), and an explicit trailing `execute`/`go` is still required to build. When in doubt, omit the field — its absence simply means no routing.
 - **No trailing phrase**: Fully backwards-compatible with original behavior

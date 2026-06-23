@@ -512,6 +512,8 @@ These rules bind every invocation. They are not subject to your judgment about t
    - Read `.plans/CONTEXT.md` for project context
    - Note what's in the Changes section (work done so far)
 
+   **Read the build route (if any):** Look for a `**Build:**` field in the task header (alongside `**Type:**` / `**Status:**`). It has the form `<skill> · <unit1>, <unit2>, ...` (e.g. `**Build:** des-build · CaseStudyCarousel, ContentModule`). If present and the skill is `des-build`, set `build_route = { skill: "des-build", units: [<unit1>, ...] }`; otherwise `build_route = null`. This field is read **only** from the header — never inferred from the task body. (Routing is applied in Steps 10–11.)
+
    Parse the How section for checkboxes and count:
    - Total checkboxes: count all `- [ ]` and `- [x]` lines in How section
    - Completed: count `- [x]` lines
@@ -527,6 +529,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    ```
    [Starting/Continuing] task #NNN: [Title]
    Type: [type] | Branch: [branch-name or "none"]
+   Build route: [des-build → unit1, unit2]            ← only show if build_route is set
    Test Suite: [Detected: RSpec/Jest/pytest/etc.] or [None detected]
 
    ## Progress (X/Y steps complete)
@@ -551,7 +554,13 @@ These rules bind every invocation. They are not subject to your judgment about t
 
 10. **Prepare for segmented execution**
 
-   **Reminder (Execution Contract #2): ALL implementation work goes through the plan-executor sub-agent — never edit directly.**
+   **Reminder (Execution Contract #2): ALL implementation work goes through the plan-executor sub-agent — never edit directly. The ONE exception is the build-skill route below: when `build_route` is set, the named build units are handed to the build skill (which this orchestrator can invoke via the Skill tool — a sub-agent cannot), not to the plan-executor.**
+
+   **Detect build-skill routing**
+
+   Using `build_route` read in Step 9 (the parsed `**Build:**` header field — never inferred from task body):
+   - If `build_route` is null → behavior is unchanged. Proceed to step-filter resolution and normal segmentation below.
+   - If `build_route` is set (skill `des-build`, with one or more named units) → those units are built by invoking the des-build skill directly in Step 11 (the "Build-skill route" branch), NOT by the plan-executor sub-agent. The build units do not enter generic segmentation. Any How steps that are NOT part of building those units still segment and run through the normal plan-executor loop (see "Mixed tasks" in Step 11).
 
    **Resolve step filter** (if `step_filter` is set)
 
@@ -603,7 +612,22 @@ These rules bind every invocation. They are not subject to your judgment about t
 
 11. **Execute segments**
 
-   **MANDATORY: Spawn plan-executor sub-agent for ALL implementation work.**
+   **Build-skill route (run this BEFORE the plan-executor path below — only when `build_route` is set):**
+
+   When `build_route` is set (from Steps 9–10), the named build units are built by invoking the build skill directly from this orchestrator (which holds the Skill tool — a plan-executor sub-agent does not), NOT by spawning plan-executor. For `build_route.skill == "des-build"`:
+
+   - **Iterate one des-build call per unit**, in listed order (des-build builds a single component/section at a time, and a later unit may need an earlier one to already exist). For each unit:
+     - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"` (append ` verify` when the task's Verification or How asks for a self-verify pass against the Figma frame).
+     - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
+     - **Autonomous deferral (mirror of the observation-step rule below):** when `worktree_mode` is true OR `yolo_mode` is true, the invocation prompt MUST instruct des-build to NOT pause with AskUserQuestion for non-linear desktop↔mobile reflow — it records the chosen interpretation as a noted assumption and continues, deferring the choice to review. When both are false, des-build may pause and ask normally.
+   - **After each unit completes:**
+     - Mark the corresponding How-step checkbox(es) for that unit complete (`- [x]`).
+     - Append to the task's `## Changes` section: the unit built, the files written, the tokens/global classes used, and any drift/styleguide flags des-build surfaced.
+     - Record a line in the state file `## Key Decisions` (e.g. `- Built <unit> via des-build skill; surfaced N flags`), and any deferred reflow interpretation in the state file `## Observations` section as `- <unit>: ⏳ reflow interpretation deferred to review`.
+   - **Mixed tasks:** any remaining unchecked How steps that are NOT part of building these units still run through the normal plan-executor segment loop below — resolve the step filter / segmentation over those remaining steps as usual. If every step is covered by build units, skip the plan-executor loop entirely.
+   - After the build route (and any remaining plan-executor segments) complete, fall through to the same finish handling (Step 11d non-worktree / Step 11e worktree) and state-setting rules — a des-build-routed task lands in `review` (worktree) or stays `in-progress` (non-worktree) exactly like any other execution.
+
+   **MANDATORY: Spawn plan-executor sub-agent for ALL implementation work (the build-skill route above is the sole exception).**
 
    **a. Create or load state file**
 
