@@ -55,18 +55,29 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 3.5. **Confirm working directory is the main repo (not a worktree)**
    - Run `pwd` and verify it matches the project root (the directory containing `.plans/`). If it does not, `cd` to the project root before continuing.
-   - Run `git rev-parse --show-toplevel` and `git rev-parse --git-dir`. If `--git-dir` resolves to a path inside `.worktrees/` (e.g. `.git/worktrees/NNN-slug`), error out: "plan-review must run from the main project directory, not a worktree. cd to [project-root] and re-run `/plan-review NNN`."
+   - Run `git rev-parse --git-dir 2>/dev/null` from the project root. **If the project root is not itself a git repo** (multi-repo project — the parent holds git sub-repos), this guard does not apply: there is no single worktree to be trapped in; the per-repo step 5 handles each sub-repo. Skip the rest of this step.
+   - Otherwise (single git repo at the root): run `git rev-parse --show-toplevel` and `git rev-parse --git-dir`. If `--git-dir` resolves to a path inside `.worktrees/` (e.g. `.git/worktrees/NNN-slug`), error out: "plan-review must run from the main project directory, not a worktree. cd to [project-root] and re-run `/plan-review NNN`."
    - This guards against the case where a previous `/plan-execute` left the shell context positioned inside `.worktrees/NNN-slug/` (or where the agent assumed the work is still trapped in the worktree). The branch lives in the main repo's `.git`; all subsequent steps must run from there.
 
-3.6. **Enforce single-occupancy of `in-review`** (only when the original status from step 3 was `review` — i.e. this task is about to *enter* review)
-   - Only one task may be `in-review` at a time, because `in-review` means that task's branch is the one checked out in the single main working directory. Two tasks cannot both have their branch checked out at once.
-   - Scan `.plans/pending/*.md` for any **other** task (different ID) with `**Status:** in-review`.
-   - If one is found, **stop now — before any checkout or status mutation** — and error:
-     `Task #MMM ([title]) is already in review — its branch is checked out in the working directory. Pause it with /plan-pause MMM (returns it to the review queue), or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
+3.6. **Enforce review concurrency by repo set** (only when the original status from step 3 was `review` — i.e. this task is about to *enter* review)
+   - In a **single-repo** project only one task can be `in-review` at a time, because `in-review` means that task's branch is checked out in the single main working directory. In a **multi-repo** project (the parent directory holds several git sub-repos and is not itself a git repo), each sub-repo has its own checkout, so two review tasks touching **disjoint** repo sets can both be `in-review` at once. This guard blocks only on a genuine conflict.
+   - **Repo set of a task** (compute for the incoming task and for each existing in-review task):
+     - `**Repos:**` field present → repo set = the comma-separated names there.
+     - else the `**Branch:**` line contains a `(multi-repo: A, B, ...)` parenthetical → repo set = the comma-separated names inside it (covers legacy tasks executed before `**Repos:**` was persisted into review). Parse: take the substring between `multi-repo:` and the closing `)`, split on commas, trim each; tolerate a single name and arbitrary whitespace.
+     - else (no repo metadata) → the task is **single-repo**; treat its repo set as the sentinel `MAIN` (it occupies the single shared main-checkout). `MAIN` conflicts with every other task.
+   - Scan `.plans/pending/*.md` for every **other** task (different ID) with `**Status:** in-review`. If none, proceed.
+   - Let `incoming` = this task's repo set. For each in-review occupant `O` (repo set `occ`):
+     - If `incoming == MAIN` **or** `occ == MAIN` → **conflict** (a single-repo task on either side needs the shared checkout) — stop with the shared-checkout error below.
+     - else if `incoming ∩ occ` is non-empty → **conflict** on the overlapping repos — stop with the overlap error below.
+     - else disjoint → no conflict with `O`; keep scanning.
+   - No conflicting occupant → **proceed** (concurrent review is allowed). On the first conflict, **stop now — before any checkout or status mutation** — and error:
+     - Shared-checkout conflict: `Task #MMM ([title]) is already in review and occupies the shared working directory. Pause it with /plan-pause MMM (returns it to the review queue), or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
+     - Repo-overlap conflict (name the intersection): `Task #MMM ([title]) is already in review and touches the same repo(s): [intersection]. Concurrent review needs disjoint repo sets. Pause it with /plan-pause MMM or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
    - This guard does not apply when the original status was `in-review` (resuming the same task) or `in-progress` (reviewing mid-execution) — neither creates a new `in-review` occupant.
 
 4. **Check for uncommitted changes**
-   - Run `git status --porcelain` to check for uncommitted changes in the current checkout
+   - **Multi-repo** (`multi_repo_review` is true — determined in step 5; for ordering, compute the repo set here per step 3.6 if not yet known): run `git status --porcelain` in **each** repo in `review_repos` (`cd [repo] && git status --porcelain`) and treat the combined output as "the current checkout" below. A "Stash changes" choice stashes per repo (`cd [repo] && git stash`); "Commit changes" commits per repo (`cd [repo] && git add -A && git commit -m "wip: save changes before review"`).
+   - **Single-repo:** run `git status --porcelain` to check for uncommitted changes in the current checkout
    - If uncommitted changes exist:
 
      **REQUIRED: You MUST call the `AskUserQuestion` tool here — do NOT auto-select an option, do NOT stash or commit automatically, do NOT skip this prompt.** The user must choose how to handle their uncommitted work.
@@ -84,7 +95,12 @@ Review a task that has completed execution (typically via worktree workflow). **
        - If "Abort": stop and exit
 
 5. **Checkout branch**
-   - **All commands in this step run in the main project directory** (verified in step 3.5). The branch was created by `/plan-execute` inside this same repository — `git worktree add` shares the `.git` of the main repo, so removing the worktree does not remove the branch. There is no "bringing code back" step needed.
+   - **Determine review repo mode (once):** compute this task's repo set per step 3.6's definition. If it is the `MAIN` sentinel (no `**Repos:**` field and no `(multi-repo: ...)` parenthetical), set `multi_repo_review = false`. Otherwise set `multi_repo_review = true` and `review_repos = [the repo names]`.
+   - **If `multi_repo_review` is false:** run the checkout body below exactly as written, in the main project directory.
+   - **If `multi_repo_review` is true:** run the checkout body below **once per repo** in `review_repos`, prefixing every git command with `cd [repo] && ` (from the parent project root). The `.plans`-protection safety guard runs per repo; it is normally a no-op for sub-repos (`.plans/` lives in the parent non-git dir, not inside any sub-repo) but keep it — if a sub-repo unexpectedly tracks `.plans`, stop with the existing warning naming that repo.
+
+   Checkout body:
+   - **All commands here run in the main project directory** (single-repo) **or in each repo's directory** (multi-repo, via the `cd [repo] &&` prefix), as determined above. The branch was created by `/plan-execute` inside this same repository — `git worktree add` shares the `.git` of the (sub-)repo, so removing the worktree does not remove the branch. There is no "bringing code back" step needed.
    - Get the branch name from the task file's `**Branch:**` field
    - Check if branch exists: `git branch --list [branch-name]`
    - If branch doesn't exist: "Branch '[branch-name]' not found. It may have been deleted."
@@ -95,6 +111,7 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Checkout branch: `git checkout [branch-name]`
 
 6. **Rebase onto latest main**
+   - **If `multi_repo_review` is true (from step 5):** run this entire rebase procedure **once per repo** in `review_repos`, prefixing every git command with `cd [repo] && ` — each repo resolves its **own** default branch (the `origin/HEAD` detection below runs per repo). Scope the conflict-handling `AskUserQuestion` prompts and messages to the current repo (say "[repo]" in them). If the user picks "Resolve in place" or "Abort rebase" for **any** repo, **stop the whole review** — do not advance the remaining repos into a half-rebased state. Otherwise the single-repo procedure below is unchanged.
    - Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
    - Fetch latest: `git fetch origin [default-branch]` (ignore errors if remote is unavailable)
    - Determine the rebase target — pick whichever is further ahead between local and remote:
@@ -238,7 +255,8 @@ Review a task that has completed execution (typically via worktree workflow). **
    [First 2-3 sentences from the What section]
 
    ## Changes
-   [Output of: git diff --stat [default-branch]...[branch-name]]
+   [Single-repo (`multi_repo_review` false): output of `git diff --stat [default-branch]...[branch-name]`.
+    Multi-repo (`multi_repo_review` true): for each repo in `review_repos`, render a `### [repo-name]` sub-heading followed by the output of `cd [repo] && git diff --stat [that-repo's-default-branch]...[branch-name]`.]
 
    ## Completed Steps
    - [x] Step 1 description
@@ -260,7 +278,8 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 ## Edge Cases
 
-- **Another task already `in-review`**: Block before checkout (step 3.6). Only one task can be `in-review` at a time because its branch occupies the single working-directory checkout. Tell the user to `/plan-pause` or `/plan-complete` the current occupant first. Does not apply when resuming the same `in-review` task or reviewing an `in-progress` one.
+- **Another task already `in-review`**: Block before checkout (step 3.6) only on a **repo conflict**. Single-repo tasks (and any task on either side without repo metadata) occupy the shared main checkout and conflict with everything — one review at a time. Two **multi-repo** tasks with **disjoint** repo sets may be `in-review` concurrently; they block only when their repo sets intersect (the error names the overlapping repos). Tell the user to `/plan-pause` or `/plan-complete` the conflicting occupant first. Does not apply when resuming the same `in-review` task or reviewing an `in-progress` one.
+- **Shared non-git dir touched by two concurrent reviews**: A symlinked non-git directory (e.g. `shared-config`) is never part of a task's repo set, so the step 3.6 guard does not arbitrate it. Review provides git-checkout isolation per sub-repo only; shared non-git files are not isolated (the same as during execution, where both worktrees symlink the same shared files). Intentional non-guarantee.
 - **No ID + one review/in-review task**: Auto-select it
 - **No ID + no review/in-review tasks**: Check for in-progress tasks with branches, list those
 - **No ID + no eligible tasks**: Error suggesting `/plan-execute`

@@ -101,6 +101,8 @@ pending   elaborated  in-progress          review │  in-review │  completed
                                              └─┘          └─┘ (archived)
                                         (pause back to review)
 
+In a multi-repo project, multiple tasks may be in-review concurrently when their repo sets are disjoint (single-repo projects stay one-at-a-time).
+
 brainstorm → expand → elaborate → execute → complete
    │            │
   idea     pending tasks
@@ -183,7 +185,7 @@ spec at `.plans/artifacts/desktop-app-spec.md`.
 - `elaborated` — Has Why/How/Verification filled in
 - `in-progress` — Actively being worked on
 - `review` — Execution complete, awaiting user review (worktree workflow)
-- `in-review` — Actively being walked through with `/plan-review` (worktree workflow)
+- `in-review` — Actively being walked through with `/plan-review` (worktree workflow). Single-repo projects allow only one `in-review` task at a time (it occupies the shared main checkout); multi-repo projects allow multiple `in-review` tasks concurrently as long as their repo sets are disjoint (each sub-repo has its own checkout). See `plan-review` step 3.6.
 - `completed` — Done and archived
 
 ### How Summary Section

@@ -913,7 +913,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    **Invariant after this step:** You are back in the parent project directory. For each repo in `relevant_repos`, the task's commits live on branch `[branch-name]` inside that repo's main checkout. The `.worktrees/NNN-slug/` tree has been fully removed. All subsequent commands run from the main project directory against those per-repo branches — do NOT assume work needs to be moved out of the (now-deleted) worktree.
 
    5. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
-   6. Remove `**Worktree:**` and `**Repos:**` lines from task file (branch metadata stays)
+   6. Remove the `**Worktree:**` line from the task file. **Keep the `**Repos:**` line** — it records which sub-repos this task touched and is now consumed by `/plan-review` (the review-concurrency guard plus per-repo checkout/rebase/diff) and `/plan-pause` (per-repo branch unwind). Branch metadata also stays.
    7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    8. Show worktree completion summary.
 

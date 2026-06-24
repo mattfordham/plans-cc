@@ -85,10 +85,16 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 
 6. **Commit changes and switch branch**
 
+   - **Multi-repo task** (the task has a `**Repos:**` field, or a `(multi-repo: ...)` parenthetical on its `**Branch:**` line): the parent directory is not itself a git repo, so the per-repo branch must be unwound in each sub-repo. Parse the repo set the same way as `/plan-review` step 3.6 (prefer the `**Repos:**` field; fall back to the parenthetical). For each listed repo:
+     - Check for uncommitted changes: `cd [repo] && git status --porcelain`
+     - If any exist, stage and commit: `cd [repo] && git add -A && git commit -m "plan: pause #NNN - [title]"`
+     - Determine that repo's default branch: `cd [repo] && git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master
+     - If not already on it: `cd [repo] && git checkout [default-branch]`
+     - Then skip the single-repo git handling below and continue to step 7.
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently to step 7
 
-   **If the task has a `**Branch:**` field:**
+   **If the task has a `**Branch:**` field (single-repo):**
    - Check for any uncommitted changes: `git status --porcelain`
    - If uncommitted changes exist:
      - Stage and commit everything:
