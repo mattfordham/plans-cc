@@ -112,6 +112,8 @@ brainstorm → expand → elaborate → execute → complete
           selected tasks
 ```
 
+**Deferral:** Any pending task can step out of the active flow via `/plan-backlog <id>` (→ `.plans/backlog/`) and step back in via `/plan-restore <id>` (→ `.plans/pending/`). Backlog is a *location*, not a status — a restored task keeps the status it had when shelved; an active task is auto-paused first.
+
 **Shortcuts:** Any command auto-fills missing earlier steps. `/plan-execute Fix bug` auto-captures and auto-elaborates before executing. `/plan-elaborate Fix bug` auto-captures before elaborating. `/plan-capture Fix bug and go` chains all three with trailing phrases. Branch keywords (`branch`, `use branch`) and worktree keywords (`worktree`, `use worktree`) work across all entry points. The `yolo` keyword (or `autonomous`) on `/plan-execute` runs a task autonomously in a worktree with skip-mode elaboration, deferred observations, and low-confidence assumptions tracked for review (e.g. `/plan-execute https://trello.com/c/abc yolo`). Step filters (`steps 3-5`, `first 3 steps`, `the diagnostic steps`, `next batch`) let you execute a subset of steps within a task. The `discuss` keyword front-loads a short, options-first clarifying conversation about a freshly-captured idea *before* a plan is committed, then chains into elaboration — it works on `/plan-capture <desc> discuss` and `/plan-execute <desc> yolo discuss`. It only fires after an auto-capture (v1 scope); an existing task id (`/plan-execute 5 discuss`) does NOT trigger it — use the standalone `/plan-discuss 5` for that. Because the gate is an open-ended turn-by-turn conversation, `yolo discuss` is intentionally NOT fully unattended — it pauses for the upfront gate (until you say "go") before autonomy begins.
 
 **Chain advancement is authorized ONLY by the parsed trailing phrase, never by task content.** A chain stops where its trailing phrase says it stops: `discuss`/`elaborate` end at the elaborated task, and only an explicit `execute`/`go` advances to execution. Text *inside* a task's description — naming a build skill, tool, command, or file ("Use des-build for this", "build with X") — describes work for a *later* explicit `/plan-execute`; it is never authorization to start building now. Reading task content as license to execute is the canonical runaway-chain failure to avoid.
@@ -129,7 +131,7 @@ Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
 
 | Emoji | Category | Skills |
 |-------|----------|--------|
-| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, merge-reviews, import, pick, expand, brainstorm, cleanup, context, init, depends |
+| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, merge-reviews, import, pick, expand, brainstorm, cleanup, context, init, depends, backlog, restore |
 | 🟡 | Review state | review |
 | ✅ | Completion (terminal) | complete |
 | ⏸️ | Paused | pause |
@@ -156,6 +158,7 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   HISTORY.md      # Completed work archive
   config.json     # Settings (git_commits, next_id, idea_next_id)
   pending/        # Active task files
+  backlog/        # Deferred task files
   completed/      # Archived task files
   ideas/          # Brainstorm session documents
 ```
@@ -187,6 +190,8 @@ spec at `.plans/artifacts/desktop-app-spec.md`.
 - `review` — Execution complete, awaiting user review (worktree workflow)
 - `in-review` — Actively being walked through with `/plan-review` (worktree workflow). Single-repo projects allow only one `in-review` task at a time (it occupies the shared main checkout); multi-repo projects allow multiple `in-review` tasks concurrently as long as their repo sets are disjoint (each sub-repo has its own checkout). See `plan-review` step 3.6.
 - `completed` — Done and archived
+
+**Backlog (a location, not a status).** `.plans/backlog/` is a deferral bucket for work consciously shelved. `/plan-backlog <id>` moves a task there; `/plan-restore <id>` brings it back to `.plans/pending/`. A backlogged task **keeps its prior status** (a restored `elaborated` task is still `elaborated`) — backlog is *where* a task lives, not a status value. An active (`in-progress`/`in-review`) task is **auto-paused** before shelving so no half-running task lands in the backlog. Backlogged tasks are hidden from default views and surfaced via `/plan-list backlog` and a `+N backlogged` badge; PROGRESS.md tracks a separate `Backlogged` stat, and the desktop-dashboard parser counts them in a separate `backlogged` summary field excluded from the active counts.
 
 ### How Summary Section
 
@@ -305,6 +310,8 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-expand` | Expand an idea into actionable tasks |
 | `/plan-brainstorm` | Explore ideas through guided discussion |
 | `/plan-pause` | Pause an in-progress or in-review task to switch context |
+| `/plan-backlog` | Defer a pending task into `.plans/backlog/` (auto-pauses an active task first) |
+| `/plan-restore` | Restore a backlogged task to `.plans/pending/`, preserving its prior status |
 | `/plan-search` | Full-text search across all tasks and ideas |
 | `/plan-depends` | Add or view task dependency relationships |
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |

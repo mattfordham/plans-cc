@@ -12,7 +12,7 @@ description: Full-text search across all tasks and ideas
 
 # plan-search
 
-Search across all tasks and ideas by keyword. Searches titles and content of task files in pending/, completed/, and ideas/.
+Search across all tasks and ideas by keyword. Searches titles and content of task files in pending/, backlog/, completed/, and ideas/.
 
 ## Arguments
 
@@ -31,6 +31,7 @@ Search across all tasks and ideas by keyword. Searches titles and content of tas
 3. **Search task and idea files**
    - Use Grep to search case-insensitively for the query in:
      - `.plans/pending/*.md`
+     - `.plans/backlog/*.md` (if directory exists)
      - `.plans/completed/*.md`
      - `.plans/ideas/*.md` (if directory exists)
    - For each matching file, collect:

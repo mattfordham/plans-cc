@@ -33,16 +33,16 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
    >
    > 1. Run `git branch --show-current` in the project root. If it fails, note "not a git repo."
    > 2. Find sub-repos: `find . -maxdepth 2 -name .git -type d` excluding `./.git`. For each, run `git -C <dir> branch --show-current`.
-   > 3. Glob `.plans/pending/*.md` and `.plans/completed/*.md`.
+   > 3. Glob `.plans/pending/*.md` and `.plans/completed/*.md`. Also Glob `.plans/backlog/*.md` and count the entries (do NOT parse or list them — just the count); treat a missing directory as 0.
    > 4. For each pending task file, parse: id (first 3 digits of filename), title (first `# ` line), type (`**Type:**` line), status (`**Status:**` line), checkbox progress (count `- [ ]` and `- [x]` lines in the How section → `completed/total`), blocked-by (if `**Blocked by:**` exists, list blocker ids and mark `blocked=true` if any blocker id is NOT present in `.plans/completed/`).
    > 5. Count files in `.plans/completed/`.
-   > 6. Refresh `.plans/PROGRESS.md` silently: update the Stats section with accurate counts (pending, elaborated, in-progress, review, in-review, completed) and set "Last updated" to today's date. Preserve all other content.
+   > 6. Refresh `.plans/PROGRESS.md` silently: update the Stats section with accurate counts (pending, elaborated, in-progress, review, in-review, completed, backlogged) and set "Last updated" to today's date. Preserve all other content.
    > 7. Return a report in this exact shape:
    >
    > ```
    > BRANCH: <branch or NONE>
    > SUBREPOS: <name→branch · name→branch or NONE>
-   > COUNTS: pending=<n> elaborated=<n> in-progress=<n> review=<n> in-review=<n> completed=<n>
+   > COUNTS: pending=<n> elaborated=<n> in-progress=<n> review=<n> in-review=<n> completed=<n> backlogged=<n>
    > TASKS (sorted: in-progress, in-review, review, elaborated, pending):
    > <id>|<status>|<type>|<completed>/<total>|<blocked:true|false>|<title>
    > <id>|<status>|<type>|<completed>/<total>|<blocked:true|false>|<title>
@@ -62,6 +62,7 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
    Sub-repos: app → feature/login-fix · api → main
 
    2 pending · 1 ready · 1 in progress · 1 ready for review · 0 in review · 3 completed
+   +2 backlogged
 
    ▶ 003 Fix login timeout [bug] 3/5
    ★ 004 Add search feature [feature] 4/4
@@ -81,6 +82,8 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
    - Blank line between branch info and the summary counts line.
 
    **Summary counts line** uses the COUNTS values: `<pending> pending · <elaborated> ready · <in-progress> in progress · <review> ready for review · <in-review> in review · <completed> completed`.
+
+   **Backlogged badge** (the line directly under the summary counts): if `backlogged` > 0, print a single line `+<n> backlogged` — a one-line count only; do NOT list the individual backlogged tasks (they're opt-in via `/plan-list backlog`). If `backlogged` is 0, omit this line entirely.
 
    **One line per task** using these glyphs:
    - `▶` in-progress
@@ -113,5 +116,6 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
 
 - **Not initialized**: short-circuit at step 1. Do not spawn subagent.
 - **No tasks**: render the header, zero-count summary, no task lines, and the "Get started" Quick Action.
+- **No backlogged tasks** (`backlogged=0`): omit the `+N backlogged` badge line entirely. Backlogged tasks are never listed individually or counted in the `<total>` of the end-of-action marker (they're not active work).
 - **Subagent returns malformed data**: print a brief error and suggest rerunning; do not fabricate task rows.
 - **Main agent must NOT** run `git`, Glob the `.plans/` tree, Read task files, or Edit PROGRESS.md itself. All of that belongs to the subagent so the transcript stays clean.

@@ -25,7 +25,7 @@ Display a focused overview of a single task: what it is, current progress, and w
 2. **Parse and resolve task ID**
    - Accept flexible ID formats: "1", "01", "001"
    - Zero-pad to 3 digits for file lookup
-   - Search both `.plans/pending/NNN-*.md` and `.plans/completed/NNN-*.md`
+   - Search `.plans/pending/NNN-*.md`, `.plans/backlog/NNN-*.md`, and `.plans/completed/NNN-*.md` (a backlogged task stays findable by ID)
 
 3. **Handle missing ID argument**
    - If no `$ARGUMENTS`, list all tasks and ask which to show:

@@ -33,7 +33,7 @@ A task's `**Status:**` line must be one of:
 
 ## Expected Directories Under `.plans/`
 
-`pending/`, `completed/`, `ideas/`, `state/`, `archive/`
+`pending/`, `completed/`, `backlog/`, `ideas/`, `state/`, `archive/`
 
 Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be flagged.
 
@@ -128,7 +128,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 
 7. **Scan for unexpected directories**
    - List immediate subdirectories of `.plans/` using Glob: `.plans/*/`
-   - Any directory not in the expected set (`pending`, `completed`, `ideas`, `state`, `archive`) is unexpected.
+   - Any directory not in the expected set (`pending`, `completed`, `backlog`, `ideas`, `state`, `archive`) is unexpected.
    - **Full mode**: If any found, use `AskUserQuestion`:
      - Header: "Unexpected dirs"
      - Question: "Found unexpected directories under .plans/:\n[list]\n\nThese aren't part of the plans system. What would you like to do?"

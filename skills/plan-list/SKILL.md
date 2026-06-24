@@ -35,8 +35,9 @@ Display a filtered list of tasks in table format.
 - `chore` — maintenance/config tasks
 
 **Special:**
-- `all` — all tasks including completed
-- (no filter) — all non-completed tasks (default)
+- `all` — all tasks including completed (does NOT include backlogged tasks — those are opt-in via the `backlog` filter)
+- `backlog` — only backlogged/deferred tasks from `.plans/backlog/` (the opt-in view)
+- (no filter) — all non-completed tasks from `.plans/pending/` only; backlogged tasks are excluded by default
 
 **Keyword search:**
 - Any text that doesn't match a known filter is treated as a search query
@@ -50,10 +51,10 @@ Display a filtered list of tasks in table format.
 
 2. **Parse filter**
    - If `$ARGUMENTS` provided:
-     - Check if it matches a known filter keyword (pending, elaborated, in-progress, review, in-review, completed, bug, feature, refactor, chore, all)
+     - Check if it matches a known filter keyword (pending, elaborated, in-progress, review, in-review, completed, bug, feature, refactor, chore, all, backlog)
      - If it matches: use as filter (filter mode)
      - If it does NOT match any known keyword: treat as a **search query** (search mode)
-   - If no filter: default to showing all non-completed
+   - If no filter: default to showing all non-completed (from `.plans/pending/` only — backlogged tasks are excluded)
 
 3. **Scan task files**
 
@@ -64,7 +65,10 @@ Display a filtered list of tasks in table format.
    - Scan `.plans/completed/*.md`
 
    **For type filters or 'all':**
-   - Scan both directories
+   - Scan both `.plans/pending/*.md` and `.plans/completed/*.md` (NOT `.plans/backlog/` — deferred tasks are opt-in only)
+
+   **For the `backlog` filter:**
+   - Scan `.plans/backlog/*.md` ONLY. If the directory does not exist, treat it as empty.
 
 4. **Parse each task file**
    Extract:
@@ -85,7 +89,8 @@ Display a filtered list of tasks in table format.
 5. **Apply filter**
    - Status filter: match Status field
    - Type filter: match Type field
-   - 'all': no filtering
+   - 'all': no filtering (scoped to pending + completed only; backlog is excluded)
+   - 'backlog': show every task in `.plans/backlog/` (no further status filtering)
    - Default (no arg): exclude completed status
    - **Search mode**: use Grep to search `.plans/pending/*.md` and `.plans/completed/*.md` for the search query (case-insensitive). Only include files that contain the query. This replaces the status/type filter — all matching tasks are included regardless of status.
 
@@ -136,6 +141,7 @@ Display a filtered list of tasks in table format.
 ## Edge Cases
 
 - **Search with no results**: "No tasks matching '[query]'. Try `/plan-search [query]` for full-text search including ideas."
+- **`backlog` filter with empty/missing `backlog/`**: "No backlogged tasks. Defer one with `/plan-backlog <id>`."
 - **No matches**: Friendly message with suggestion
 - **No tasks at all**: "No tasks yet. Run `/plan-capture` to add one."
 - **Many tasks**: Show all (no pagination needed for CLI)

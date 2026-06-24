@@ -30,6 +30,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
      config.json
      pending/
      completed/
+     backlog/
      ideas/
      state/
    ```
@@ -86,6 +87,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
    - Elaborated: 0
    - In Progress: 0
    - Completed: 0
+   - Backlogged: 0
    ```
 
 5. **Write HISTORY.md template**

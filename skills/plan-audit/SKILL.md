@@ -29,7 +29,7 @@ Run a completeness audit on a task. Verifies that all affected files, tests, and
 2. **Parse and resolve task ID**
    - Accept flexible ID formats: "1", "01", "001"
    - Zero-pad to 3 digits for file lookup
-   - Find task file in `.plans/pending/NNN-*.md` or `.plans/completed/NNN-*.md`
+   - Find task file in `.plans/pending/NNN-*.md`, `.plans/backlog/NNN-*.md`, or `.plans/completed/NNN-*.md`
 
 3. **Validate task state**
    - Read the task file

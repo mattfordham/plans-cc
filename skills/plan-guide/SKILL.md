@@ -41,6 +41,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
      - `in-progress` (actively being worked on)
      - `review` (execution complete, awaiting review)
    - Count files in `.plans/completed/`
+   - Count files in `.plans/backlog/` (just the count — do NOT parse or list them; treat a missing directory as 0)
    - Check if `.plans/ideas/` has any files
    - Check if `.plans/CONTEXT.md` exists and has been customized (not just the auto-generated template — look for an Overview section with actual content)
    - For in-progress tasks: parse checkbox progress (completed/total steps)
@@ -53,6 +54,12 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
    ```
    # Plans Guide
    ```
+
+   **Backlogged badge** (directly under the `# Plans Guide` header) — if `.plans/backlog/` contains N > 0 tasks, print a single one-line badge and nothing more:
+   ```
+   +N backlogged — `/plan-list backlog` to view, `/plan-restore <id>` to bring one back
+   ```
+   Do NOT list the individual backlogged tasks, and keep every suggestion section below sourced from `.plans/pending/` only. If N is 0, omit this line entirely.
 
    **Section: Context check** (show if CONTEXT.md is missing or only has auto-generated content)
    ```
@@ -155,4 +162,5 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
 - **Only completed tasks**: Show "All Caught Up" with completion count
 - **Malformed task files**: Skip them silently, work with what's readable
 - **ideas/ directory doesn't exist**: Skip ideas section
+- **backlog/ directory missing or empty**: Omit the backlogged badge entirely (show it only when the count is > 0)
 - **No git repo**: Omit any git-related tips
