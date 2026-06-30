@@ -115,8 +115,8 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - Check if `.worktrees/` directory exists. If not, skip to step 7.
    - List subdirectories of `.worktrees/`
    - For each, extract the task ID from the directory name (first 3 digits)
-   - Check if a matching task exists in `.plans/pending/NNN-*.md` with status `in-progress` or `review`
-   - Directories with no matching active task are orphaned
+   - Check if a matching task exists in `.plans/pending/NNN-*.md` with status `in-progress`, `review`, or `in-review`
+   - Directories with no matching active task are orphaned (an `in-review` task with a live kept worktree is actively being reviewed *inside* its worktree — it is NOT orphaned and must not be reaped)
    - **If orphaned worktrees found, use `AskUserQuestion` tool:**
      - Header: "Worktrees"
      - Question: "Found N orphaned worktree(s) with no matching active task:\n[list directory names]\n\nDelete them?"

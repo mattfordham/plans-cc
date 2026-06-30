@@ -85,6 +85,12 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 
 6. **Commit changes and switch branch**
 
+   - **Kept-worktree review task** (the task has a live `**Worktree:**` field — i.e. it was executed with `keep` — and its status is `in-review`): the work lives in a separate checkout, and main was never moved onto the task branch (the branch lives in the worktree), so there is nothing to switch main off of. Commit any stray changes **inside the worktree** and leave the worktree in place — mirror `/plan-backlog`'s "don't remove the worktree" path:
+     - `cd [worktree] && git status --porcelain`; if dirty, `cd [worktree] && git add -A && git commit -m "plan: pause #NNN - [title]"`.
+     - **Multi-repo** (also has a `**Repos:**` field or `(multi-repo: ...)` parenthetical): do the commit per sub-repo checkout under the worktree tree.
+     - **SKIP** the main `git checkout [default-branch]` step — main is not on the task branch. Do NOT remove the worktree; `/plan-review` resumes it in place.
+     - If any commit fails (e.g. hooks): warn but do not fail the skill.
+     - Then skip the remaining single-/multi-repo git handling below and continue to step 7. (For the confirmation in step 7, omit the "Switched to branch:" line since no branch switch occurred.)
    - **Multi-repo task** (the task has a `**Repos:**` field, or a `(multi-repo: ...)` parenthetical on its `**Branch:**` line): the parent directory is not itself a git repo, so the per-repo branch must be unwound in each sub-repo. Parse the repo set the same way as `/plan-review` step 3.6 (prefer the `**Repos:**` field; fall back to the parenthetical). For each listed repo:
      - Check for uncommitted changes: `cd [repo] && git status --porcelain`
      - If any exist, stage and commit: `cd [repo] && git add -A && git commit -m "plan: pause #NNN - [title]"`
@@ -168,3 +174,4 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
 - **Git commit fails**: Warn but don't fail the pause operation
 - **Review task with no branch**: Pause without branch switch (just add paused note)
 - **Already on default branch during review pause**: Skip checkout, just commit
+- **Kept-worktree in-review task** (live `**Worktree:**` field, executed with `keep`): commit any stray changes inside the worktree and leave the worktree in place — skip the main `git checkout [default-branch]` (main was never on the task branch). Status transition `in-review` → `review` is unchanged; omit the "Switched to branch:" line from the confirmation.

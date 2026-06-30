@@ -111,12 +111,15 @@ This auto-captures, auto-elaborates, and starts executing — all in one command
 |---------|-------------|
 | `/plan-execute <id> branch` | Execute with a dedicated git branch |
 | `/plan-execute <id> use worktree` | Execute in an isolated git worktree |
+| `/plan-execute <id> worktree keep` | Execute in a worktree and keep it for review (enables parallel review) |
 | `/plan-review <id>` | Checkout a task's branch and display a diff summary for manual testing |
 | `/plan-spawn <ids...>` | Fan out N tasks in parallel, each in its own worktree (always autonomous) |
 
 **Branch mode** creates a feature branch (e.g., `fix/001-login-timeout`) and works on it. When you complete the task, Claude offers to merge it back.
 
 **Worktree mode** goes further — it creates an isolated copy of your repo in `.worktrees/`, executes there, then cleans up the worktree and sets the task to `review` status. This lets you keep working on your main checkout while Claude works in isolation, and you can run multiple tasks in parallel.
+
+**Keep mode** (`keep`, or `keep worktree` / `keep wt`) tells worktree mode *not* to clean up the worktree at the end of execution. It implies worktree mode (it cascades like `yolo`) and composes freely with `worktree` and `yolo` — e.g. `/plan-execute 1 worktree keep` or `/plan-execute 1 yolo keep`. The task holds onto its live worktree, and `/plan-review` then reviews *inside* that worktree instead of checking the branch out into your main copy. Because a kept worktree is its own checkout, it never ties up the shared main directory — so you can have **multiple tasks in review at the same time, even in a single-repo project** (without `keep`, single-repo projects review one task at a time). The kept worktree is torn down later by `/plan-complete` (it merges from main, removes the worktree, and clears the task's worktree reference).
 
 ### Viewing and Tracking
 
@@ -183,6 +186,8 @@ capture → elaborate → execute (worktree) → review → complete
 
 - **review** — Execution is finished, the worktree has been cleaned up, and the branch is ready for manual testing. Run `/plan-review` to checkout the branch and see what changed.
 
+With the `keep` keyword (e.g. `/plan-execute 1 worktree keep`), the worktree is **not** cleaned up at the end of execution. The task keeps its worktree and is reviewed in place, which lets multiple tasks sit in `review`/`in-review` concurrently — including in single-repo projects. The worktree is removed later when you run `/plan-complete`.
+
 ## Common Workflows
 
 ### Standard: one task at a time
@@ -221,6 +226,19 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-review 3                            # Checkout task 3's branch, see changes
 # ... test manually ...
 /plan-complete 3                          # Merge and archive
+```
+
+### Parallel review with kept worktrees
+
+```
+/plan-execute 3 worktree keep             # Task 3 runs in a worktree that is KEPT
+/plan-execute 5 worktree keep             # Task 5 too — its own kept worktree
+# ... both finish and land in `review`, each in its own checkout ...
+/plan-review 3                            # Review task 3 inside its worktree
+/plan-review 5                            # Review task 5 concurrently — no conflict,
+                                          #   even in a single-repo project
+/plan-complete 3                          # Merge, remove task 3's worktree, archive
+# ... task 5's worktree survives until you complete it ...
 ```
 
 ### Explore before committing

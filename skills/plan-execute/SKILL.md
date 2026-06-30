@@ -1,7 +1,7 @@
 ---
 name: plan-execute
 disable-model-invocation: false
-argument-hint: "<id|description> [steps N-M] [branch|worktree] [discuss]"
+argument-hint: "<id|description> [steps N-M] [branch|worktree] [keep] [discuss]"
 allowed-tools:
   - Read
   - Write
@@ -52,6 +52,10 @@ These rules bind every invocation. They are not subject to your judgment about t
 - **YOLO keyword detection** (second) — set `yolo_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `yolo`, `yolo mode`, `autonomous`
   - Strip YOLO keywords from `$ARGUMENTS` before further parsing
   - `yolo_mode = true` implies `worktree_mode = true` AND `branch_mode = true` (autonomous execution always runs in an isolated worktree on its own branch)
+- **Keep keyword detection** (after worktree/yolo detection, since keep governs worktree lifecycle) — set `keep_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `keep`, `keep worktree`, `keep wt`
+  - Strip keep keywords from `$ARGUMENTS` before further parsing
+  - `keep_mode = true` implies `worktree_mode = true` AND `branch_mode = true` (a kept worktree is still a worktree on its own branch — there is NO standalone-`keep` error path; it cascades exactly like `yolo`/`worktree`)
+  - `keep` composes freely with `worktree` and `yolo` (e.g. `worktree keep`, `yolo keep`); it preserves the execution worktree past execution finish so `/plan-review` can review inside it, unlocking parallel review
 - **Branch keyword detection** (third) — set `branch_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `branch`, `get branch`, `use branch`, `yes branch`
   - Strip branch keywords from `$ARGUMENTS` before further parsing
 - **Discuss keyword detection** (after worktree/yolo/branch/step-filter detection) — set `discuss_mode = true` if any remaining token in `$ARGUMENTS` is (case-insensitive) `discuss`. This is a per-token flag, not an end-anchored phrase: strip the matched `discuss` token from `$ARGUMENTS` before further parsing. `discuss` composes freely with `worktree` / `branch` / `yolo` (e.g. `yolo discuss`).
@@ -101,6 +105,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 - `/plan-execute 1 next batch` → execute the next segment of uncompleted steps
 - `/plan-execute 1 last 2 steps` → execute the last 2 steps of task 1
 - `/plan-execute 1 yolo` → run task 1 in yolo mode (autonomous, worktree, low-confidence assumptions tracked)
+- `/plan-execute 1 worktree keep` → execute task 1 in a worktree, then PRESERVE the worktree (and its `**Worktree:**` field) at finish so it can be reviewed in place for parallel review
+- `/plan-execute 1 yolo keep` → run task 1 autonomously in a worktree and keep the worktree afterward for parallel review (teardown deferred to `/plan-complete`)
 - `/plan-execute https://trello.com/c/abc123 yolo` → ingest Trello card and run autonomously
 - `/plan-execute "Some task" yolo` → autonomous execution on user-authored description
 - `/plan-execute Fix bug discuss` → auto-capture, hold an upfront clarifying conversation, then auto-elaborate and execute
@@ -119,6 +125,8 @@ These rules bind every invocation. They are not subject to your judgment about t
    - Check for YOLO keywords/phrases (see Arguments section) → store as `yolo_mode` flag (true/false). If true, also set `worktree_mode = true` AND `branch_mode = true`.
    - Strip YOLO keywords from `$ARGUMENTS`
    - **`yolo` does NOT grant discretion to skip steps.** You do not get to judge a task "too trivial" for capture/elaborate or for the worktree. See Execution Contract #1 and #3.
+   - Check for keep keywords/phrases (see Arguments section) → store as `keep_mode` flag (true/false). If true, also set `worktree_mode = true` AND `branch_mode = true` (keep cascades like yolo — no standalone-keep error path).
+   - Strip keep keywords from `$ARGUMENTS`. `keep` composes with `worktree` / `yolo` (e.g. `worktree keep`, `yolo keep`).
    - Check for branch keywords/phrases (see Arguments section) → store as `branch_mode` flag (true/false)
    - Strip branch keywords from `$ARGUMENTS`
    - Check for step filter (see Arguments section) → store as `step_filter` (or null if none found)
@@ -298,13 +306,17 @@ These rules bind every invocation. They are not subject to your judgment about t
      - `pending`: Start mode (needs elaboration first — see step 7a)
      - `elaborated`: Start mode (ideal)
      - `in-progress`: Resume mode
-     - `review` or `in-review`: Resume mode — set status back to `in-progress`, use `AskUserQuestion` to ask if user wants worktree or current directory:
-       - Header: "Resume review"
-       - Question: "Task #NNN is in review. Resume execution in current directory or create a new worktree?"
-       - Options:
-         1. "Current directory" (description: "Continue working in the current checkout")
-         2. "New worktree" (description: "Create a fresh worktree for this task")
-       - If "New worktree": set `worktree_mode = true`, `branch_mode = true`
+     - `review` or `in-review`: Resume mode — set status back to `in-progress`. **First, check for a live kept worktree** (mirror the `in-progress` worktree-resume logic below):
+       - If the task has a `**Worktree:**` field:
+         - If the path exists: **auto-detect and reuse it** — set execution working directory to that path, set `worktree_mode = true` and `branch_mode = true`, and print `Resuming task #NNN inside kept worktree at [path].` Do NOT present the current-dir/new-worktree question (the kept worktree is the answer). If the task also has a `**Repos:**` field, set `multi_repo_mode = true` and parse it to restore `relevant_repos`.
+         - If the path does NOT exist: warn `Kept worktree path no longer exists. Falling back to current directory or a new worktree.`, remove the stale `**Worktree:**` line from the task file (and `**Repos:**` line if present), then fall through to the question below.
+       - **If there is NO live `**Worktree:**` field** (the default — task reviewed in main), use `AskUserQuestion` to ask if user wants worktree or current directory:
+         - Header: "Resume review"
+         - Question: "Task #NNN is in review. Resume execution in current directory or create a new worktree?"
+         - Options:
+           1. "Current directory" (description: "Continue working in the current checkout")
+           2. "New worktree" (description: "Create a fresh worktree for this task")
+         - If "New worktree": set `worktree_mode = true`, `branch_mode = true`
      - `completed`: "Task #NNN is already completed."
      - Not found: "Task #NNN not found. Run `/plan-list` to see available tasks."
    - **Worktree resume check** (if status was `in-progress`):
@@ -864,19 +876,26 @@ These rules bind every invocation. They are not subject to your judgment about t
       cd [worktree-path] && git commit -m "plan: complete work on task #NNN - [title]"
       ```
    2. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
-   3. Return to project root: `cd [project-root]`
-   4. Remove worktree: `git worktree remove .worktrees/NNN-slug`
-      - If remove fails (dirty worktree), force it: `git worktree remove --force .worktrees/NNN-slug`
 
-   **Invariant after worktree removal:** You are now in the main project directory (`[project-root]`). The task's commits live on branch `[branch-name]` in the main repository — they are *not* lost when the worktree is removed. `git worktree add` only created a separate checkout; the branch and its commits remain in the main repo's `.git`. Subsequent commands (`/plan-review`, `/plan-complete`) operate on this branch from the main project directory — do NOT `cd` back into `.worktrees/NNN-slug` (it no longer exists) and do NOT assume the work needs to be "brought back" from anywhere.
+   **Teardown gate (depends on `keep_mode`):**
 
-   5. Remove `**Worktree:**` line from task file (branch metadata stays)
+   - **If `keep_mode` is FALSE (default — behavior unchanged):**
+     3. Return to project root: `cd [project-root]`
+     4. Remove worktree: `git worktree remove .worktrees/NNN-slug`
+        - If remove fails (dirty worktree), force it: `git worktree remove --force .worktrees/NNN-slug`
+     5. Remove `**Worktree:**` line from task file (branch metadata stays)
+   - **If `keep_mode` is TRUE — PRESERVE the worktree:**
+     3. **Skip `git worktree remove`** — the worktree stays on disk.
+     4. **Keep the `**Worktree:**` line** on the task file (it is the live signal `/plan-review` and other lifecycle skills read to review inside the worktree, enabling parallel review). Branch metadata also stays.
+     5. Teardown of this kept worktree is deferred to `/plan-complete` (after merge).
+
+   **Invariant after this step:** The task's commits live on branch `[branch-name]` in the main repository's `.git` — `git worktree add` only created a separate checkout, so the branch and its commits persist regardless of whether the worktree is removed. **When `keep_mode` is FALSE:** the worktree is gone and you are in the main project directory (`[project-root]`); subsequent commands (`/plan-review`, `/plan-complete`) operate on this branch from there — do NOT `cd` back into `.worktrees/NNN-slug` (it no longer exists) and do NOT assume the work needs to be "brought back" from anywhere. **When `keep_mode` is TRUE:** the worktree still exists and the task retains its `**Worktree:**` field; you remain in the worktree-aware state and downstream skills review *inside* that worktree rather than checking the branch out into main.
    6. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    7. Show worktree completion summary.
 
       Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Run /plan-review NNN and walk through the diff`.
 
-      Print EXACTLY this format and STOP:
+      Print EXACTLY this format and STOP (the `Worktree:` line depends on `keep_mode` — see below):
       ```
       All segments complete for task #NNN (worktree mode)
 
@@ -888,7 +907,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 
       **Next:** /plan-review NNN
       ```
-      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after `Worktree: cleaned up`):
+      **`Worktree:` line:** when `keep_mode` is FALSE, print `Worktree: cleaned up` as shown. When `keep_mode` is TRUE, print `Worktree: kept at [absolute-worktree-path] for parallel review` instead.
+      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after the `Worktree:` line):
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```
@@ -903,23 +923,31 @@ These rules bind every invocation. They are not subject to your judgment about t
       - If changes exist: `git add -A && git commit -m "plan: complete work on task #NNN - [title]"`
       - Track which repos had changes in `repos_with_changes` list
    2. Return to parent directory
-   3. For each repo in `relevant_repos`:
-      - Remove worktree: `cd [repo-name] && git worktree remove .worktrees/NNN-slug`
-        - If remove fails, force it: `git worktree remove --force .worktrees/NNN-slug`
-      - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
-   4. Remove parent-level worktree directory: `rm -rf .worktrees/NNN-slug`
-      - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
 
-   **Invariant after this step:** You are back in the parent project directory. For each repo in `relevant_repos`, the task's commits live on branch `[branch-name]` inside that repo's main checkout. The `.worktrees/NNN-slug/` tree has been fully removed. All subsequent commands run from the main project directory against those per-repo branches — do NOT assume work needs to be moved out of the (now-deleted) worktree.
+   **Teardown gate (depends on `keep_mode`):**
+
+   - **If `keep_mode` is FALSE (default — behavior unchanged):**
+     3. For each repo in `relevant_repos`:
+        - Remove worktree: `cd [repo-name] && git worktree remove .worktrees/NNN-slug`
+          - If remove fails, force it: `git worktree remove --force .worktrees/NNN-slug`
+        - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
+     4. Remove parent-level worktree directory: `rm -rf .worktrees/NNN-slug`
+        - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
+   - **If `keep_mode` is TRUE — PRESERVE the worktree tree:**
+     3. **Skip the per-repo `git worktree remove`** for every repo in `relevant_repos` — each per-repo worktree stays on disk.
+     4. **Skip `rm -rf .worktrees/NNN-slug`** (and the `rmdir .worktrees`) — preserve the whole symlinked parent `.worktrees/NNN-slug/` tree intact, including the per-repo symlinks and the `.plans` symlink.
+     5. Teardown of this kept worktree tree is deferred to `/plan-complete` (after merge).
+
+   **Invariant after this step:** For each repo in `relevant_repos`, the task's commits live on branch `[branch-name]` inside that repo's `.git` — they persist regardless of whether the worktree is removed. **When `keep_mode` is FALSE:** the `.worktrees/NNN-slug/` tree has been fully removed and you are back in the parent project directory; all subsequent commands run from the main project directory against those per-repo branches — do NOT assume work needs to be moved out of the (now-deleted) worktree. **When `keep_mode` is TRUE:** the `.worktrees/NNN-slug/` tree (and each per-repo worktree) still exists and the task retains its `**Worktree:**` and `**Repos:**` fields; downstream skills review *inside* that worktree tree rather than checking the branches out into main.
 
    5. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
-   6. Remove the `**Worktree:**` line from the task file. **Keep the `**Repos:**` line** — it records which sub-repos this task touched and is now consumed by `/plan-review` (the review-concurrency guard plus per-repo checkout/rebase/diff) and `/plan-pause` (per-repo branch unwind). Branch metadata also stays.
+   6. **When `keep_mode` is FALSE:** remove the `**Worktree:**` line from the task file. **Keep the `**Repos:**` line** — it records which sub-repos this task touched and is now consumed by `/plan-review` (the review-concurrency guard plus per-repo checkout/rebase/diff) and `/plan-pause` (per-repo branch unwind). Branch metadata also stays. **When `keep_mode` is TRUE:** keep BOTH the `**Worktree:**` line (the live signal for in-worktree review) and the `**Repos:**` line; branch metadata also stays.
    7. Skip steps 12-14 (testing/feedback loop) — worktree workflow defers this to `/plan-review`. This skip applies equally when `yolo_mode` is true (which always implies `worktree_mode`).
    8. Show worktree completion summary.
 
       Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Run /plan-review NNN and walk through the diff`.
 
-      Print EXACTLY this format and STOP:
+      Print EXACTLY this format and STOP (the `Worktree:` line depends on `keep_mode` — see below):
       ```
       All segments complete for task #NNN (worktree mode)
 
@@ -932,7 +960,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 
       **Next:** /plan-review NNN
       ```
-      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after `Worktree: cleaned up`):
+      **`Worktree:` line:** when `keep_mode` is FALSE, print `Worktree: cleaned up` as shown. When `keep_mode` is TRUE, print `Worktree: kept at [absolute-path-to-.worktrees/NNN-slug] for parallel review` instead.
+      **If `yolo_mode` is true,** insert one additional line BEFORE the `**How to verify:**` block (right after the `Worktree:` line):
       ```
       YOLO assumptions logged — see /plan-review NNN for low-confidence items.
       ```

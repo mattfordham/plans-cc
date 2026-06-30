@@ -192,7 +192,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 8. **Update task file**
    - Change Status to `completed`
    - Add completion timestamp: `**Completed:** [YYYY-MM-DDTHH:MM]`
-   - Remove `**Worktree:**` line if present (defensive cleanup — worktree should already be removed by `/plan-execute`, but remove stale metadata if it persists)
+   - Remove `**Worktree:**` line if present (and the `**Repos:**` line if multi-repo). For a non-kept task this is defensive cleanup — the worktree should already be removed by `/plan-execute`, but remove stale metadata if it persists. For a kept-worktree task (executed with `keep`), this is the deliberate field-strip that finishes the teardown begun in step 14b, which removed the actual worktree after merging from main.
    - Write updated file (still in pending/ temporarily)
 
 9. **Move to completed/**
@@ -252,6 +252,18 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
         - Report success or any merge conflicts
       - If "Skip merge":
         - Note in completion message that branch was not merged
+
+14b. **Tear down a kept worktree** (if the task still has a live `**Worktree:**` field)
+
+    Completion is the OWNER of kept-worktree teardown. A task executed with `keep` keeps its execution worktree alive through review (`/plan-execute` no longer removes it), so the live `**Worktree:**` field will still be present here. If the task has NO `**Worktree:**` field, skip this step entirely.
+
+    **The ordering below is load-bearing — do it in exactly this order:**
+
+    1. **Merge from main while the branch is still checked out in the worktree.** `cd` to the project root, `git checkout [default-branch]`, then `git merge [task-branch]`. (Step 14 may already have performed this merge — if so, just confirm main is on the default branch and the merge landed; do not merge twice.) Merging FROM main first is mandatory: the branch lives in the worktree, and removing the worktree before merging would discard the very checkout the branch is in.
+    2. **Remove the worktree.**
+       - **Single-repo:** `git worktree remove --force [worktree-path]`.
+       - **Multi-repo** (task has a `**Repos:**` field or `(multi-repo: ...)` parenthetical): for each listed repo, `cd [repo] && git worktree remove --force [repo-worktree-path]`, then remove the symlinked parent tree: `rm -rf .worktrees/NNN-slug`.
+    3. **Strip the field(s).** This is handled by step 8's existing field-strip (which removed `**Worktree:**`, and `**Repos:**` for multi-repo) — do not duplicate it here.
 
 15. **Commit .plans/ changes**
     - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
@@ -316,3 +328,4 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 - **Debug code is intentional**: User selects "Keep all" to preserve it
 - **False positives in debug scan**: User selects "Review each" to inspect individually
 - **Auto-accept keyword provided**: Skip verification and checkbox prompts, but still enforce unresolved issues block (step 5) and branch merge prompt (step 14) — those are never auto-skipped
+- **Task completed with a kept worktree** (live `**Worktree:**` field, executed with `keep`): remove it during completion (step 14b) — merge from main first, then remove the worktree, then strip the field (step 8). Removing the worktree before merging would discard the checkout the branch is in.
