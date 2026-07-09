@@ -710,15 +710,25 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    6. **If segment's last step was an observation step:**
 
+      **Observation provenance (both paths below).** *A passing observation whose provenance you haven't verified is not evidence.* Immediately **before** and immediately **after** every runtime observation, assert:
+      ```bash
+      git rev-parse --abbrev-ref HEAD   # must equal the task branch
+      git rev-parse HEAD                # record; must be unchanged after
+      ```
+      If either differs before vs. after, the working tree drifted mid-observation — the observation is **VOID**: discard the result, report the drift, and never promote it to a conclusion.
+
       **If `worktree_mode` is true OR `yolo_mode` is true — defer observation to review:**
       (yolo_mode implies worktree_mode transitively, but we list both explicitly so the deferral guarantee is self-documenting.)
       - Do NOT pause with AskUserQuestion
+      - Capture the current branch and SHA for provenance: `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`. Record them alongside the deferred entry so review can later verify the observation is replayed against the same code.
       - Check if later steps depend on this observation (instrumentation dependency rule applied during segmentation, or step language like "based on what you saw", "if the output shows"):
-        - If dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review (⚠ later steps depend on this — agent proceeded with plan assumptions)`
-        - If not dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review`
+        - If dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review (branch: [branch] @ [sha]) (⚠ later steps depend on this — agent proceeded with plan assumptions)`
+        - If not dependent: Record in state file Observations section: `- Step N: ⏳ Deferred to review (branch: [branch] @ [sha])`
       - Continue to next segment
 
       **If `worktree_mode` is false AND `yolo_mode` is false — MUST pause for user feedback:**
+
+      - **Assert provenance before presenting:** record branch and SHA (`git rev-parse --abbrev-ref HEAD`, `git rev-parse HEAD`) before showing the observation to the user.
 
       **MUST use `AskUserQuestion` tool:**
       - Header: `"Observation"`
@@ -727,6 +737,7 @@ These rules bind every invocation. They are not subject to your judgment about t
         1. "Looks good" (description: "The observation matches expectations — continue to next segment")
         2. "Something's wrong" (description: "The observation doesn't match — describe what you see")
         3. "Skip" (description: "Continue without verifying this step")
+      - **After the user responds, assert provenance again** (`git rev-parse --abbrev-ref HEAD`, `git rev-parse HEAD`). If HEAD moved between the before- and after-assertion, the observation is **VOID**: tell the user the working tree switched underneath the observation, discard their result, and re-run the observation from scratch rather than recording it.
       - **On "Looks good":**
         - Record in state file Observations section: `- Step N: ✓ User confirmed`
         - Continue to next segment
@@ -822,6 +833,18 @@ These rules bind every invocation. They are not subject to your judgment about t
    for the observation (add logging code, configure output, etc.) but do NOT mark
    the observation as verified — user verification happens outside this agent.
 
+   **Observation provenance.** A passing observation whose provenance you haven't
+   verified is not evidence. Assert the working tree hasn't drifted immediately
+   before implementing prerequisites and immediately before reporting: run
+   `git rev-parse --abbrev-ref HEAD` (must equal the task branch) and
+   `git rev-parse HEAD` (record it; must be unchanged). If either differs, the tree
+   switched underneath you — report the drift instead of a result.
+
+   **Dev-server rule.** If you start a long-running server, record the SHA it was
+   started at (`git rev-parse HEAD`). A branch switch invalidates it. Before drawing
+   **any** conclusion from that server's behavior, re-check the SHA. If it changed,
+   the server is serving stale code — restart it before trusting anything it says.
+
    ## Assumptions to Track
 
    As you work, watch for low-confidence decisions and write them into the task file's `## Assumptions > Discovered during execution` section. Append a bullet for each, tagged `- [high]` or `- [low]`:
@@ -881,8 +904,12 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    - **If `keep_mode` is FALSE (default — behavior unchanged):**
      3. Return to project root: `cd [project-root]`
-     4. Remove worktree: `git worktree remove .worktrees/NNN-slug`
-        - If remove fails (dirty worktree), force it: `git worktree remove --force .worktrees/NNN-slug`
+     4. Remove worktree with the canonical teardown sequence:
+        ```bash
+        git worktree remove .worktrees/NNN-slug || git worktree remove --force .worktrees/NNN-slug
+        test ! -e .worktrees/NNN-slug || echo "WARNING: .worktrees/NNN-slug still exists — a process may hold it open"
+        git worktree prune
+        ```
      5. Remove `**Worktree:**` line from task file (branch metadata stays)
    - **If `keep_mode` is TRUE — PRESERVE the worktree:**
      3. **Skip `git worktree remove`** — the worktree stays on disk.
@@ -927,11 +954,14 @@ These rules bind every invocation. They are not subject to your judgment about t
    **Teardown gate (depends on `keep_mode`):**
 
    - **If `keep_mode` is FALSE (default — behavior unchanged):**
-     3. For each repo in `relevant_repos`:
-        - Remove worktree: `cd [repo-name] && git worktree remove .worktrees/NNN-slug`
-          - If remove fails, force it: `git worktree remove --force .worktrees/NNN-slug`
+     3. For each repo in `relevant_repos`, remove the per-repo worktree with the canonical teardown sequence. Address the repo with `git -C` rather than `cd`, so no command depends on a directory change persisting from the previous one:
+        ```bash
+        git -C [repo-name] worktree remove .worktrees/NNN-slug || git -C [repo-name] worktree remove --force .worktrees/NNN-slug
+        test ! -e [repo-name]/.worktrees/NNN-slug || echo "WARNING: [repo-name]/.worktrees/NNN-slug still exists — a process may hold it open"
+        git -C [repo-name] worktree prune
+        ```
         - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
-     4. Remove parent-level worktree directory: `rm -rf .worktrees/NNN-slug`
+     4. Remove the symlinked parent tree. Every per-repo worktree is gone, so `.worktrees/NNN-slug` now contains nothing but the per-repo symlinks and the `.plans` symlink (targets already removed) — a plain `rm -rf` unlinks only dangling symlinks and the empty dir, touching no real checkout: `rm -rf .worktrees/NNN-slug`
         - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
    - **If `keep_mode` is TRUE — PRESERVE the worktree tree:**
      3. **Skip the per-repo `git worktree remove`** for every repo in `relevant_repos` — each per-repo worktree stays on disk.

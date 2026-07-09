@@ -48,6 +48,8 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
 ## Steps
 
+> **`MAIN`-checkout invariant.** `plan-complete` never checks out a branch in a working directory it does not own, and never occupies the shared `MAIN` checkout (the single main working directory that `plan-review` step 3.6 serializes on). Its merge dispatch (step 14) touches no shared tree in cases A and D (a ref fast-forward and a throwaway worktree, respectively), operates in case B only inside *this session's own* working directory, and in case C **refuses** rather than checking out a directory another session owns. Because it can never contend for `MAIN`, `plan-complete` needs no concurrency serializer and deliberately has **no** analogue of `plan-review`'s step 3.6 guard.
+
 1. **Verify initialization**
    - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
    - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
@@ -244,25 +246,93 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
         2. "Merge and keep branch" — Merge to [default-branch] but keep the feature branch
         3. "Skip merge" — Leave branch as-is, I'll handle it manually
     - **After user responds via AskUserQuestion:**
-      - If "Merge and delete branch" or "Merge and keep branch":
-        - Check current branch: `git branch --show-current`
-        - If not on default branch, checkout: `git checkout [default-branch]`
-        - Merge: `git merge [task-branch]`
-        - If "Merge and delete branch": `git branch -d [task-branch]`
-        - Report success or any merge conflicts
-      - If "Skip merge":
-        - Note in completion message that branch was not merged
+
+      - **If "Skip merge":** Note in the completion message that the branch was not merged. Do NOT run any of the merge steps below.
+
+      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[default-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it.
+
+        **Detect where `[default-branch]` is checked out, if anywhere:**
+        ```bash
+        git worktree list --porcelain | grep -B2 "^branch refs/heads/[default-branch]$" | head -1 | cut -d' ' -f2
+        ```
+        Call this `[default-checkout-path]` (empty = checked out nowhere).
+
+        **Test whether the task branch fast-forwards onto the default** (exit 0 = yes, is a descendant):
+        ```bash
+        git merge-base --is-ancestor [default-branch] [task-branch]
+        ```
+
+        Now pick the case:
+
+        - **Case A — `[default-checkout-path]` is empty AND fast-forward test passed.** The default is checked out nowhere and the task branch is strictly ahead. Advance the ref with zero working-tree effect:
+          ```bash
+          git fetch . [task-branch]:[default-branch]
+          ```
+          (If `[default-branch]` is later checked out somewhere unexpected, this fatals with exit 128 rather than stomping — treat that as case C and report.)
+
+        - **Case B — `[default-checkout-path]` equals this session's own current working directory** (`git rev-parse --show-toplevel`). The default is already checked out right here. First assert the tree is clean:
+          ```bash
+          git status --porcelain
+          ```
+          If that prints anything, **refuse** — do not merge over uncommitted work: report `Cannot merge: [default-branch] is checked out here with uncommitted changes. Commit or stash them, then re-run /plan-complete NNN.` and STOP. If clean, merge in place:
+          ```bash
+          git merge [task-branch]
+          ```
+
+        - **Case C — `[default-checkout-path]` is non-empty and is NOT this session's own working directory.** Another session may own that directory. **Refuse and STOP** — do not fall through to completion. Print VERBATIM:
+          ```
+          Cannot merge: [default-branch] is checked out at
+            [default-checkout-path]
+          which is not this session's working directory.
+
+          Another session may be working there. Complete this task from that
+          directory, or re-run /plan-complete NNN once it is free.
+          ```
+
+        - **Case D — `[default-checkout-path]` is empty but the fast-forward test FAILED** (the branches diverged). Merge in an isolated throwaway worktree so no shared tree is touched. Every command below is addressed with `git -C` and never depends on the current directory — a `cd` in one command does not persist into the next:
+          ```bash
+          git worktree add -q .worktrees/.merge-NNN [default-branch]
+          git -C .worktrees/.merge-NNN merge --no-ff [task-branch] -m "merge: #NNN [title]"
+          ```
+          - **On merge conflict:** abort the merge *inside the throwaway worktree* (`git merge --abort` run from the project root fails with `fatal: There is no merge to abort` and silently leaves the worktree mid-conflict), tear it down, then STOP and report the conflict for manual resolution:
+            ```bash
+            git -C .worktrees/.merge-NNN merge --abort
+            git worktree remove .worktrees/.merge-NNN || git worktree remove --force .worktrees/.merge-NNN
+            test ! -e .worktrees/.merge-NNN || echo "WARNING: .worktrees/.merge-NNN still exists — a process may hold it open"
+            git worktree prune
+            ```
+          - **On clean merge:** tear down the throwaway worktree (the merge commit already landed on `[default-branch]`):
+            ```bash
+            git worktree remove .worktrees/.merge-NNN || git worktree remove --force .worktrees/.merge-NNN
+            test ! -e .worktrees/.merge-NNN || echo "WARNING: .worktrees/.merge-NNN still exists — a process may hold it open"
+            git worktree prune
+            ```
+
+        **After a successful merge in case A, B, or D:**
+        - If the user chose "Merge and delete branch": `git branch -d [task-branch]`. This is a ref operation and works from any directory — no checkout needed.
+        - Report success (or, for cases B/D, any merge conflict already handled above).
 
 14b. **Tear down a kept worktree** (if the task still has a live `**Worktree:**` field)
 
     Completion is the OWNER of kept-worktree teardown. A task executed with `keep` keeps its execution worktree alive through review (`/plan-execute` no longer removes it), so the live `**Worktree:**` field will still be present here. If the task has NO `**Worktree:**` field, skip this step entirely.
 
-    **The ordering below is load-bearing — do it in exactly this order:**
+    **Merge and teardown are independent.** `git worktree remove` removes a *checkout*, not a *branch* — the branch ref and all its commits survive in the main repo's `.git` regardless of removal order (the same truth plan-spawn states in its "Invariant" after `git worktree remove`). The ordering below is chosen for cleanliness, not correctness.
 
-    1. **Merge from main while the branch is still checked out in the worktree.** `cd` to the project root, `git checkout [default-branch]`, then `git merge [task-branch]`. (Step 14 may already have performed this merge — if so, just confirm main is on the default branch and the merge landed; do not merge twice.) Merging FROM main first is mandatory: the branch lives in the worktree, and removing the worktree before merging would discard the very checkout the branch is in.
-    2. **Remove the worktree.**
-       - **Single-repo:** `git worktree remove --force [worktree-path]`.
-       - **Multi-repo** (task has a `**Repos:**` field or `(multi-repo: ...)` parenthetical): for each listed repo, `cd [repo] && git worktree remove --force [repo-worktree-path]`, then remove the symlinked parent tree: `rm -rf .worktrees/NNN-slug`.
+    1. **Merge.** The merge was already handled by step 14 above via its A/B/C/D decision table — do NOT re-merge, do NOT `cd` to the project root and `git checkout [default-branch]`. If the user chose "Skip merge" in step 14, skip merging here too. (Step 14 never checks out inside this kept worktree; its case dispatch keeps the merge off the worktree's tree.)
+    2. **Remove the worktree** using the canonical teardown sequence (`remove` → `remove --force` fallback → `test ! -e` warning → `git worktree prune`).
+       - **Single-repo:**
+         ```bash
+         git worktree remove [worktree-path] || git worktree remove --force [worktree-path]
+         test ! -e [worktree-path] || echo "WARNING: [worktree-path] still exists — a process may hold it open"
+         git worktree prune
+         ```
+       - **Multi-repo** (task has a `**Repos:**` field or `(multi-repo: ...)` parenthetical): apply the canonical sequence to each per-repo worktree, then remove the symlinked parent tree. Address each repo with `git -C` rather than `cd`, so no command depends on a directory change persisting from the previous one. For each listed repo:
+         ```bash
+         git -C [repo] worktree remove [repo-worktree-path] || git -C [repo] worktree remove --force [repo-worktree-path]
+         test ! -e [repo]/[repo-worktree-path] || echo "WARNING: [repo]/[repo-worktree-path] still exists — a process may hold it open"
+         git -C [repo] worktree prune
+         ```
+         Once every per-repo worktree is gone, remove the parent tree at `.worktrees/NNN-slug`. It now contains nothing but the per-repo symlinks and the `.plans` symlink (all their targets already removed above), so a plain `rm -rf .worktrees/NNN-slug` unlinks only dangling symlinks and the empty dir — no real checkout is touched.
     3. **Strip the field(s).** This is handled by step 8's existing field-strip (which removed `**Worktree:**`, and `**Repos:**` for multi-repo) — do not duplicate it here.
 
 15. **Commit .plans/ changes**
@@ -328,4 +398,4 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 - **Debug code is intentional**: User selects "Keep all" to preserve it
 - **False positives in debug scan**: User selects "Review each" to inspect individually
 - **Auto-accept keyword provided**: Skip verification and checkbox prompts, but still enforce unresolved issues block (step 5) and branch merge prompt (step 14) — those are never auto-skipped
-- **Task completed with a kept worktree** (live `**Worktree:**` field, executed with `keep`): remove it during completion (step 14b) — merge from main first, then remove the worktree, then strip the field (step 8). Removing the worktree before merging would discard the checkout the branch is in.
+- **Task completed with a kept worktree** (live `**Worktree:**` field, executed with `keep`): remove it during completion (step 14b) — step 14 already merged via its A/B/C/D dispatch, then step 14b removes the worktree with the canonical teardown sequence and step 8 strips the field. Merge and teardown are independent — `git worktree remove` drops a checkout, never the branch, so ordering is a cleanliness choice, not a correctness one.

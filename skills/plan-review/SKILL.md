@@ -180,19 +180,23 @@ Review a task that has completed execution (typically via worktree workflow). **
    For each deferred observation (in order):
 
    1. Find the corresponding step description in the task file's How section
-   2. **MUST use `AskUserQuestion` tool:**
+   2. **Verify observation provenance.** Parse the recorded branch/SHA from the entry (`(branch: [branch] @ [sha])`, written by plan-execute when the observation was deferred) and compare `[sha]` against the current `HEAD` (`git rev-parse HEAD`).
+      - If they differ, **warn loudly**: "⚠ The code under observation has MOVED since this observation was deferred (deferred at `[sha]`, now at `[current]`). Replaying it now may not reflect the same code — verify carefully or re-run against the recorded SHA."
+      - If the entry has **no recorded SHA** (a legacy state file written before provenance tracking), note that provenance is unverifiable rather than crashing: "ℹ No recorded SHA for this deferred observation (legacy entry) — cannot confirm the code is unchanged since it was deferred."
+   3. **MUST use `AskUserQuestion` tool:**
       - Header: `"Observation"`
-      - Question: Quote the observation step description, tell the user the implementation is in place, and ask them to perform the observation and report what they see. **If the entry contains ⚠ (dependency flag)**, prominently note: "Later steps were built on plan assumptions without verifying this observation — please check carefully."
+      - Question: Quote the observation step description, tell the user the implementation is in place, and ask them to perform the observation and report what they see. **If the entry contains ⚠ (dependency flag)**, prominently note: "Later steps were built on plan assumptions without verifying this observation — please check carefully." **If the provenance check above flagged a SHA mismatch**, restate that warning here too.
       - Options:
         1. "Looks good" (description: "The observation matches expectations — continue")
         2. "Something's wrong" (description: "The observation doesn't match — describe what you see")
         3. "Skip" (description: "Continue without verifying this step")
+      - **Preserving provenance when rewriting an entry:** replace only the `⏳ Deferred to review` marker, and **keep any `(branch: [branch] @ [sha])` parenthetical** — it records the code the observation was originally deferred against. Append `(replayed at [current-sha])` when the SHA mismatch above was flagged, so the state file shows both.
       - **On "Looks good":**
-        - Update state file Observations section: replace `⏳ Deferred to review` with `✓ User confirmed`
+        - Update state file Observations section: replace `⏳ Deferred to review` with `✓ User confirmed`, keeping the provenance parenthetical
         - Continue to next observation
       - **On "Something's wrong":**
         - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
-        - Update state file Observations section: replace entry with `✗ [user's observation]`
+        - Update state file Observations section: replace the `⏳ Deferred to review` marker with `✗ [user's observation]`, keeping the provenance parenthetical
         - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation and the current branch context in the prompt
         - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
         - If user says "Something's wrong" again after 2 fix attempts, suggest:
@@ -202,7 +206,7 @@ Review a task that has completed execution (typically via worktree workflow). **
           ```
           Then continue to next observation (don't block indefinitely)
       - **On "Skip":**
-        - Update state file Observations section: replace `⏳ Deferred to review` with `⊘ Skipped`
+        - Update state file Observations section: replace `⏳ Deferred to review` with `⊘ Skipped`, keeping the provenance parenthetical
         - Continue to next observation
 
 8. **Register project (best-effort telemetry)**

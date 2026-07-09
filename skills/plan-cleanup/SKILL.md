@@ -111,20 +111,36 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - If "Review each": for each branch, use AskUserQuestion with "Delete" / "Keep" options
    - Report: "Deleted N stale branch(es)" or "No stale branches found"
 
-6. **List orphaned worktree directories** *(full mode only)*
-   - Check if `.worktrees/` directory exists. If not, skip to step 7.
-   - List subdirectories of `.worktrees/`
-   - For each, extract the task ID from the directory name (first 3 digits)
-   - Check if a matching task exists in `.plans/pending/NNN-*.md` with status `in-progress`, `review`, or `in-review`
-   - Directories with no matching active task are orphaned (an `in-review` task with a live kept worktree is actively being reviewed *inside* its worktree — it is NOT orphaned and must not be reaped)
-   - **If orphaned worktrees found, use `AskUserQuestion` tool:**
+6. **Reconcile worktrees (registry vs. disk)** *(full mode only)*
+   - This step is a **reconciler, not a reaper**: it cross-checks git's worktree registry against the `.worktrees/` directory and reports **both** desync directions. `git worktree prune` only cleans one of them, so a bare `rm -rf` was leaving stale on-disk corpses git never listed.
+   - **Gather both sides:**
+     - **Registry:** `git worktree list --porcelain` (skip this step's git parts silently if not in a git repo). It emits a `worktree <abs-path>` line per registered worktree — parse those absolute paths and keep the ones under `.worktrees/`.
+     - **Disk:** the immediate subdirectories of `.worktrees/` (may be absent).
+   - Do **not** early-exit just because `.worktrees/` is missing — git may still list worktrees under a since-deleted `.worktrees/` (the *registered but missing* case below). Only skip the entire step when the repo is not git AND `.worktrees/` does not exist.
+   - **Classify each entry into one of two desync kinds:**
+     - **On disk but unregistered** — a directory under `.worktrees/` that `git worktree list` does NOT contain. These are the corpses: `git worktree prune` will NOT clean them (git has no record to prune), so they need explicit removal.
+     - **Registered but missing** — git lists a worktree whose path no longer exists on disk. `git worktree prune` DOES clean these (it removes the stale administrative record).
+   - **Active-task exemption** (applies to *on disk but unregistered* candidates): extract the task ID from the directory name (first 3 digits) and check for a matching task in `.plans/pending/NNN-*.md` with status `in-progress`, `review`, or `in-review`. Such a task owns its worktree — do NOT reap it. (An `in-review` task with a live kept worktree is actively being reviewed *inside* it — it is NOT orphaned and must not be reaped.) A *registered* worktree with a live parent task is likewise left alone; only truly stale records are candidates.
+   - **If any desync (of either kind, after the exemption) is found, use `AskUserQuestion` tool:**
      - Header: "Worktrees"
-     - Question: "Found N orphaned worktree(s) with no matching active task:\n[list directory names]\n\nDelete them?"
+     - Question: "Found worktree desync:\n[list *on disk but unregistered* directories — corpses git doesn't track]\n[list *registered but missing* worktrees — stale records git will prune]\n\nDelete/reconcile them?"
      - Options:
-       1. "Delete all" — Remove all orphaned worktree directories
+       1. "Delete all" — Reconcile both kinds (remove corpses, prune stale records)
        2. "Keep all" — Leave them as-is
-   - If "Delete all": `rm -rf .worktrees/[dir]` for each. If `.worktrees/` is now empty, remove it.
-   - Report: "Deleted N orphaned worktree(s)" or "No orphaned worktrees"
+   - **If "Delete all":**
+     - For each **on disk but unregistered** directory (git doesn't know it, so `git worktree remove` will fail — remove the directory, then prune):
+       ```bash
+       git worktree remove ".worktrees/[dir]" 2>/dev/null || rm -rf ".worktrees/[dir]"
+       git worktree prune
+       ```
+       (`git worktree remove` is attempted first for the rare case git actually does track it; it fails for a true corpse, and the `rm -rf` fallback removes the untracked directory. The bare `rm -rf` is justified only here — for a directory git has no registry entry for — never as the primary reap path.)
+     - For each **registered but missing** worktree, the record is stale and the path is already gone — `git worktree prune` removes the administrative record:
+       ```bash
+       git worktree prune
+       ```
+     - If `.worktrees/` is now empty, remove it.
+   - **Always run `git worktree prune` before finishing this step**, even when nothing was reaped and even when the user chose "Keep all". Pruning only removes *stale administrative records* — it never touches a live worktree or an on-disk directory, so it is always safe to run.
+   - Report: "Reconciled N worktree(s): X corpses removed, Y stale records pruned" or "Worktrees in sync"
 
 7. **Scan for unexpected directories**
    - List immediate subdirectories of `.plans/` using Glob: `.plans/*/`

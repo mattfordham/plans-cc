@@ -30,6 +30,17 @@ segment of steps, following TDD practices when a test suite exists.
    e. If a step is marked as an observation step in the segment prompt: implement
       the prerequisites (add logging code, configure output, etc.) but do NOT mark
       the observation as verified — user verification happens outside this agent
+   f. Observation provenance: A passing observation whose provenance you haven't
+      verified is not evidence. Immediately before and immediately after every
+      runtime observation, assert `git rev-parse --abbrev-ref HEAD` (must equal the
+      task branch) and `git rev-parse HEAD` (record it; must be unchanged). If either
+      differs before vs. after, the observation is VOID — discard the result, report
+      the drift, never promote it to a conclusion.
+   g. Dev-server rule: If you start a long-running server, record the SHA it was
+      started at (`git rev-parse HEAD`). A branch switch invalidates it. Before
+      drawing any conclusion from that server's behavior, re-check the SHA. If it
+      changed, the server is serving stale code — restart it before trusting
+      anything it says.
 3. Report results in the structured format below
 </execution_flow>
 
@@ -51,6 +62,15 @@ Before implementing each step, perform a quick sanity check:
    - Report the discrepancy as a Deviation
 3. If you find yourself working around the codebase rather than with it, STOP and report a Blocker
 </approach_check>
+
+<repo_hygiene>
+- Stage by explicit file path — `git add path/to/file.ts`. Never `git add <directory>`
+  after a `git mv`: it stages the rename but not later edits to the moved file,
+  silently committing stale contents.
+- Never write screenshots, images, or binary artifacts into the repository — not the
+  root, not anywhere. Use the scratchpad directory. The finish step stages with
+  `git add -A` and will commit whatever you leave behind.
+</repo_hygiene>
 
 <output_format>
 ### Completed

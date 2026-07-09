@@ -94,7 +94,7 @@ These rules bind every invocation; they are not subject to your judgment about h
      Worktree path collision — clean up before retrying:
      - .worktrees/NNN-slug (task #NNN)
      ...
-     For each: `git worktree remove --force .worktrees/NNN-slug` (then `rm -rf .worktrees/NNN-slug` if the directory remains).
+     For each: `git worktree remove .worktrees/NNN-slug || git worktree remove --force .worktrees/NNN-slug`, then `git worktree prune`; if the directory still remains (`test -e .worktrees/NNN-slug`), a process may hold it open — free it before retrying.
      ```
 
 4. **Auto-elaborate any pending tasks (sequential, skip-mode)**
@@ -281,7 +281,12 @@ These rules bind every invocation; they are not subject to your judgment about h
       - If the task completed all segments: set Status to `review`. Leave the file in `.plans/pending/` — only `/plan-complete` moves it to `.plans/completed/`.
       - If the task was **blocked**: LEAVE Status at `in-progress` — a blocked task is not ready for review.
    3. Return to the project root: `cd [project-root]`.
-   4. Remove the worktree: `git worktree remove .worktrees/NNN-slug`. If it fails because the worktree is dirty, force it: `git worktree remove --force .worktrees/NNN-slug`.
+   4. Remove the worktree with the canonical teardown sequence:
+      ```bash
+      git worktree remove .worktrees/NNN-slug || git worktree remove --force .worktrees/NNN-slug
+      test ! -e .worktrees/NNN-slug || echo "WARNING: .worktrees/NNN-slug still exists — a process may hold it open"
+      git worktree prune
+      ```
    5. Strip the `**Worktree:**` line from the task file. **The `**Branch:**` line STAYS.**
 
    **Invariant:** after `git worktree remove`, the branch and all its commits survive in the main repo's `.git`. The worktree was only a separate checkout — removing it loses nothing. `/plan-review NNN` later checks the branch out from the main project directory; the work does not need to be "brought back" from anywhere.
@@ -344,7 +349,7 @@ These rules bind every invocation; they are not subject to your judgment about h
 - **Duplicate IDs** (`1 1 3`): Deduplicate silently — runs as `001 003`.
 - **Nonexistent ID**: Abort the whole spawn before any work begins, listing the offending ID.
 - **Task in `in-progress` / `review` / `in-review` / `completed`**: Abort the whole spawn before any work, listing every offender with its status. The user must resolve those (resume, review, reopen, etc.) before spawning.
-- **Worktree path collision** (`.worktrees/NNN-slug` already exists): Abort with cleanup instructions (`git worktree remove --force .worktrees/NNN-slug`, then `rm -rf .worktrees/NNN-slug` if it still exists). Spawn never silently removes an existing worktree.
+- **Worktree path collision** (`.worktrees/NNN-slug` already exists): Abort with cleanup instructions (`git worktree remove .worktrees/NNN-slug || git worktree remove --force .worktrees/NNN-slug`, then `git worktree prune`; if `.worktrees/NNN-slug` still exists, a process holds it open — free it before retrying). Spawn never silently removes an existing worktree.
 - **Skip-mode elaboration fails for any pending task**: Abort the whole spawn after the failure surfaces. Already-elaborated tasks from earlier loop iterations stay elaborated (those writes were idempotent and valuable on their own). Do not attempt to "un-elaborate."
 - **A `plan-executor` segment spawn fails or returns malformed output**: plan-spawn detects this from the agent's response (missing/garbled `Completed / Decisions / Deviations / Blockers / Test Status` sections) combined with on-disk state (segment not actually advanced, How checkboxes not checked off). Record that task's outcome as `malformed` (or `blocked` if the response did surface a blocker), stop spawning further rounds for **that task only**, and continue every other task's rounds normally. Do NOT auto-roll-back sibling tasks — each task's branch and worktree are independent. The malformed task surfaces in the summary table.
 - **All spawned `plan-executor` agents fail**: Display the summary table anyway (every row will show a non-`ok` outcome) so the user has a complete picture.
