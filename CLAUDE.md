@@ -101,7 +101,7 @@ pending   elaborated  in-progress          review │  in-review │  completed
                                              └─┘          └─┘ (archived)
                                         (pause back to review)
 
-In a multi-repo project, multiple tasks may be in-review concurrently when their repo sets are disjoint. Single-repo projects normally stay one-at-a-time (the lone review occupies the shared main checkout) — UNLESS a task was executed with `keep` (e.g. `/plan-execute 1 worktree keep`), which preserves the execution worktree so the task is reviewed inside its own checkout. A kept-worktree task never occupies the shared main checkout, so two `keep`-executed single-repo tasks can be in review/in-review at the same time. Teardown of a kept worktree moves to `/plan-complete` (merge from main → remove worktree → strip the `**Worktree:**` field).
+In a multi-repo project, multiple tasks may be in-review concurrently when their repo sets are disjoint. Single-repo projects normally stay one-at-a-time (the lone review occupies the shared main checkout) — UNLESS a task was executed with `keep` (e.g. `/plan-execute 1 worktree keep`), which preserves the execution worktree so the task is reviewed inside its own checkout. A kept-worktree task never occupies the shared main checkout, so two `keep`-executed single-repo tasks can be in review/in-review at the same time. Teardown of a kept worktree moves to `/plan-complete` (merge → remove worktree → strip the `**Worktree:**` field). The merge never checks out the default branch in a directory this session does not own: `/plan-complete` dispatches on where the default branch is checked out — nowhere and fast-forwardable (`git fetch .`), in our own cwd (plain `git merge`), elsewhere (refuse and stop), or nowhere but diverged (merge inside a throwaway worktree). Merge and teardown are **independent**: `git worktree remove` removes a checkout, not a branch, so the ordering is chosen for cleanliness, not correctness.
 
 brainstorm → expand → elaborate → execute → complete
    │            │
@@ -190,6 +190,24 @@ spec at `.plans/artifacts/desktop-app-spec.md`.
 - `review` — Execution complete, awaiting user review (worktree workflow). If the task was executed with `keep`, its execution worktree is preserved (live `**Worktree:**` field) and it is reviewed in place rather than checked out into main.
 - `in-review` — Actively being walked through with `/plan-review` (worktree workflow). A kept-worktree task (live `**Worktree:**` field) is reviewed inside its preserved worktree, so it never occupies the shared main checkout. Single-repo projects normally allow only one `in-review` task at a time (it occupies the shared main checkout) — but kept-worktree tasks are exempt, so concurrent single-repo `in-review` is allowed for them. Multi-repo projects allow multiple `in-review` tasks concurrently as long as their repo sets are disjoint (each sub-repo has its own checkout). See `plan-review` step 3.6.
 - `completed` — Done and archived
+
+### Worktree hygiene (cross-skill contract)
+
+Every skill that removes a worktree uses the same canonical sequence — never a bare `rm -rf`, which leaves a directory on disk that git no longer tracks (a "corpse" that pollutes lint and search):
+
+```bash
+git worktree remove [path] || git worktree remove --force [path]
+test ! -e [path] || echo "WARNING: [path] still exists — a process may hold it open"
+git worktree prune
+```
+
+Call sites: `plan-complete` (kept-worktree teardown), `plan-execute` (single- and multi-repo finish), `plan-spawn` (teardown and collision abort). `git worktree remove` preserves the branch ref and its commits — removing a worktree loses nothing.
+
+`/plan-cleanup` is the **reconciler**: it cross-checks `git worktree list --porcelain` against the `.worktrees/` listing and reports both desync directions — *on disk but unregistered* (a corpse; `prune` will not touch it, it needs explicit removal) and *registered but missing* (`prune` clears the stale record). It always prunes, even when nothing is reaped.
+
+### Observation provenance
+
+*A passing observation whose provenance you haven't verified is not evidence.* Immediately before and after every runtime observation, `plan-execute` and `plan-executor` assert `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`. If either moved, the observation is **VOID** — discarded, never promoted to a conclusion. Deferred observations record the SHA they were deferred at (`⏳ Deferred to review (branch: X @ sha)`), and `/plan-review` warns loudly when the code has moved since.
 
 **Backlog (a location, not a status).** `.plans/backlog/` is a deferral bucket for work consciously shelved. `/plan-backlog <id>` moves a task there; `/plan-restore <id>` brings it back to `.plans/pending/`. A backlogged task **keeps its prior status** (a restored `elaborated` task is still `elaborated`) — backlog is *where* a task lives, not a status value. An active (`in-progress`/`in-review`) task is **auto-paused** before shelving so no half-running task lands in the backlog. Backlogged tasks are hidden from default views and surfaced via `/plan-list backlog` and a `+N backlogged` badge; PROGRESS.md tracks a separate `Backlogged` stat, and the desktop-dashboard parser counts them in a separate `backlogged` summary field excluded from the active counts.
 
