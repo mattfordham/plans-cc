@@ -7,18 +7,26 @@ const { execSync } = require("child_process");
 const { parseTasks } = require("../lib/parse-tasks");
 const { buildLayout, updateLayout } = require("../lib/render-dashboard");
 const { registerProject } = require("../lib/registry");
+const { findProjectRoot } = require("../lib/find-root");
 
-const PLANS_DIR = path.resolve(process.cwd(), ".plans");
-const CONTEXT_FILE = path.join(PLANS_DIR, "CONTEXT.md");
+// Discover the project root by the shared walk (CLAUDE.md "Project-root
+// discovery"): ascend from cwd to the nearest ancestor holding
+// .plans/config.json, so the dashboard works when launched from a sub-repo
+// directory of a centralized-.plans project. May be null (no root up the tree);
+// main() handles that before any PLANS_DIR-dependent work runs. Everything that
+// used to key off process.cwd() re-anchors to PROJECT_ROOT below.
+const PROJECT_ROOT = findProjectRoot(process.cwd());
+const PLANS_DIR = PROJECT_ROOT ? path.join(PROJECT_ROOT, ".plans") : null;
+const CONTEXT_FILE = PLANS_DIR ? path.join(PLANS_DIR, "CONTEXT.md") : null;
 const DEBOUNCE_MS = 100;
 const BRANCH_CACHE_TTL_MS = 5000;
 const PROJECT_CACHE_TTL_MS = 5000;
 const GIT_POLL_INTERVAL_MS = 2000;
 
 function main() {
-  if (!fs.existsSync(PLANS_DIR)) {
+  if (!PROJECT_ROOT) {
     process.stderr.write(
-      "\n  plans-cc-dashboard — .plans/ not found in current directory\n" +
+      "\n  plans-cc-dashboard — no .plans/ found in this directory or any parent\n" +
         "  Run `/plan-init` in Claude Code first.\n\n"
     );
     process.exit(1);
@@ -27,7 +35,7 @@ function main() {
   // Self-register this project in the system-wide registry. Best-effort —
   // registerProject never throws, but guard anyway so the dashboard can't break.
   try {
-    registerProject(process.cwd());
+    registerProject(PROJECT_ROOT);
   } catch (_) {
     // ignore
   }
@@ -84,19 +92,19 @@ function main() {
       return cachedBranches;
     }
     cachedBranchesAt = now;
-    const root = readBranch(process.cwd());
-    const rootDirty = root ? readDirty(process.cwd()) : null;
+    const root = readBranch(PROJECT_ROOT);
+    const rootDirty = root ? readDirty(PROJECT_ROOT) : null;
     const subRepos = [];
     try {
-      const entries = fs.readdirSync(process.cwd(), { withFileTypes: true });
+      const entries = fs.readdirSync(PROJECT_ROOT, { withFileTypes: true });
       const names = entries
         .filter((e) => e.isDirectory() && !e.name.startsWith("."))
         .map((e) => e.name)
         .sort();
       for (const name of names) {
-        const gitPath = path.join(process.cwd(), name, ".git");
+        const gitPath = path.join(PROJECT_ROOT, name, ".git");
         if (!fs.existsSync(gitPath)) continue;
-        const repoPath = path.join(process.cwd(), name);
+        const repoPath = path.join(PROJECT_ROOT, name);
         const branch = readBranch(repoPath);
         const dirty = readDirty(repoPath);
         subRepos.push({ name, branch, dirty });
@@ -126,7 +134,7 @@ function main() {
     } catch (_) {
       // ignore — fall through to basename
     }
-    if (!name) name = path.basename(process.cwd());
+    if (!name) name = path.basename(PROJECT_ROOT);
     cachedProject = name;
     return cachedProject;
   }

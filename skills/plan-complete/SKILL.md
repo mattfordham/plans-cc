@@ -51,8 +51,8 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 > **`MAIN`-checkout invariant.** `plan-complete` never checks out a branch in a working directory it does not own, and never occupies the shared `MAIN` checkout (the single main working directory that `plan-review` step 3.6 serializes on). Its merge dispatch (step 14) touches no shared tree in cases A and D (a ref fast-forward and a throwaway worktree, respectively), operates in case B only inside *this session's own* working directory, and in case C **refuses** rather than checking out a directory another session owns. Because it can never contend for `MAIN`, `plan-complete` needs no concurrency serializer and deliberately has **no** analogue of `plan-review`'s step 3.6 guard.
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Resolve which task to complete**
 
@@ -249,7 +249,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
       - **If "Skip merge":** Note in the completion message that the branch was not merged. Do NOT run any of the merge steps below.
 
-      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[default-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it.
+      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[default-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it. The cwd-relative git commands here (Case A's `git fetch .`, Case D's `git worktree add .worktrees/.merge-NNN`) rely on the **Project-root discovery** invariant from step 1: after that step's `cd`, cwd IS the discovered project root, so `.worktrees/` resolves at the root even when the session was started from a sub-repo. (Git semantics, the merge dispatch, and teardown are unchanged — this note only pins *where* cwd is.)
 
         **Detect where `[default-branch]` is checked out, if anywhere:**
         ```bash

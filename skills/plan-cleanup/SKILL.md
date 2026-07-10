@@ -40,8 +40,8 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 ## Steps
 
 1. **Verify initialization**
-   - Use Glob or Read to check if `.plans/config.json` exists.
-   - If not, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Validate task file(s)**
 

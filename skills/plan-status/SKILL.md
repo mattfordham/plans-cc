@@ -20,8 +20,8 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
 ## Steps
 
 1. **Verify initialization**
-   - Use Read or Glob to check `.plans/config.json`.
-   - If it does not exist: print `Not initialized. Run `/plan-init` to get started.` and stop. Do not spawn a subagent.
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there.
+   - If no root is found: print `Not initialized. Run `/plan-init` to get started.` and stop. Do not spawn a subagent.
 
 2. **Announce once, then delegate gathering**
    - Print a single short line like `Gathering status…` before the tool call (this is the only pre-dashboard text the user should see).

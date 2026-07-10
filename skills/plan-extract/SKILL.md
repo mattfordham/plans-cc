@@ -26,8 +26,8 @@ Complements `/plan-import`: import handles structured documents; extract handles
 ## Steps
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Resolve input source**
    - If `$ARGUMENTS` looks like a path to an existing file (ends in `.md` or `.txt`, no embedded newlines, and the file exists), Read it. Set `source_label` = the filename.

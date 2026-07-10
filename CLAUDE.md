@@ -176,7 +176,12 @@ dashboard launch (`bin/dashboard.js`), `/plan-init`, `/plan-capture`,
 - Reads **live-prune** entries whose `<path>/.plans/` no longer exists, and
   tolerate a missing/empty/corrupt file (treated as zero projects, rewritten fresh
   on next write).
-- See `lib/registry.js` (producer) and `bin/plan-touch.js` (CLI touch).
+- A touch fired from **inside a sub-repo or a worktree normalizes upward to the
+  discovered project root** before registering, so the registry only ever holds
+  roots — never sub-repos or worktrees — and the desktop app never shows phantom
+  projects.
+- See `lib/registry.js` (producer), `lib/find-root.js` (the upward normalization),
+  and `bin/plan-touch.js` (CLI touch).
 
 The registry is the contract consumed by a separate macOS desktop app (a menu bar
 glance plus a cross-project browser), built outside this repo from the handoff
@@ -210,6 +215,35 @@ Call sites: `plan-complete` (kept-worktree teardown), `plan-execute` (single- an
 *A passing observation whose provenance you haven't verified is not evidence.* Immediately before and after every runtime observation, `plan-execute` and `plan-executor` assert `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`. If either moved, the observation is **VOID** — discarded, never promoted to a conclusion. Deferred observations record the SHA they were deferred at (`⏳ Deferred to review (branch: X @ sha)`), and `/plan-review` warns loudly when the code has moved since.
 
 **Backlog (a location, not a status).** `.plans/backlog/` is a deferral bucket for work consciously shelved. `/plan-backlog <id>` moves a task there; `/plan-restore <id>` brings it back to `.plans/pending/`. A backlogged task **keeps its prior status** (a restored `elaborated` task is still `elaborated`) — backlog is *where* a task lives, not a status value. An active (`in-progress`/`in-review`) task is **auto-paused** before shelving so no half-running task lands in the backlog. Backlogged tasks are hidden from default views and surfaced via `/plan-list backlog` and a `+N backlogged` badge; PROGRESS.md tracks a separate `Backlogged` stat, and the desktop-dashboard parser counts them in a separate `backlogged` summary field excluded from the active counts.
+
+### Project-root discovery (cross-skill contract)
+
+Every `plan-*` skill locates the project by the same walk — never by assuming cwd already holds `.plans/`. From cwd, ascend parent-by-parent looking for a directory that contains `.plans/config.json`; **the first hit wins**. Before ascending, a cwd inside a `.worktrees/<name>/` tree is first collapsed to the path just above `.worktrees` (see below). Halt the ascent at two stop conditions: `$HOME` (inclusive — check it, then stop) and the filesystem root. If no root is found, error with the UNCHANGED text: `Not initialized. Run /plan-init first.`
+
+A project rooted above `$HOME` (say `/Volumes/work/ensemble`) still resolves — its walk simply never reaches `$HOME` and terminates at the filesystem root instead. The `$HOME` stop exists so that a stray `.plans/` accidentally created in a *parent* of your home directory can never silently become the root for every project on the machine.
+
+When the discovered root differs from cwd, `cd` to it and print exactly one line — `Using plans root: <path> (from <cwd>)`. When root == cwd, print nothing: silence is the common case, and a notice on every invocation would be noise.
+
+The load-bearing invariant every other step depends on: **after the discovery step, cwd is the project root.** So relative `.worktrees/`, the sub-repo scan (`plan-execute` finding cwd is not a git repo and scanning children for `.git`), and every `.plans/` relative path keep working untouched — discovery is a prefix that leaves the rest of each skill unchanged.
+
+Why a cwd inside a worktree collapses to the parent: in a worktree, `.plans` is a *symlink up to the parent* (created at `skills/plan-execute/SKILL.md:463`), so the parent genuinely **is** the project root — there is no separate root inside the worktree to find. Collapsing first (rather than ascending through the symlink) also guarantees the walk can never return a `.plans/` that happens to live inside a worktree.
+
+This does **not** pull a review out of the worktree it is reviewing, because the two are separate concerns. Discovery answers *"where does `.plans/` live"* — always the parent. Which checkout a skill operates in is decided independently: `/plan-review` on a `keep`-executed task reads the task's `**Worktree:**` field and `cd`s into `.worktrees/NNN-slug/` itself, exactly as it does today. Never couple the two by trying to make discovery return a worktree path.
+
+Why first-hit-wins: a nested `.plans/` closer to cwd shadows a centralized ancestor, preserving any existing per-repo setup rather than silently redirecting it to a parent's plans.
+
+`lib/find-root.js` (`findProjectRoot(startDir)` → absolute root path or `null`) implements this walk for the Node tools, composing with `registry.normalizeProjectRoot` rather than reimplementing the collapse: that helper already strips from a `.worktrees` segment onward, so running it first is what makes a worktree cwd resolve to the parent before the ascent begins. `/plan-init` is the ONE skill exempt from the discovery-then-`cd` substitution — it must be able to *create* a root where none exists, so instead of erroring on no-root it proceeds to initialize, and it guards against silently nesting under an ancestor root.
+
+**Nested / centralized plans.** A parent directory holds the single `.plans/` while its git sub-repos live beneath it; the parent itself is typically *not* a git repo:
+
+```
+ensemble/            # parent — holds .plans/, not itself a git repo
+  .plans/            # the one centralized plans root
+  ensemble_website/  # git sub-repo
+  ensemble_backend/  # git sub-repo
+```
+
+This is not a new project model — it **is** the existing multi-repo shape that `plan-execute` already detects (cwd is not a git repo, so it scans immediate children for `.git`), that `plan-review` arbitrates by disjoint repo sets, and that `plan-complete` tears down per-repo. What discovery adds is *invocation from anywhere inside the tree*: run any `plan-*` skill from a sub-repo (e.g. inside `ensemble_website/`) and it ascends to the centralized `.plans/` at the parent. Plans stay centralized; only the invocation site got flexible.
 
 ### How Summary Section
 

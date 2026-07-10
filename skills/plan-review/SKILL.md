@@ -25,8 +25,8 @@ Review a task that has completed execution (typically via worktree workflow). **
 ## Steps
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and resolve task ID**
    - Accept flexible ID formats: "1", "01", "001"
@@ -59,7 +59,8 @@ Review a task that has completed execution (typically via worktree workflow). **
      - **If a `**Worktree:**` field is present but the path no longer exists** (manually deleted, etc.): treat it as absent — set `review_in_worktree = false`, fall through to the main-repo handling below, and proceed (the branch still lives in the main repo's `.git`).
      - **If there is no `**Worktree:**` field:** set `review_in_worktree = false` and continue to the main-repo handling below.
    - **Main-repo handling (only when `review_in_worktree` is false):**
-     - Run `pwd` and verify it matches the project root (the directory containing `.plans/`). If it does not, `cd` to the project root before continuing.
+     - Resolve the project root via the **Project-root discovery** contract in `CLAUDE.md` (ascend from cwd to the nearest ancestor containing `.plans/config.json`) and `cd` there before continuing. Do not assume the caller is already at the root — a session may be started from a sub-repo directory.
+     - **This is deliberately separate from the `**Worktree:**` branch above (the "if a `**Worktree:**` field is present" cases): that branch decides the review checkout from the task's `**Worktree:**` field and `cd`s *into* the worktree, and discovery must never override it.** Discovery here only re-anchors the *no-worktree* review to the directory holding `.plans/`; it always resolves to the parent (never a worktree path), so it cannot disturb an intentional in-worktree review.
      - Run `git rev-parse --git-dir 2>/dev/null` from the project root. **If the project root is not itself a git repo** (multi-repo project — the parent holds git sub-repos), this guard does not apply: there is no single worktree to be trapped in; the per-repo step 5 handles each sub-repo. Skip the rest of this step.
      - Otherwise (single git repo at the root): run `git rev-parse --show-toplevel` and `git rev-parse --git-dir`. If `--git-dir` resolves to a path inside `.worktrees/` (e.g. `.git/worktrees/NNN-slug`), error out: "plan-review must run from the main project directory, not a worktree. cd to [project-root] and re-run `/plan-review NNN`."
      - This guards against the case where a previous `/plan-execute` left the shell context positioned inside `.worktrees/NNN-slug/` for a task that has **no** live `**Worktree:**` field (e.g. a non-`keep` task whose worktree was supposed to be removed). The branch lives in the main repo's `.git`; all subsequent steps must run from there. (When `review_in_worktree` is true this error must NOT fire — the worktree is intentional.)

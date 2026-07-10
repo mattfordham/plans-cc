@@ -22,6 +22,8 @@ Display the complete command reference. Output the following help text:
 /plan-complete 1        # Mark task #1 done
 ```
 
+Any `plan-*` skill can be run from a sub-directory or sub-repo beneath the project root — it ascends to the centralized `.plans/` and prints `Using plans root: <path>` when it resolves upward. `/plan-init` is the exception: rather than ascending-and-erroring, it guards against nesting a new project under an existing root.
+
 ### All Commands
 
 | Command | Description |

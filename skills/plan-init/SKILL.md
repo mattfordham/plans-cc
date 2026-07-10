@@ -16,10 +16,18 @@ Initialize the `.plans/` directory structure for lightweight task management.
 
 ## Steps
 
-1. **Check if already initialized**
-   - Look for `.plans/` directory in current working directory
-   - If exists and has `config.json`, error: "Already initialized. Run `/plan-status` to see current tasks."
-   - If `.plans/` exists but is incomplete (missing files), offer to repair
+1. **Check if already initialized (and guard against nesting)**
+
+   `/plan-init` is the ONE skill EXEMPT from the generic project-root discovery-then-`cd` substitution that every other `plan-*` skill uses (see CLAUDE.md "Project-root discovery"). Every other skill errors when no root is found; `plan-init` must instead be able to *create* a root where none exists. Do NOT "fix" this by making it `cd` to an ancestor root and bail — the nesting guard below is deliberate.
+
+   - **cwd itself already has `.plans/config.json`** → keep today's exact behavior: error `Already initialized. Run /plan-status to see current tasks.`
+   - **cwd has a `.plans/` but it is incomplete** (directory exists, missing `config.json` or other files) → offer to repair by creating only the missing files (unchanged behavior).
+   - **cwd has NO `.plans/`, but an ANCESTOR does** — discover the nearest ancestor root by ascending parent-by-parent from cwd looking for `.plans/config.json`, stopping at `$HOME`, the filesystem root, and any `.worktrees` segment (same walk as `lib/find-root.js`). Do NOT silently create a nested root. Instead, use `AskUserQuestion`:
+     - Header: `Nested plans`
+     - Question: name the discovered ancestor root path, e.g. "An existing plans root was found at `<ancestor-path>`. Initialize here anyway?"
+     - Option 1 (recommended): **Use existing root at `<ancestor-path>`** — nothing is created. Tell the user they can already run any `/plan-*` skill from here (skills ascend to that root automatically), then STOP.
+     - Option 2: **Create nested `.plans/` here** — proceed to step 2, but FIRST warn explicitly that: plans will be fragmented; the two roots will not see each other; and (per first-hit-wins) this nested root will SHADOW the ancestor for every skill invoked at or below this directory.
+   - **Neither cwd nor any ancestor has `.plans/`** → proceed to step 2 (create the directory structure) exactly as today.
 
 2. **Create directory structure**
    ```
@@ -167,6 +175,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
 
 ## Edge Cases
 
-- **Already initialized**: If `.plans/config.json` exists, show error with suggestion to use `/plan-status`
+- **Already initialized**: If `.plans/config.json` exists in cwd, show error with suggestion to use `/plan-status`
 - **Partial initialization**: If `.plans/` exists but is missing files, offer to repair by creating missing files only
+- **Nested under an existing root**: If cwd has no `.plans/` but an ancestor does, ask before creating a nested root (see step 1) — the recommended path is to use the existing ancestor root, since all skills discover it automatically
 - **Not in a project directory**: Proceed anyway (user knows best where to put their plans)

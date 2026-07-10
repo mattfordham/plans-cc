@@ -56,8 +56,8 @@ These rules bind every invocation; they are not subject to your judgment about h
 ## Steps
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments**
    - Strip silent keywords (`yolo`, `worktree`, `autonomous`) — no warning.
@@ -79,7 +79,7 @@ These rules bind every invocation; they are not subject to your judgment about h
      - If not found: abort the whole spawn with `Task #NNN not found. Aborting spawn — no tasks were started.`
    - Read the task file. Extract Title, Type, and Status.
    - If Status is `in-progress`, `review`, `in-review`, or `completed`: add the ID + status to an `offenders` list (do not abort yet — collect them all so the user sees the full list).
-   - Check whether `.worktrees/NNN-slug/` already exists at the project root (where `NNN-slug` matches the task's filename stem). If so, add to a `worktree_collisions` list.
+   - Check whether `.worktrees/NNN-slug/` already exists at the project root (where `NNN-slug` matches the task's filename stem). If so, add to a `worktree_collisions` list. "The project root" is the directory resolved by the **Project-root discovery** contract in step 1 — after that step's `cd`, cwd IS the root, so this relative `.worktrees/` path (and every one below) resolves there even when the session was started from a sub-repo.
 
    After scanning all tasks:
    - If `offenders` is non-empty, abort:

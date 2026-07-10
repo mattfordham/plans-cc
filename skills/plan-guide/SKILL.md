@@ -16,8 +16,8 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
 ## Steps
 
 1. **Check initialization**
-   - Use Glob or Read to check if `.plans/config.json` exists.
-   - **If NOT initialized**, provide setup guidance instead of erroring:
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there.
+   - **If no root is found**, provide setup guidance instead of erroring:
      ```
      # Getting Started with Plans
 

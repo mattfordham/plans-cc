@@ -19,8 +19,8 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
 ## Steps
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments**
    - If `$ARGUMENTS` is numeric → treat as idea ID, go to detail mode (step 6)

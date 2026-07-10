@@ -26,7 +26,7 @@ It is deliberately **safe-by-construction**: it proves all branches are cleanly 
 ## Steps
 
 1. **Verify init, parse IDs, and validate gates**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check. If it does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this. If no root is found, error: "Not initialized. Run `/plan-init` first."
    - **Parse task IDs** (reuse `/plan-combine`'s parsing):
      - Split `$ARGUMENTS` by spaces. Zero-pad each ID to 3 digits. Deduplicate silently (e.g. "2 2 4" → "2 4").
      - **If no `$ARGUMENTS` were provided:** glob `.plans/pending/*.md` and read each file's `**Status:**` line. Collect every task whose status is `review` or `in-review`. 
@@ -37,7 +37,7 @@ It is deliberately **safe-by-construction**: it proves all branches are cleanly 
      - (a) **Existence:** every ID resolves to a file `.plans/pending/NNN-*.md`. If not: "Task #NNN not found. Run `/plan-list` to see available tasks."
      - (b) **Status:** every task's `**Status:**` is `review` or `in-review`. If a task is `pending`, `elaborated`, `in-progress`, or `completed`: "Cannot merge #NNN — its status is `[status]`, not `review`/`in-review`. Only review-state tasks can be merged for combined review."
      - (c) **Branch present:** every task file has a non-empty `**Branch:**` field. If missing/empty: "Task #NNN has no `**Branch:**` field — there's nothing to merge. (A branch-less task's changes live in the working tree, not on a branch.)"
-     - (d) **Main repo, not a worktree:** run `git rev-parse --show-superproject-working-tree` (per `/plan-review`'s guard). If it prints a non-empty path, we're inside a worktree — STOP: "plan-merge-reviews must run from the main project directory, not a worktree. cd to the project root and re-run." Also confirm `pwd` is the project root containing `.plans/`; if not, `cd` there first.
+     - (d) **Main repo, not a worktree:** run `git rev-parse --show-superproject-working-tree` (per `/plan-review`'s guard). If it prints a non-empty path, we're inside a worktree — STOP: "plan-merge-reviews must run from the main project directory, not a worktree. cd to the project root and re-run." Re-anchor to the discovered root first: resolve the project root via the **Project-root discovery** contract in `CLAUDE.md` (ascend from cwd to the nearest ancestor containing `.plans/config.json`) and `cd` there — do not assume the caller is already at the root, since a session may be started from a sub-repo. Discovery always resolves to the parent holding `.plans/`, never a worktree, so it composes with the worktree guard rather than overriding it.
    - Record, for each task, its ID, title, and branch name — steps 2 and 3 reuse them.
 
 2. **Dry-run mergeability first (the safety gate)**

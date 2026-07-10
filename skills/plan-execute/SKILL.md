@@ -116,8 +116,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 ## Steps
 
 1. **Verify initialization**
-   - FIRST, use Glob or Read to check if `.plans/config.json` exists. Do NOT skip this file check.
-   - If the file does not exist, error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse and resolve arguments**
    - Check for worktree keywords/phrases (see Arguments section) → store as `worktree_mode` flag (true/false). If true, also set `branch_mode = true`.
@@ -373,7 +373,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    c. **Ask about git branch** (if in a git repo)
       - Check if current directory is a git repository: `git rev-parse --git-dir 2>/dev/null`
       - If not a git repo:
-        - Scan for sub-repos: find immediate subdirectories with `.git` directories (`find . -maxdepth 2 -name .git -type d`)
+        - Scan for sub-repos: find immediate subdirectories with `.git` directories (`find . -maxdepth 2 -name .git -type d`). This scan (and every relative `.worktrees/` path below) is correct **because of the load-bearing discovery invariant from step 1: after the project-root discovery `cd`, cwd IS the project root.** A session started in a sub-repo (e.g. `ensemble/api/`) has already been re-anchored to the parent root here, so this finds the sibling sub-repos and worktrees land at the root — not nested inside the sub-repo.
         - If sub-repos found: set `multi_repo_mode = true`, store list of sub-repo directory names
         - If none found: skip this step silently (not a git project)
       - **If `multi_repo_mode` is true:**

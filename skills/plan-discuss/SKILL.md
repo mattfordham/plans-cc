@@ -45,8 +45,8 @@ Files are only edited when the user signals "update the plan" (or equivalent). C
 ## Steps
 
 1. **Verify initialization**
-   - Use Glob or Read to check `.plans/config.json` exists. Do NOT skip this check.
-   - If missing: error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments and pick mode**
    - If the leading whitespace-separated token is numeric → **task mode**: that token is `task_id` (zero-padded to 3 digits); remaining text → `opening_topic` (may be empty). Continue at step 4.

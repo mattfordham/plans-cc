@@ -13,10 +13,25 @@ try {
 } catch (_) {
   registry = require("./lib/registry");
 }
+// find-root is a sibling of registry in both layouts; require it the same
+// defensive way so plan-touch keeps working in the installed layout too.
+let findProjectRoot;
+try {
+  ({ findProjectRoot } = require("../lib/find-root"));
+} catch (_) {
+  ({ findProjectRoot } = require("./lib/find-root"));
+}
 
 try {
-  const projectRoot = process.argv[2] || process.cwd();
-  registry.registerProject(projectRoot);
+  const startDir = process.argv[2] || process.cwd();
+  // Register the CENTRALIZED project root, not the sub-repo a touch fired from:
+  // ascend to the nearest ancestor holding .plans/config.json. If none exists
+  // up the tree this isn't a plans-cc project, so register nothing (registering
+  // a non-project path would pollute the desktop app's project list).
+  const projectRoot = findProjectRoot(startDir);
+  if (projectRoot) {
+    registry.registerProject(projectRoot);
+  }
 } catch (_) {
   // best-effort — never fail
 }

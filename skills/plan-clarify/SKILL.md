@@ -39,8 +39,8 @@ Complements `/plan-elaborate`: elaborate generates structure, clarify hardens it
 ## Steps
 
 1. **Verify initialization**
-   - Use Glob or Read to check `.plans/config.json` exists. Do NOT skip this check.
-   - If missing: error: "Not initialized. Run `/plan-init` first."
+   - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
+   - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
 2. **Parse arguments**
    - Detect skip keywords/phrases (see Arguments) → `skip_mode`
