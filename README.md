@@ -150,6 +150,7 @@ node bin/dashboard.js         # local dev from the plans-cc repo
 | `/plan-issue [id] <description>` | Attach a bug report to a task found during manual testing |
 | `/plan-audit <id>` | Verify all affected files are accounted for in the task plan |
 | `/plan-import <file>` | Bulk-import tasks from a markdown document |
+| `/plan-retrospect [report \| across \| seed] [domain]` | Mine completed plan history for named, ranked, cross-project lessons |
 
 ### Idea Exploration
 

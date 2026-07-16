@@ -54,6 +54,7 @@ Any `plan-*` skill can be run from a sub-directory or sub-repo beneath the proje
 | `/plan-summary` | Summarize work completed in the current session |
 | `/plan-pause <id>` | Pause an in-progress task to switch context |
 | `/plan-search <query>` | Full-text search across all tasks and ideas |
+| `/plan-retrospect [report \| across \| seed] [domain]` | Mine completed plan history for named, ranked, cross-project lessons |
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
 | `/plan-depends <id> [blocked by <id>\|clear\|show]` | Add or view task dependencies |
 | `/plan-guide` | Interactive contextual guide — what to do next |

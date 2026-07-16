@@ -131,11 +131,11 @@ Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
 
 | Emoji | Category | Skills |
 |-------|----------|--------|
-| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, merge-reviews, import, pick, expand, brainstorm, cleanup, context, init, depends, backlog, restore |
+| 🟢 | Progress / advancing | capture, elaborate, clarify, discuss, execute, reopen, combine, merge-reviews, import, pick, expand, brainstorm, cleanup, context, init, depends, backlog, restore, retrospect (seed) |
 | 🟡 | Review state | review |
 | ✅ | Completion (terminal) | complete |
 | ⏸️ | Paused | pause |
-| 🔵 | Read-only / informational | status, list, show, search, ideas, guide, summary, help, audit |
+| 🔵 | Read-only / informational | status, list, show, search, ideas, guide, summary, help, audit, retrospect (report/across) |
 | 🔴 | Destructive / warning | delete, issue |
 | 🟣 | Spawn / fan-out | spawn |
 
@@ -365,6 +365,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-backlog` | Defer a pending task into `.plans/backlog/` (auto-pauses an active task first) |
 | `/plan-restore` | Restore a backlogged task to `.plans/pending/`, preserving its prior status |
 | `/plan-search` | Full-text search across all tasks and ideas |
+| `/plan-retrospect` | Mine completed plan history for named, ranked, cross-project lessons (report/across/seed modes) |
 | `/plan-depends` | Add or view task dependency relationships |
 | `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
 | `/plan-guide` | Interactive contextual guide — what to do next |

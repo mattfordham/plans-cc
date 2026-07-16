@@ -22,7 +22,7 @@ Update the project's CONTEXT.md with relevant information about the codebase.
 
 2. **Read current CONTEXT.md**
    - Load `.plans/CONTEXT.md`
-   - Note any existing user-written content to preserve
+   - Note any existing user-written content to preserve (including a `## Lessons From Past Projects` section, if present — it is managed by `/plan-retrospect seed` and must survive regeneration verbatim)
 
 3. **Auto-detect tech stack**
    Scan for common project files and infer technologies:
@@ -113,6 +113,9 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    ## Key Patterns
    [Preserve existing if present, otherwise: "_Architecture decisions, conventions_"]
 
+   ## Lessons From Past Projects
+   [Preserve existing if present; managed by /plan-retrospect seed — otherwise omit this section entirely]
+
    ## Notes
    [Preserve existing if present, otherwise: "_Anything else relevant_"]
    ```
@@ -151,7 +154,7 @@ Update the project's CONTEXT.md with relevant information about the codebase.
 ## Edge Cases
 
 - **No project files found**: Write template with placeholder sections, note that auto-detection found nothing
-- **Already has CONTEXT.md with content**: Preserve user-written Overview, Key Patterns, and Notes sections; update Tech Stack, Structure, and Testing with fresh detection
+- **Already has CONTEXT.md with content**: Preserve user-written Overview, Key Patterns, Lessons From Past Projects (managed by `/plan-retrospect seed`), and Notes sections; update Tech Stack, Structure, and Testing with fresh detection. Only emit the `## Lessons From Past Projects` section when it already exists — never write an empty placeholder for it.
 - **Large monorepo**: Focus on current directory only, note scope in Overview
 - **No tests detected**: Write "Not detected" in Testing section, suggest adding test config
 - **Mixed test frameworks**: List all detected frameworks
