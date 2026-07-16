@@ -63,6 +63,13 @@ Before implementing each step, perform a quick sanity check:
 3. If you find yourself working around the codebase rather than with it, STOP and report a Blocker
 </approach_check>
 
+<comment_policy>
+- Write code comments that reference the plan, task number, or step numbers (e.g.
+  `// Task #012 Step 3`) only when the spawning prompt does not forbid it.
+- If the prompt contains a Code Comment Policy section, follow it strictly.
+- When in doubt, prefer comments that explain the code itself over plan references.
+</comment_policy>
+
 <repo_hygiene>
 - Stage by explicit file path — `git add path/to/file.ts`. Never `git add <directory>`
   after a `git mv`: it stages the rename but not later edits to the moved file,

@@ -66,7 +66,7 @@ These rules bind every invocation; they are not subject to your judgment about h
    - If fewer than 2 unique IDs remain:
      - If exactly 1 ID: error `Spawn requires 2+ tasks. For a single task, use \`/plan-execute NNN worktree yolo\`.`
      - If 0 IDs: error `Spawn requires 2+ task IDs. Example: /plan-spawn 1 3 5`
-   - Read `.plans/config.json` once and remember `git_commits` for the post-spawn reconciliation step.
+   - Read `.plans/config.json` once and remember `git_commits` for the post-spawn reconciliation step. In the same read, remember `plan_comments`: set `plan_comments_off = true` ONLY when the key is present and explicitly `false` (missing or `true` ⇒ `false`) — it gates the `## Code Comment Policy` block in every segment prompt.
 
 3. **Preflight (sequential — no work yet)**
 
@@ -235,6 +235,7 @@ These rules bind every invocation; they are not subject to your judgment about h
    3. **Per-task prompt construction.** Use plan-execute step 11c's segment execution prompt template, with these fields substituted **per task** (each task gets its own prompt scoped to its own worktree):
       - `## Task Context` — that task's ID, Title, Type, Branch, and **Worktree:** line set to *that task's* `.worktrees/NNN-slug` absolute path. The worktree line MUST instruct the agent to prefix all bash commands with `cd [that-worktree-path] &&` — work for task A must never touch task B's worktree.
       - `## Project Context` — the abbreviated CONTEXT.md content read once in step 3 (same text for every task).
+      - `## Code Comment Policy` — include this section only when `plan_comments_off` (from the step-2 config read; same for every task): the conditional block from plan-execute step 11c's template forbidding code comments that reference the plan, task number, task title, or step numbers.
       - `## Previous Work (from earlier segments)` — read from *that task's* `.plans/state/NNN-state.md`: its completed steps, key decisions, and relevant context. For round 1 this is empty (`_None yet_`).
       - `## Your Segment` — that task's segment at index `round`, listed as the unchecked `- [ ]` step lines from the task file's How section.
       - `## Test Suite` — the `has_tests` flag + test command(s) detected once in step 3 (same for every task).

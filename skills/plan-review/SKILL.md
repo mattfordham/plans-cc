@@ -198,7 +198,7 @@ Review a task that has completed execution (typically via worktree workflow). **
       - **On "Something's wrong":**
         - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
         - Update state file Observations section: replace the `⏳ Deferred to review` marker with `✗ [user's observation]`, keeping the provenance parenthetical
-        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation and the current branch context in the prompt
+        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation and the current branch context in the prompt. When `plan_comments` in `.plans/config.json` is explicitly `false`, the fix prompt MUST include the `## Code Comment Policy` block from plan-execute step 11c's template (never write code comments referencing the plan, task number, task title, or step numbers)
         - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
         - If user says "Something's wrong" again after 2 fix attempts, suggest:
           ```

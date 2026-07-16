@@ -110,6 +110,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
    ```json
    {
      "git_commits": true,
+     "plan_comments": true,
      "next_id": 1,
      "idea_next_id": 1,
      "segment_threshold": 4
@@ -129,20 +130,31 @@ Initialize the `.plans/` directory structure for lightweight task management.
      - Ensure `.gitignore` exists; create it if missing.
      - If it exists and does not end with a newline, append a newline first.
      - Append `.plans` (no trailing slash) followed by a newline. **Do not use the trailing-slash form `.plans/`** — that pattern matches only directories, so a stray `.plans` symlink could slip past the ignore rule, get committed, and then clobber the real `.plans/` directory on a later `git checkout` (causing an ELOOP / lost task files). The slashless `.plans` ignores a directory, file, or symlink of that name.
-     - Remember for step 9 that `.gitignore` should be staged alongside the init commit.
+     - Remember for step 10 that `.gitignore` should be staged alongside the init commit.
    - If **Check in**: do nothing.
 
-8. **Display confirmation**
+8. **Ask about plan references in code comments**
+   - Ask the user via `AskUserQuestion`:
+     - Question: "May executors write code comments referencing plan/task numbers (e.g. `// Task #012 Step 3`)?"
+     - Header: "Plan comments"
+     - Options (place the recommended tag contextually):
+       1. **Allow plan references** — Executors may mention task/step numbers in code comments. Recommend this if the user chose **Check in** at step 7 (plan files live in the repo, so the references resolve).
+       2. **No plan references** — Executors never write comments referencing the plan, task number, title, or step numbers. Recommend this if the user chose **Ignore** at step 7, `.plans` was already gitignored, or this is not a git repo (plan files won't be in the repo, so such references are meaningless to readers).
+   - If **No plan references**: edit `.plans/config.json`, setting `"plan_comments": false` (the step-6 template default stays `true`).
+   - If **Allow plan references**: do nothing (the template already wrote `true`).
+
+9. **Display confirmation**
    Show:
    - Confirmation that `.plans/` was created
    - List of files created
    - Whichever applies: "Added `.plans/` to `.gitignore`" or "Tracking `.plans/` in git"
+   - Whichever applies: "Plan references in code comments: allowed" or "Plan references in code comments: disabled"
    - Suggest next steps:
      - `/plan-context` to set up project context
      - `/plan-capture <description>` to capture your first task
      - `/plan-help` to see all commands
 
-9. **Commit changes**
+10. **Commit changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
    - Read `.plans/config.json` for `git_commits` setting
@@ -165,12 +177,12 @@ Initialize the `.plans/` directory structure for lightweight task management.
        ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-10. **Register project (best-effort telemetry)**
+11. **Register project (best-effort telemetry)**
     - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
     - This registers the project in the system-wide plans registry for the desktop dashboard.
     - Ignore any error and do NOT surface output to the user. Never let this break the skill.
 
-11. **End-of-action marker**
+12. **End-of-action marker**
     - Output as the final line: `🟢 INITIALIZED · .plans/ ready → Next: /plan-capture`
 
 ## Edge Cases

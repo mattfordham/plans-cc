@@ -523,6 +523,7 @@ These rules bind every invocation. They are not subject to your judgment about t
 9. **Load context and present current state**
    - Read `.plans/CONTEXT.md` for project context
    - Note what's in the Changes section (work done so far)
+   - Read `.plans/config.json` for the `plan_comments` setting. Set `plan_comments_off = true` ONLY when the key is present and explicitly `false`; a missing key or `true` means `plan_comments_off = false` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; it gates the `## Code Comment Policy` block in every code-writing prompt below (steps 11–14).
 
    **Read the build route (if any):** Look for a `**Build:**` field in the task header (alongside `**Type:**` / `**Status:**`). It has the form `<skill> · <unit1>, <unit2>, ...` (e.g. `**Build:** des-build · CaseStudyCarousel, ContentModule`). If present and the skill is `des-build`, set `build_route = { skill: "des-build", units: [<unit1>, ...] }`; otherwise `build_route = null`. This field is read **only** from the header — never inferred from the task body. (Routing is applied in Steps 10–11.)
 
@@ -632,6 +633,7 @@ These rules bind every invocation. They are not subject to your judgment about t
      - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"` (append ` verify` when the task's Verification or How asks for a self-verify pass against the Figma frame).
      - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
      - **Autonomous deferral (mirror of the observation-step rule below):** when `worktree_mode` is true OR `yolo_mode` is true, the invocation prompt MUST instruct des-build to NOT pause with AskUserQuestion for non-linear desktop↔mobile reflow — it records the chosen interpretation as a noted assumption and continues, deferring the choice to review. When both are false, des-build may pause and ask normally.
+     - **Comment policy:** when `plan_comments_off` (from Step 9), the invocation prompt MUST instruct des-build to never write code comments referencing the plan, task number, task title, or step numbers — write only comments that explain the code itself.
    - **After each unit completes:**
      - Mark the corresponding How-step checkbox(es) for that unit complete (`- [x]`).
      - Append to the task's `## Changes` section: the unit built, the files written, the tokens/global classes used, and any drift/styleguide flags des-build surfaced.
@@ -744,7 +746,7 @@ These rules bind every invocation. They are not subject to your judgment about t
       - **On "Something's wrong":**
         - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
         - Record in state file Observations section: `- Step N: ✗ [user's observation]`
-        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation in the prompt
+        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation in the prompt. When `plan_comments_off`, the fix prompt MUST include the `## Code Comment Policy` block (same text as the segment template in 11c).
         - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
         - If user says "Something's wrong" again after 2 fix attempts, suggest manual investigation:
           ```
@@ -798,6 +800,13 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    ## Project Context
    [Abbreviated CONTEXT.md content - tech stack, key patterns, testing info]
+
+   ## Code Comment Policy
+   [If plan_comments_off, include this section:]
+   NEVER write code comments that reference the plan, task number, task title, or
+   step numbers (e.g. `// Task #012 Step 3`, `# Step 2: ...`, `/* per task #026 */`).
+   This project does not keep plan files in the repo, so such references are
+   meaningless to readers. Write only comments that explain the code itself.
 
    ## Previous Work (from earlier segments)
    [From state file: completed steps, key decisions, any relevant context]
@@ -1034,6 +1043,13 @@ These rules bind every invocation. They are not subject to your judgment about t
     ## Project Context
     [Abbreviated CONTEXT.md content]
 
+    ## Code Comment Policy
+    [If plan_comments_off, include this section:]
+    NEVER write code comments that reference the plan, task number, task title, or
+    step numbers (e.g. `// Task #012 Step 3`, `# Step 2: ...`, `/* per task #026 */`).
+    This project does not keep plan files in the repo, so such references are
+    meaningless to readers. Write only comments that explain the code itself.
+
     ## Issue to Fix
     [Issue description from the Issues section]
 
@@ -1095,6 +1111,13 @@ These rules bind every invocation. They are not subject to your judgment about t
 
        ## Project Context
        [Abbreviated CONTEXT.md content]
+
+       ## Code Comment Policy
+       [If plan_comments_off, include this section:]
+       NEVER write code comments that reference the plan, task number, task title, or
+       step numbers (e.g. `// Task #012 Step 3`, `# Step 2: ...`, `/* per task #026 */`).
+       This project does not keep plan files in the repo, so such references are
+       meaningless to readers. Write only comments that explain the code itself.
 
        ## Issue to Fix
        [Issue description]

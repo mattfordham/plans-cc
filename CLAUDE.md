@@ -156,7 +156,7 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   CONTEXT.md      # Project knowledge
   PROGRESS.md     # Current work status
   HISTORY.md      # Completed work archive
-  config.json     # Settings (git_commits, next_id, idea_next_id)
+  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments)
   pending/        # Active task files
   backlog/        # Deferred task files
   completed/      # Archived task files

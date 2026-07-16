@@ -283,7 +283,7 @@ After running `/plan-init`, your project will have:
   CONTEXT.md      # Project knowledge (tech stack, patterns, conventions)
   PROGRESS.md     # Current work status and stats
   HISTORY.md      # Completed work archive
-  config.json     # Settings (git_commits, next_id, idea_next_id)
+  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments)
   pending/        # Active task files
     001-fix-auth-bug.md
     002-add-dark-mode.md
@@ -292,6 +292,8 @@ After running `/plan-init`, your project will have:
 ```
 
 Task files are plain markdown with metadata at the top and sections for What, Why, How (with checkboxes), Verification, Impact Scope, Changes, and Notes. You can read and edit them directly — they're designed to be human-readable.
+
+`config.json` includes a `plan_comments` setting (asked during `/plan-init`): set it to `false` to forbid executors from writing plan/task-referencing code comments (e.g. `// Task #012 Step 3`) — useful for projects that don't keep `.plans/` in the repo. A missing key means such comments are allowed.
 
 ## Filtering
 
