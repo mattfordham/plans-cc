@@ -255,10 +255,18 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
     - If elaboration is on Path A (simple task), auto-select "Yes, proceed"
     - If on Path B (complex task), auto-select first/suggested options throughout
 
-    Show abbreviated confirmation when done:
+    Show abbreviated confirmation when done. Read the task file's `**Status:**`
+    value back and include it in the line, so a status flip that failed to land
+    during elaboration surfaces here in the chain rather than being masked by an
+    assumed success (a task still at `pending` can make a downstream
+    `/plan-execute` mis-detect its lifecycle mode):
     ```
-    Elaborated #NNN: [Title] (N steps)
+    Elaborated #NNN: [Title] (N steps, status: [actual **Status:** value])
     ```
+    If the read-back status is still `pending` (the elaboration did not flip it),
+    do not silently proceed — surface it: print
+    `Warning: task #NNN is still 'pending' after elaboration — status flip did not land.`
+    and STOP the chain (do not auto-execute).
 
     **If elaboration fails** (e.g., sub-agent error, file read failure):
     - Print warning: `Auto-elaboration failed: [reason]. Task was captured successfully.`

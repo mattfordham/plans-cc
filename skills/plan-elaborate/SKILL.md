@@ -527,11 +527,11 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     - If fewer than 3 files: skip this section entirely
 
 14. **Update task file**
+    - **Set Status to `elaborated` (do this first, as its own action — it must not be lost in the prose below):** Change Status from `pending` to `elaborated` — rewrite the `**Status:** pending` header line to `**Status:** elaborated`. The file stays in `.plans/pending/`. This from→to rewrite fires only when the current status is `pending`; if the header already reads `elaborated`, `in-progress`, or any later status (a direct `/plan-elaborate NNN` re-run on an already-advanced task), **leave the existing status untouched** — do not force it back to `elaborated`.
     - Fill in Why, How Summary, How, Verification, and Impact Scope (if applicable) sections
     - Write the `## How Summary` section **between the `## Why` and `## How` sections**
       (replacing its `_To be filled during elaboration_` placeholder), per the
       `### How Summary Generation` rules
-    - Update Status to `elaborated` (the file stays in `.plans/pending/`)
 
     **Propose a build-skill route (only when warranted, never auto-applied):** If the task clearly describes building one or more design-system components/sections AND the project has a `design-system/` directory, propose adding a `**Build:**` field to the task header so `/plan-execute` will route the build through the real `des-build` skill instead of the generic executor. Format (alongside `**Type:**` / `**Status:**`):
     ```
@@ -566,6 +566,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     If `skip_mode` is false, do not write any Initial assumptions — that subsection is reserved for skip-mode elaboration. Leave any existing placeholder text intact.
 
     - Write the updated file
+    - **Read-back assertion (verify the status flip actually landed):** Immediately after writing, re-read the task file and confirm the `**Status:**` line now reads `elaborated` (or the later status it was intentionally left at per the from→to rule above — it must NOT read `pending` after a `pending`→`elaborated` elaboration). If it still reads `pending`, rewrite the `**Status:**` line to `elaborated` and write the file again. If the correction cannot be made to stick (e.g. repeated write failure, file not writable), **hard-stop the chain**: do NOT proceed to step 15, do NOT auto-execute, and surface the problem clearly to the user — a task left at `pending` can make `/plan-execute` mis-detect its lifecycle mode, so silently continuing is not safe.
 
 15. **Register project (best-effort telemetry)**
     - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
@@ -596,10 +597,13 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     ```
     Then add task to `elaborated_tasks` list and continue to next task.
 
-    **If single task:** show full confirmation:
+    **If single task:** show full confirmation. Echo the `Status:` line from the
+    `**Status:**` value actually read back from the task file in step 14 — do NOT
+    print a hardcoded `elaborated` literal, so a flip that failed to land surfaces
+    here instead of being masked by an optimistic constant:
     ```
     Elaborated task #NNN: [Title]
-    Status: elaborated
+    Status: [actual **Status:** value read back from the file]
 
     Steps (0/X complete):
     - [ ] Step 1: ...
