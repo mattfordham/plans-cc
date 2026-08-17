@@ -1,6 +1,6 @@
 ---
 name: plan-delete
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<id>"
 allowed-tools:
   - Read

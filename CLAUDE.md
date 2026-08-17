@@ -67,7 +67,7 @@ Longer explanation of what this skill does.
 |-------|----------|-------------|
 | `name` | Yes | Skill name (must match directory name) |
 | `description` | Yes | Short description for skill picker |
-| `disable-model-invocation` | Yes | `true` for most skills. `false` for read-only/capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show, plan-search, plan-guide) and for the core lifecycle skills agents need to drive autonomously (plan-elaborate, plan-execute) |
+| `disable-model-invocation` | Yes | `true` for most skills. `false` for read-only/capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show, plan-search, plan-guide), for the core lifecycle skills agents need to drive autonomously (plan-elaborate, plan-execute), and for plan-delete (model-invocable despite being destructive — its explicit `yes` confirmation step is the guardrail) |
 | `allowed-tools` | No | Tools the skill can use |
 | `argument-hint` | No | Shows in skill picker (e.g., `"<id>"`, `"[description]"`) |
 
