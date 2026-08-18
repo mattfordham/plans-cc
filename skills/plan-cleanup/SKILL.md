@@ -1,7 +1,7 @@
 ---
 name: plan-cleanup
 disable-model-invocation: true
-argument-hint: "[id]"
+argument-hint: "[id | history]"
 allowed-tools:
   - Read
   - Write
@@ -19,12 +19,18 @@ Validate task files and clean up orphaned state files, branches, worktrees, and 
 
 ## Arguments
 
-- `$ARGUMENTS` (optional): A task ID (e.g., `001`) to focus the health check on a single task. Without an ID, runs a full system sweep with interactive prompts.
+- `$ARGUMENTS` (optional): a **mode selector** (first token, optional).
+  - The token `history` selects **history mode** — the opt-in HISTORY.md Summary backfill.
+  - A numeric token (e.g. `001`, `7`) selects **focused mode** on that task ID.
+  - Empty selects **full mode** — the full system sweep with interactive prompts.
+  - When the first token is neither `history` nor a task ID, treat the mode as `full` (the default).
+  - `history` does NOT compose with a task ID: `/plan-cleanup history 007` is not supported — the backfill is a repo-wide pass.
 
 ## Modes
 
-- **Full mode** (no ID): Run all steps below, including interactive prompts to clean up orphans.
-- **Focused mode** (ID provided): Run steps 1, 2 (focused validation only), and 7 (silent system scan — report-only, no prompts). Skip the prompting cleanup steps.
+- **Full mode** (no arguments): Run all steps below, including interactive prompts to clean up orphans, and the flag-only HISTORY.md cap check (step 3.5).
+- **Focused mode** (ID provided): Run steps 1, 2 (focused validation only), and 7 (silent system scan — report-only, no prompts). Skip the prompting cleanup steps and step 3.5.
+- **History mode** (`history`): Run step 1 (root discovery) and step 3.6 (the HISTORY.md backfill) **ONLY** — then close out through the two mode-agnostic steps every mode ends with, step 9 (commit) and step 10 (summary). It does NOT validate task files, rebuild PROGRESS.md, reap orphaned state files, touch branches or worktrees, or scan for unexpected directories. It is a narrow, opt-in data-hygiene pass over `.plans/HISTORY.md` and nothing else.
 
 ## Valid Statuses
 
@@ -80,6 +86,97 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
      - Rebuilding to exactly the last 5 also corrects/backfills an over-long "Recently Completed" list, making `/plan-cleanup` the on-demand shrink path for a file that already bloated past 5.
    - Rewrite PROGRESS.md with ground-truth data
    - Report what changed: "Rebuilt PROGRESS.md: X pending, Y elaborated, Z in-progress, W completed"
+
+3.5. **Check HISTORY.md Summary cap (flag only — never rewrite)** *(full mode only)*
+   - `.plans/HISTORY.md` is an **index**, not a second archive: each Summary cell is capped at exactly ONE sentence of the form `<verb-phrase> — <what changed>` followed by a ` → completed/NNN-slug.md` pointer, ≤250 chars for sentence and pointer together (the contract lives in `CLAUDE.md` under **HISTORY.md Summary cap** and is written by `plan-complete` step 11). Projects whose history predates the cap still carry fat rows.
+   - If `.plans/HISTORY.md` does not exist, skip this step silently.
+   - **Parse data rows**: a data row is a line matching `^\| [0-9]{3} \|` — a 3-digit zero-padded ID in the first column. Skip the table header row, the `|---|` separator row, any `<!-- ... -->` HTML comment, and any blank or prose line. Split each data row on `|` into its 5 columns (`ID | Title | Type | Completed | Summary`) and measure the trimmed 5th column.
+     ```bash
+     grep -cE '^\| [0-9]{3} \|' .plans/HISTORY.md
+     ```
+   - **Count drift** — a row is over cap if *either* holds:
+     - its Summary cell exceeds **250 chars**, or
+     - its Summary cell lacks the ` → completed/NNN-slug.md` pointer (a short pre-cap row can be conformant on length yet still miss the pointer, so length alone under-detects the contract's two-part shape).
+   - If no data rows exist, or no row drifts, emit nothing.
+   - If any row drifts, **FLAG it** — one line, no writes:
+     ```
+     N HISTORY.md row(s) exceed the 250-char Summary cap. Run `/plan-cleanup history` to backfill.
+     ```
+   - This step **NEVER rewrites a row — it only detects and points at `/plan-cleanup history`**, the same flag-only discipline `des-build` uses for global-CSS drift (it flags and points at `/des-sync`, and never syncs itself). The reason is that re-summarizing a row is an LLM judgment call per row — read `completed/NNN-slug.md`, compose a new sentence — not a mechanical fix like the neighbouring truncate-to-5 in step 3. A judgment call at that volume must never run unattended inside a default sweep.
+   - **Why this is not the shape `plan-complete` step 12 forbids:** that step carries a standing warning against adding a "detect >5 then backfill" branch for PROGRESS.md, and this step is superficially that shape. The two legitimately differ — truncating "Recently Completed" to 5 is a deterministic trim that is free to run everywhere, so it is folded unconditionally into every completion and needs no gate; re-deriving a Summary from a completed file is neither deterministic nor free, so it must be gated behind an explicit invocation. Do not "fix" this branch away by analogy to step 12.
+
+3.6. **Backfill HISTORY.md Summary cells** *(history mode only)*
+   - This is the invocable form of the backfill procedure documented in `CLAUDE.md`. It is **non-destructive by construction**: same row count, same IDs, dates, titles, and types — only the Summary cell shrinks. The source of truth (`.plans/completed/*.md`) is **never modified**, so the worst case is a poor *summary*, never lost data.
+   - **Never prune rows.** History is append-only; row *size* is capped, never row *count*. `/plan-retrospect` mines HISTORY.md by name as a lesson corpus, so deleting rows would quietly degrade retrospectives.
+   - If `.plans/HISTORY.md` does not exist, report "No HISTORY.md — nothing to backfill." and stop.
+
+   **(a) Parse rows, preserving everything but the Summary.**
+   - Parse data rows exactly as step 3.5 does (`^\| [0-9]{3} \|`; skip header, separator, HTML comments, blank lines).
+   - Split each into its 5 columns. The `ID`, `Title`, `Type`, and `Completed` columns are copied through **byte-for-byte** — only the 5th column is ever rewritten. Never reorder rows, never reformat the table.
+
+   **(b) Select rows to rewrite (this is what makes the pass idempotent).**
+   - Select a row if its Summary exceeds 250 chars **OR** lacks the ` → completed/NNN-slug.md` pointer.
+   - A row that is already conformant on both counts is **SKIPPED** — untouched, counted as already-conformant. That skip is the whole idempotence story: a second run over a backfilled file is a near-no-op.
+
+   **(c) Regenerate the Summary from the completed file.**
+   - For each selected row, read `.plans/completed/NNN-slug.md` and compose a replacement Summary matching `plan-complete` step 11's template exactly — a backfilled row and a freshly-completed row must be indistinguishable in form:
+     ```
+     [<verb-phrase> — <what changed>.] → completed/NNN-slug.md
+     ```
+   - Exactly ONE sentence, then the pointer. The shape is the primary constraint; ≤250 chars for sentence and pointer together is the backstop.
+   - **Never** carry over multi-paragraph postmortems, root-cause narratives, disproved hypotheses, bolded caveats, or file-by-file breakdowns — that content already lives in the completed file, which is precisely what the pointer is for.
+
+   **(d) Rewrite each row in place.**
+   - Replace only the Summary cell of that row; leave every other line of the file untouched.
+   - **Never emit a raw `|` inside a regenerated Summary.** A pipe is the table's column delimiter, so a single stray one silently splits the row into 6+ columns and corrupts the table — with no error, and no other skill checking for it. If the source completed file contains a pipe (a file path in a list, a shell one-liner, an "A | B" alternation), either **escape it as `\|`** or, preferably, **rephrase the sentence so it isn't needed**. This backfill is the first bulk writer of Summary cells, so it is the step that has to enforce the rule — `CLAUDE.md`'s **HISTORY.md Summary cap** contract states it, but `plan-complete` step 11 writes one row at a time and does not.
+
+   **(e) Skip — never guess — the rows the pass cannot source.**
+   The pass rewrites only what it can derive from ground truth. Three kinds of row are left **untouched**, and the first two are reported at the end:
+   - **No completed file.** The row's `.plans/completed/NNN-slug.md` does not exist. ID gaps are real (this repo has no `005`), and a task file can be deleted or renamed after its row was written. There is no source to re-derive from, so fabricating a sentence would violate the "source of truth is never touched" invariant and put invented prose into the `/plan-retrospect` corpus. Leave the row byte-for-byte as-is and report:
+     ```
+     Skipped 2 row(s) with no completed/ file: #005, #013
+     ```
+   - **Malformed row.** The line matched `^\| [0-9]{3} \|` but does not split into exactly 5 columns (a pre-existing stray `|`, a truncated row, a hand-edited line). Do not attempt to repair the shape — rewriting a row whose columns cannot be identified risks moving data between columns. Leave it untouched and report it by ID:
+     ```
+     Skipped 1 malformed row (not 5 columns): #009
+     ```
+   - **Already conformant.** ≤250 chars **and** carries the ` → completed/NNN-slug.md` pointer. Silently skipped — no line of output per row — and counted toward the already-conformant total in the summary. This is the common case on a second run and must stay quiet, or a re-run over a backfilled file would print hundreds of no-op lines.
+
+   **Scope: `.plans/archive/` is explicitly out of scope.**
+   - The backfill reads `.plans/HISTORY.md` and `.plans/completed/*.md` and nothing else. `archive/` appears in this skill only as a name in the expected-directories allowlist; nothing in `skills/`, `lib/`, or `bin/` ever writes to it. Sweeping it would be building for a phantom — do not add it "for completeness."
+
+   **Worked example** — a fat pre-cap row:
+   ```
+   | 012 | Session Timeout Handling | bug | 2026-07-14 | **Root cause:** the refresh token was being read from a stale cookie jar, so sessions silently expired at 30m instead of 24h. We first suspected the load balancer's sticky-session config (disproved — see the timing table below), then the Redis TTL (also disproved). Files touched: `lib/session.ts`, `lib/cookies.ts`, `middleware.ts`, `test/session.test.ts`. Note that the fix does NOT address the separate SSO path, which still... |
+   ```
+   becomes:
+   ```
+   | 012 | Session Timeout Handling | bug | 2026-07-14 | Fixed silent session expiry at 30m — refresh token now read from the live cookie jar in the session middleware. → completed/012-session-timeout-handling.md |
+   ```
+   ID, Title, Type, and Completed are byte-identical; only the Summary shrank.
+
+   **Safety gate — preview the first 3 rewrites before committing to the pass.**
+   - Regenerate the **first 3** selected rows (in ID order) WITHOUT writing anything, and present them so the user can judge summary quality — old length → new text + new length:
+     ```
+     #007  1,412 chars → "Added worktree teardown to completion — merge, remove, strip the Worktree field. → completed/007-worktree-teardown.md" (121 chars)
+     #012  9,020 chars → "Fixed silent session expiry at 30m — refresh token now read from the live cookie jar. → completed/012-session-timeout-handling.md" (133 chars)
+     #018    684 chars → "Capped HISTORY.md summaries at one sentence — plan-complete step 11 and the init template. → completed/018-cap-history-summaries.md" (135 chars)
+     ```
+   - Then use `AskUserQuestion`:
+     - Header: "Backfill"
+     - Question: "N HISTORY.md row(s) are over cap. Here are the first 3 rewrites. Proceed with the full pass?"
+     - Options:
+       1. "Backfill all" — Rewrite all N selected rows
+       2. "Cancel" — Write nothing and stop
+   - If "Cancel": abort with **zero writes** — not even the previewed 3. Report "Backfill cancelled — no rows changed."
+   - This matches the repo's confirm-before-write idiom (this skill's own Delete-all/Keep-all gates, `plan-delete`'s explicit `yes`, `plan-import`'s preview-table-then-confirm).
+
+   **Running the pass.**
+   - On approval, process the selected rows in **ID order** and report progress in prose as you go, e.g. `Backfilled 50/552 rows…`. No fixed chunk size is mandated — how many rows fit in a pass depends on how fat the rows are; progress reporting plus the idempotent skip is what makes the pass safe, not a particular batch number.
+
+   **Resumability is the idempotent skip itself — do NOT invent a checkpoint/state file.**
+   - An interrupted or context-exhausted pass is continued simply by re-invoking `/plan-cleanup history`: rows already rewritten are conformant, so selection skips them and the pass picks up exactly where it stopped.
+   - A `.plans/state/history-backfill.json` would be actively **harmful**: step 4 of this very skill reaps orphaned files in `.plans/state/`, so cleanup would eat its own checkpoint. There is no chunking/resumable-pass precedent in this repo to mirror, and inventing one here would be over-engineering on top of a mechanism that is already resumable for free.
 
 4. **Clean up orphaned state files** *(full mode only)*
    - Check if `.plans/state/` directory exists. If not, skip to step 5.
@@ -176,7 +273,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - If a tracked `.plans` entry or vulnerable `.plans/` ignore form is detected, always surface it prominently (it risks data loss): "⚠️ `.plans` is tracked in git / ignored with a trailing slash — run `/plan-cleanup` to fix before your next branch checkout."
    - If everything is clean, report: "System scan: clean."
 
-9. **Commit .plans/ changes** *(both modes, if anything changed)*
+9. **Commit .plans/ changes** *(all modes, if anything changed)*
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
    - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
@@ -204,8 +301,20 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
     - Branches: N stale deleted / M kept
     - Worktrees: N orphaned deleted / M kept
     - Unexpected directories: N deleted / M kept
+    - HISTORY.md: N row(s) over cap — run `/plan-cleanup history`
     ```
-    Omit lines for categories that had nothing to report.
+    Omit lines for categories that had nothing to report. The HISTORY.md line follows that same discipline — it appears **only** when step 3.5 actually detected drift, and is absent when HISTORY.md is missing, has no data rows, or is fully conformant. It is a pointer, not a result: full mode never rewrote anything.
+
+    **History mode:**
+    ```
+    # HISTORY.md Backfill Complete
+
+    - Rewritten: N row(s)
+    - Already conformant: M row(s) (skipped)
+    - Skipped 2 row(s) with no completed/ file: #005, #013
+    - Skipped 1 malformed row (not 5 columns): #009
+    ```
+    Omit the skip lines when nothing was skipped for that reason. If the user cancelled at the preview gate, report "Backfill cancelled — no rows changed." instead of the block above. If every row was already conformant, report "HISTORY.md: all N row(s) already conformant — nothing to backfill."
 
     **Focused mode:**
     ```
@@ -221,8 +330,13 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
     System scan: <summary from step 8>
     ```
 
-    End-of-action marker (final line): `🟢 CLEANED UP · N issues resolved`
-    (N = total issues fixed across all categories; use `0 issues resolved` if nothing needed fixing)
+    End-of-action marker (final line):
+    - **Full mode and focused mode**: `🟢 CLEANED UP · N issues resolved`
+      (N = total issues fixed across all categories; use `0 issues resolved` if nothing needed fixing)
+    - **History mode**: `🟢 BACKFILLED · N HISTORY rows → Next: /plan-status`
+      (N = rows actually rewritten; use `0 HISTORY rows` when the pass was a no-op or the user cancelled)
+
+    Backfilled rows do **NOT** count toward `N issues resolved`. The two markers are separate on purpose: the sweep's count is a count of *sweep* fixes, and folding a backfill into it would render as `552 issues resolved`, which badly misreads a single data-hygiene pass as hundreds of distinct problems.
 
 ## Edge Cases
 
@@ -236,3 +350,10 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 - **Worktree has uncommitted changes**: Warn before deleting
 - **Task in wrong directory** (e.g., `completed` status in pending/): Offer to move via AskUserQuestion before moving.
 - **Invalid status value**: Suggest closest valid status; do not auto-fix without confirmation.
+- **HISTORY.md doesn't exist**: Full mode skips step 3.5 silently. History mode reports "No HISTORY.md — nothing to backfill." and stops.
+- **No rows over cap**: Full mode emits nothing (no "HISTORY.md: OK" line). History mode reports "all N row(s) already conformant — nothing to backfill."
+- **Row with no matching `completed/NNN-slug.md`** (history mode): Leave the row untouched — never invent a summary — and report the skipped IDs.
+- **Malformed HISTORY.md row** (history mode): A line that matches the ID pattern but doesn't split into 5 columns is left untouched and reported; do not attempt to repair its shape.
+- **User declines the 3-row preview** (history mode): Abort with **zero writes** — not even the previewed 3 rows. Report "Backfill cancelled — no rows changed."
+- **Backfill pass interrupted** (history mode): No cleanup needed and no checkpoint to reconcile — re-run `/plan-cleanup history` and it resumes, because already-rewritten rows are conformant and get skipped.
+- **`/plan-cleanup history 007`**: History mode does not compose with a task ID in v1. Explain that the backfill is a repo-wide pass and run `/plan-cleanup history` instead — do not silently ignore the ID and do not fall through to focused mode on `007`.

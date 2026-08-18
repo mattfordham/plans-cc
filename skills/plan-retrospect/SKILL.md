@@ -192,7 +192,9 @@ scopes the expensive prose-reading work, and the whole thing is delegated to a s
 
 **Corpus.** For each root being mined, the corpus is:
 - `.plans/completed/*.md` — the archived task files (the primary signal).
-- `.plans/HISTORY.md` — the dense per-task completion summaries.
+- `.plans/HISTORY.md` — the index of completions: one capped one-sentence summary per task,
+  plus its ID, title, type, and completion date. Use it for the timeline and for pointers
+  into `completed/`; the depth lives in the task files above, not here.
 
 Treat a missing directory or file as empty (zero contributions), never an error.
 

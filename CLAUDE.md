@@ -177,20 +177,31 @@ table is already on disk in every live project.
 
 History is **append-only and is NEVER pruned** — only row *size* is capped, never row
 *count*. `/plan-retrospect` mines HISTORY.md by name as a lesson corpus, so deleting rows
-would quietly degrade retrospectives. `/plan-complete` step 11 is the sole write path and
-the single source for this wording; `/plan-init` seeds the convention as a comment inside
-the generated HISTORY.md. Row consumers (`plan-reopen`, `plan-delete`) key on the `| NNN |`
-first column and never parse the Summary cell, so the cap is behavior-preserving.
+would quietly degrade retrospectives. `/plan-complete` step 11 is the sole **append** path
+and the single source for this wording; `/plan-cleanup history` is the only **in-place
+rewrite** path (it never appends, never prunes, and only ever touches the Summary cell).
+`/plan-init` seeds the convention as a comment inside the generated HISTORY.md. Row consumers
+(`plan-reopen`, `plan-delete`) key on the `| NNN |` first column and never parse the Summary
+cell, so the cap is behavior-preserving.
+
+A regenerated Summary must **never contain a raw `|`** — the pipe is the table's column
+delimiter, so one stray character silently splits the row into 6+ columns with no error.
+Escape it as `\|`, or preferably rephrase so it isn't needed.
 
 **Backfill of pre-cap rows (optional, one-time, per consuming project).** Projects whose
-HISTORY.md predates the cap may hold fat rows. Shrinking them is a documented agent-driven
-pass — deliberately **not** a skill or script — run *in the affected project*, never in the
-plans-cc repo: for each existing row, re-read `.plans/completed/NNN-slug.md`, regenerate a
-one-sentence ≤250-char summary plus the ` → completed/NNN-slug.md` pointer, and rewrite that
-row in place. It is **non-destructive**: same row count, same IDs, dates, titles, and types —
-only the Summary cell shrinks. It is entirely **safe to skip**, since the cap governs future
-completions regardless. *Running* this backfill against any consuming project is out of scope
-for the task that documented it; this procedure is the deliverable.
+HISTORY.md predates the cap may hold fat rows. Shrinking them is `/plan-cleanup history` —
+a gated, opt-in mode on an existing skill, deliberately **not** a new skill and **not** a
+script — run *in the affected project*, never in the plans-cc repo. For each over-cap row it
+re-reads `.plans/completed/NNN-slug.md`, regenerates a one-sentence ≤250-char summary plus the
+` → completed/NNN-slug.md` pointer, and rewrites that row in place, producing rows
+indistinguishable in form from what `plan-complete` step 11 writes for a fresh completion. It
+previews its first 3 rewrites for approval before the full pass, skips (and reports) rows it
+cannot source from a `completed/` file, and is idempotent — an interrupted pass resumes by
+simply re-invoking it, because already-capped rows are skipped. It is **non-destructive**:
+same row count, same IDs, dates, titles, and types — only the Summary cell shrinks. It is
+entirely **safe to skip**, since the cap governs future completions regardless. *Running* this
+backfill against any consuming project is out of scope for the tasks that shipped it; the
+procedure and its invocable form are the deliverable.
 
 ### Machine-Wide Project Registry
 
@@ -238,6 +249,8 @@ git worktree prune
 Call sites: `plan-complete` (kept-worktree teardown), `plan-execute` (single- and multi-repo finish), `plan-spawn` (teardown and collision abort). `git worktree remove` preserves the branch ref and its commits — removing a worktree loses nothing.
 
 `/plan-cleanup` is the **reconciler**: it cross-checks `git worktree list --porcelain` against the `.worktrees/` listing and reports both desync directions — *on disk but unregistered* (a corpse; `prune` will not touch it, it needs explicit removal) and *registered but missing* (`prune` clears the stale record). It always prunes, even when nothing is reaped.
+
+It reconciles data the same way it reconciles worktrees: a full sweep also reports **HISTORY.md cap drift** — rows whose Summary exceeds 250 chars or lacks the ` → completed/NNN-slug.md` pointer — as a third desync direction. That one is **flag-only**: the sweep never rewrites a row, it points at `/plan-cleanup history` (the same discipline `des-build` uses when it flags global-CSS drift and points at `/des-sync`), because re-deriving a summary is an LLM judgment call per row, not a mechanical fix.
 
 ### Observation provenance
 
@@ -396,7 +409,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-search` | Full-text search across all tasks and ideas |
 | `/plan-retrospect` | Mine completed plan history for named, ranked, cross-project lessons (report/across/seed modes) |
 | `/plan-depends` | Add or view task dependency relationships |
-| `/plan-cleanup` | Rebuild state from ground truth, clean up orphans |
+| `/plan-cleanup` | Rebuild state from ground truth, clean up orphans; `history` mode backfills pre-cap HISTORY.md Summary cells |
 | `/plan-guide` | Interactive contextual guide — what to do next |
 | `/plan-spawn` | Fan out N tasks in parallel, each in its own worktree (always autonomous) |
 | `/des-styleguide` | Generate (on demand, opt-in) a single human-openable styleguide page from `design-system/` — token swatches, global classes, and built components rendered at once against the live Tailwind layer |
