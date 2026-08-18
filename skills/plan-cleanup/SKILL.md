@@ -77,6 +77,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - Build accurate counts: pending, elaborated, in-progress, review, completed
    - Find in-progress and review tasks for "Active Work" section
    - Find last 5 completed tasks (by `**Completed:**` date) for "Recently Completed" section
+     - Rebuilding to exactly the last 5 also corrects/backfills an over-long "Recently Completed" list, making `/plan-cleanup` the on-demand shrink path for a file that already bloated past 5.
    - Rewrite PROGRESS.md with ground-truth data
    - Report what changed: "Rebuilt PROGRESS.md: X pending, Y elaborated, Z in-progress, W completed"
 
