@@ -220,11 +220,15 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
 12. **Update PROGRESS.md**
     - Remove task from "Active Work" section
-    - Add to "Recently Completed" (keep last 5):
-      ```
-      ## Recently Completed
-      - **#NNN** - [Title] (completed [YYYY-MM-DD])
-      ```
+    - Add to "Recently Completed" — two explicit actions, in order:
+      1. **Prepend** the new bullet at the TOP of the section (newest-first, matching the existing ordering):
+         ```
+         ## Recently Completed
+         - **#NNN** - [Title] (completed [YYYY-MM-DD])
+         ```
+         If the section holds only the `_No completed tasks yet_` placeholder, REPLACE the placeholder with the new bullet rather than prepending above it.
+      2. **Hard-truncate to 5**: keep only the top 5 bullet lines and delete every bullet from the 6th onward, stopping at the `## Stats` heading. Never touch `## Stats` or anything after it. This truncate is MANDATORY and unconditional — it runs on EVERY completion, even when the list is already longer than 5, so it self-heals any legacy bloat that accumulated before this rule existed. This is a hard trim, not a warning.
+    - The truncate is unconditional *because* it doubles as the one-time backfill: trimming to 5 on every completion is idempotent (a no-op when the list is already ≤5), so there is NO separate gated backfill mechanism — do not add a "detect >5 then backfill" branch.
     - Update Stats section:
       - Decrement In Progress count
       - Increment Completed count
