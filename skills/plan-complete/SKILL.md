@@ -206,9 +206,16 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
 
 11. **Update HISTORY.md**
+    - HISTORY.md is an **index**, not a second archive. The full record already lives in `.plans/completed/NNN-slug.md`.
     - Append row to the history table:
       ```
-      | NNN | [Title] | [type] | [YYYY-MM-DD] | [Brief summary from Changes section] |
+      | NNN | [Title] | [type] | [YYYY-MM-DD] | [<verb-phrase> — <what changed>.] → completed/NNN-slug.md |
+      ```
+    - The Summary cell has a mandated **shape**: exactly ONE sentence of the form `<verb-phrase> — <what changed>`, then the ` → completed/NNN-slug.md` pointer to the full record. The shape is the constraint; `≤250 chars` (sentence + pointer) is the backstop.
+    - **Never** paste multi-paragraph postmortems, root-cause narratives, disproved hypotheses, bolded caveats, or file-by-file breakdowns into the cell — that content belongs in (and already exists in) the completed task file.
+    - Example row:
+      ```
+      | 005 | User Model Additions | feature | 2026-08-18 | Added company association and pricing override fields — User model, migration, and serializer. → completed/005-user-model-additions.md |
       ```
 
 12. **Update PROGRESS.md**
@@ -358,7 +365,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     ```
     Task #{id} completed: {title}
 
-    Summary: {one sentence from Changes section}
+    Summary: {one sentence from Changes section — same capped sentence written to HISTORY.md in step 11, without the ` → completed/...` pointer}
 
     Archived to: .plans/completed/{id}-{slug}.md
     Branch: {branch-name} merged to {default-branch}

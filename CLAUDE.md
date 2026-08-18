@@ -163,6 +163,35 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   ideas/          # Brainstorm session documents
 ```
 
+### HISTORY.md Summary cap (cross-skill contract)
+
+`.plans/HISTORY.md` is an **index**, not a second archive — the full record of a completed
+task always lives in `.plans/completed/NNN-slug.md`. Its Summary cell is therefore capped:
+exactly ONE sentence of the form `<verb-phrase> — <what changed>`, followed by a
+` → completed/NNN-slug.md` pointer to the full record, **≤250 chars for the sentence and
+pointer together**. The shape is the primary constraint; the char count is the backstop.
+Never paste multi-paragraph postmortems, root-cause narratives, disproved hypotheses, or
+file-by-file breakdowns into the cell — that content already exists in the completed file.
+The pointer lives *inside* the existing Summary cell, not as a sixth column; the 5-column
+table is already on disk in every live project.
+
+History is **append-only and is NEVER pruned** — only row *size* is capped, never row
+*count*. `/plan-retrospect` mines HISTORY.md by name as a lesson corpus, so deleting rows
+would quietly degrade retrospectives. `/plan-complete` step 11 is the sole write path and
+the single source for this wording; `/plan-init` seeds the convention as a comment inside
+the generated HISTORY.md. Row consumers (`plan-reopen`, `plan-delete`) key on the `| NNN |`
+first column and never parse the Summary cell, so the cap is behavior-preserving.
+
+**Backfill of pre-cap rows (optional, one-time, per consuming project).** Projects whose
+HISTORY.md predates the cap may hold fat rows. Shrinking them is a documented agent-driven
+pass — deliberately **not** a skill or script — run *in the affected project*, never in the
+plans-cc repo: for each existing row, re-read `.plans/completed/NNN-slug.md`, regenerate a
+one-sentence ≤250-char summary plus the ` → completed/NNN-slug.md` pointer, and rewrite that
+row in place. It is **non-destructive**: same row count, same IDs, dates, titles, and types —
+only the Summary cell shrinks. It is entirely **safe to skip**, since the cap governs future
+completions regardless. *Running* this backfill against any consuming project is out of scope
+for the task that documented it; this procedure is the deliverable.
+
 ### Machine-Wide Project Registry
 
 plans-cc maintains a machine-wide index of every project that uses it, written to

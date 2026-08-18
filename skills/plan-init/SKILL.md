@@ -102,6 +102,10 @@ Initialize the `.plans/` directory structure for lightweight task management.
    ```markdown
    # Task History
 
+   <!-- Summary column: ONE sentence (`<verb-phrase> — <what changed>`) plus a
+        ` → completed/NNN-slug.md` pointer, ≤250 chars. This file is an index —
+        the full record lives in .plans/completed/. -->
+
    | ID | Title | Type | Completed | Summary |
    |----|-------|------|-----------|---------|
    ```
