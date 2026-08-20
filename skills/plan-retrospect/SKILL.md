@@ -207,6 +207,12 @@ user's window. Do NOT run the scan tools yourself.
   pre-report text the user should see).
 - Spawn ONE Agent (`subagent_type: general-purpose`) with a prompt that instructs it to
   scan the corpus and return ONLY a compact structured report (no raw file contents).
+  **Model:** read `.plans/config.json`. When the `models` key is present AND defines a
+  `research` entry, spawn with `model: [research_model]` where `research_model` is
+  `models.research` (see **Model selection** in `CLAUDE.md`). When the `models` key or the
+  `research` entry is absent, pass **no `model:` parameter at all** — this read-only mining
+  agent then inherits the session model, exactly as today. Do NOT substitute `"opus"` or any
+  other literal default.
   The subagent must, across every completed file (and HISTORY.md) in the mined root(s):
 
   1. **Files of note** — Grep `**Files of note:**` blocks and the bullet lines beneath

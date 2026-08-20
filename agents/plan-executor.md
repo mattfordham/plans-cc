@@ -9,6 +9,10 @@ tools:
   - Glob
   - Grep
 color: yellow
+# Fallback only. Every call site (plan-execute steps 11c/11c.6/13/14, plan-spawn,
+# plan-review) passes an explicit `model:` derived from `models.executor` in
+# .plans/config.json, defaulting to "opus" when that key is absent. This line
+# applies only if some future call site omits the parameter.
 model: inherit
 ---
 

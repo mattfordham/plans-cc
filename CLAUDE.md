@@ -156,7 +156,7 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   CONTEXT.md      # Project knowledge
   PROGRESS.md     # Current work status
   HISTORY.md      # Completed work archive
-  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments)
+  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments, models)
   pending/        # Active task files
   backlog/        # Deferred task files
   completed/      # Archived task files
@@ -286,6 +286,32 @@ ensemble/            # parent — holds .plans/, not itself a git repo
 ```
 
 This is not a new project model — it **is** the existing multi-repo shape that `plan-execute` already detects (cwd is not a git repo, so it scans immediate children for `.git`), that `plan-review` arbitrates by disjoint repo sets, and that `plan-complete` tears down per-repo. What discovery adds is *invocation from anywhere inside the tree*: run any `plan-*` skill from a sub-repo (e.g. inside `ensemble_website/`) and it ascends to the centralized `.plans/` at the parent. Plans stay centralized; only the invocation site got flexible.
+
+### Model selection (cross-skill contract)
+
+The model a `plan-*` skill spawns sub-agents with is **configuration, not a hardcoded constant** — an optional `models` object in `.plans/config.json` maps a *role* to a model name, and the spawn sites read it instead of literalizing `"opus"`. Three roles exist, and only three:
+
+```json
+"models": {
+  "executor": "opus",
+  "research": "sonnet",
+  "reasoning": "opus"
+}
+```
+
+- **`executor`** — the model every `plan-executor` sub-agent spawn uses. Call sites: `plan-execute` (step 11c segment spawn, step 11c.6 observation-failure fix, step 13 issue resolution, step 14 testing/feedback fix), `plan-spawn` (parallel round spawn), `plan-review` (deferred-observation fix). Absent ⇒ `"opus"`, the value those sites hardcoded before this contract existed.
+- **`research`** — the model for read-only research/analysis sub-agents that today spawn with no `model:` parameter at all. Call sites: `plan-elaborate` (two sites), `plan-audit`, `plan-status`, `plan-retrospect`, `plan-execute`. Absent ⇒ **omit the `model:` parameter entirely** — not `"opus"`, not any literal. Passing a default here would change today's behavior, because omitting the parameter lets the sub-agent inherit the session model.
+- **`reasoning`** — consulted **only** on `/plan-elaborate`'s `deep` path, and nowhere else. Absent ⇒ the `deep` path behaves exactly as it does today.
+
+**Absence = today's behavior, exactly.** A project with no `models` key — which is every existing project — must produce byte-identical spawn calls to what it produced before. That is why each role's absence-default is specified separately rather than sharing one: `executor` defaults to a literal, `research` defaults to *the absence of a parameter*, and collapsing those two into a single rule would silently pin research agents to a model they never used.
+
+`models` is the first **nested object** in `config.json`; every prior key (`git_commits`, `next_id`, `idea_next_id`, `plan_comments`) is a flat scalar. Read it defensively: the key may be missing, and when present it may define only some roles.
+
+**`models` is deliberately NOT seeded into `/plan-init`'s config template.** A generated config would either bake in values the user never chose, or add a key that reads as an instruction to tune something most projects should leave alone. The key is documented here and honored when hand-added — that is the whole opt-in surface.
+
+**Only a Task-tool spawn site can honor a model key.** A skill body is markdown that Claude follows *in the main session*, on whatever model that session was launched with — a skill cannot switch its own model mid-run. So a role key only means something where a `Task` call actually names a model. A key like `models.elaborate` (or `models.review`, or any per-skill name) is **structurally inert**: nothing could ever read it, and it would sit in config.json looking functional while doing nothing. Never add one. Roles are named after *what kind of sub-agent gets spawned*, never after the skill that spawns it — which is precisely why there are three roles and not one per skill.
+
+This failure mode has precedent in this repo: `segment_threshold` is written into every generated config by `skills/plan-init/SKILL.md:120` and **read by nothing** — `plan-execute` step 10 hardcodes "segments of 3-4 steps" regardless. It is a phantom key that has looked configurable for its entire existence. Do not grow the collection.
 
 ### How Summary Section
 

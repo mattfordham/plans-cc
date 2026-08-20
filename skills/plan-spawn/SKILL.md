@@ -66,7 +66,7 @@ These rules bind every invocation; they are not subject to your judgment about h
    - If fewer than 2 unique IDs remain:
      - If exactly 1 ID: error `Spawn requires 2+ tasks. For a single task, use \`/plan-execute NNN worktree yolo\`.`
      - If 0 IDs: error `Spawn requires 2+ task IDs. Example: /plan-spawn 1 3 5`
-   - Read `.plans/config.json` once and remember `git_commits` for the post-spawn reconciliation step. In the same read, remember `plan_comments`: set `plan_comments_off = true` ONLY when the key is present and explicitly `false` (missing or `true` ⇒ `false`) — it gates the `## Code Comment Policy` block in every segment prompt.
+   - Read `.plans/config.json` once and remember `git_commits` for the post-spawn reconciliation step. In the same read, remember `plan_comments`: set `plan_comments_off = true` ONLY when the key is present and explicitly `false` (missing or `true` ⇒ `false`) — it gates the `## Code Comment Policy` block in every segment prompt. Also in the same read, remember `executor_model` from `models.executor` (see **Model selection** in `CLAUDE.md`): use that value ONLY when the `models` key is present AND defines an `executor` entry; a missing `models` key or `executor` entry ⇒ `executor_model = "opus"` (backwards compatible) — every `plan-executor` spawn in step 7 uses this remembered value and never restates the default.
 
 3. **Preflight (sequential — no work yet)**
 
@@ -228,7 +228,7 @@ These rules bind every invocation; they are not subject to your judgment about h
    2. **In a SINGLE assistant message, spawn one `plan-executor` Task call for every task in that set.** Multiple `Task` calls in one message run concurrently — that concurrency *is* the parallelism. Each call uses:
       ```
       subagent_type: "plan-executor"
-      model: "opus"
+      model: [executor_model]
       prompt: [segment execution prompt — see plan-execute step 11c's template]
       ```
 
@@ -258,7 +258,7 @@ These rules bind every invocation; they are not subject to your judgment about h
 
    **c. Concurrency-safety rules (why this is race-free)**
 
-   - **`.plans/config.json` is read exactly once, up front (step 2), and NEVER re-read mid-loop.** No round reads or writes it.
+   - **`.plans/config.json` is read exactly once, up front (step 2), and NEVER re-read mid-loop.** No round reads or writes it. Everything a round needs from it — `git_commits`, `plan_comments_off`, `executor_model` — was remembered in step 2; rounds use the remembered values.
    - **`.plans/` is NEVER committed mid-loop.** The single `.plans/` commit is deferred to post-spawn reconciliation (step 8). Rounds only write per-task files.
    - **Per-task artifacts are isolated.** Each task has its own state file, its own task file, its own branch, its own worktree. Parallel `plan-executor` agents in a round each touch only their own worktree and (via plan-spawn's reconciliation) their own state/task file — never a sibling's. That isolation is what makes spawning a whole round in one message safe.
    - **The post-round reconciliation is sequential.** Even though no shared file is written during reconciliation, processing results one task at a time keeps the invariant that no two writes ever target the same file concurrently.

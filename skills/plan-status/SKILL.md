@@ -26,6 +26,7 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
 2. **Announce once, then delegate gathering**
    - Print a single short line like `Gathering status…` before the tool call (this is the only pre-dashboard text the user should see).
    - Spawn ONE Agent (`subagent_type: general-purpose`) with the prompt below. Do NOT run `git`, `Glob`, `Read`, or any other gathering tool yourself — the subagent does all of it.
+   - **Model:** read `.plans/config.json`. When the `models` key is present AND defines a `research` entry, spawn with `model: [research_model]` where `research_model` is `models.research` (see **Model selection** in `CLAUDE.md`). When the `models` key or the `research` entry is absent, pass **no `model:` parameter at all** — this read-only gathering agent then inherits the session model, exactly as today. Do NOT substitute `"opus"` or any other literal default.
 
    **Subagent prompt (use verbatim, adjusted for context):**
 

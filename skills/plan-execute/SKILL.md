@@ -524,6 +524,8 @@ These rules bind every invocation. They are not subject to your judgment about t
    - Read `.plans/CONTEXT.md` for project context
    - Note what's in the Changes section (work done so far)
    - Read `.plans/config.json` for the `plan_comments` setting. Set `plan_comments_off = true` ONLY when the key is present and explicitly `false`; a missing key or `true` means `plan_comments_off = false` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; it gates the `## Code Comment Policy` block in every code-writing prompt below (steps 11–14).
+   - In the same read, remember `executor_model` from `models.executor` (see **Model selection** in `CLAUDE.md`). Set it to that value ONLY when the `models` key is present AND defines an `executor` entry; a missing `models` key or a missing `executor` entry means `executor_model = "opus"` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; **every** `plan-executor` spawn below (steps 11c, 11c.6, 13, 14) uses this remembered value and never restates the default.
+   - In the same read, also remember `research_model` from `models.research` (see **Model selection** in `CLAUDE.md`). Set it to that value ONLY when the `models` key is present AND defines a `research` entry. **When `models.research` is absent, there is no default value — pass no `model:` parameter at all** to the read-only research spawn (step 11's "Research alternatives" escalation), exactly as today, so the sub-agent inherits the session model. Do NOT fall back to `"opus"` or any other literal here; that would change existing behavior. Read this once per run and never restate the default at the spawn site.
 
    **Read the build route (if any):** Look for a `**Build:**` field in the task header (alongside `**Type:**` / `**Status:**`). It has the form `<skill> · <unit1>, <unit2>, ...` (e.g. `**Build:** des-build · CaseStudyCarousel, ContentModule`). If present and the skill is `des-build`, set `build_route = { skill: "des-build", units: [<unit1>, ...] }`; otherwise `build_route = null`. This field is read **only** from the header — never inferred from the task body. (Routing is applied in Steps 10–11.)
 
@@ -687,7 +689,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    2. Spawn sub-agent using `Task` tool:
       ```
       subagent_type: "plan-executor"
-      model: "opus"
+      model: [executor_model]
       prompt: [segment execution prompt - see template below]
       ```
 
@@ -746,7 +748,7 @@ These rules bind every invocation. They are not subject to your judgment about t
       - **On "Something's wrong":**
         - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
         - Record in state file Observations section: `- Step N: ✗ [user's observation]`
-        - Spawn plan-executor sub-agent with `model: "opus"` to fix the issue, including the user's observation in the prompt. When `plan_comments_off`, the fix prompt MUST include the `## Code Comment Policy` block (same text as the segment template in 11c).
+        - Spawn plan-executor sub-agent with `model: [executor_model]` (from step 9) to fix the issue, including the user's observation in the prompt. When `plan_comments_off`, the fix prompt MUST include the `## Code Comment Policy` block (same text as the segment template in 11c).
         - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
         - If user says "Something's wrong" again after 2 fix attempts, suggest manual investigation:
           ```
@@ -781,7 +783,7 @@ These rules bind every invocation. They are not subject to your judgment about t
           1. "Research alternatives" (description: "Spawn Explore agent to find a better approach, then update How section")
           2. "I know what to do" (description: "I'll provide the correct approach")
           3. "Skip this segment" (description: "Mark as skipped and continue to next segment")
-      - If "Research alternatives": spawn Explore agent focused on the failing steps, present findings, update How section with revised approach, then retry the segment
+      - If "Research alternatives": spawn Explore agent focused on the failing steps, present findings, update How section with revised approach, then retry the segment. Use the `research_model` remembered in step 9: when `models.research` was present, pass `model: [research_model]`; when it was absent, pass **no `model:` parameter at all**.
       - If "I know what to do": accept user's approach, update How section, then retry the segment
       - If "Skip this segment": mark segment as skipped in state file, continue to next segment
 
@@ -1032,7 +1034,7 @@ These rules bind every invocation. They are not subject to your judgment about t
 
     **For each unchecked issue (`- [ ]`) in the Issues section:**
 
-    Spawn a plan-executor sub-agent with `model: "opus"`:
+    Spawn a plan-executor sub-agent with `model: [executor_model]` (from step 9):
     ```markdown
     Fix an issue reported during testing.
 
@@ -1101,7 +1103,7 @@ These rules bind every invocation. They are not subject to your judgment about t
     c. **Investigate and resolve using plan-executor agent**
        **IMPORTANT: Use plan-executor agent for ALL fixes — never fix issues directly.**
 
-       Spawn a plan-executor sub-agent with `model: "opus"` (same as step 13):
+       Spawn a plan-executor sub-agent with `model: [executor_model]` (same as step 13):
        ```markdown
        Fix an issue reported during testing.
 

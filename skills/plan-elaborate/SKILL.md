@@ -1,7 +1,7 @@
 ---
 name: plan-elaborate
 disable-model-invocation: false
-argument-hint: "<id|description> [skip]"
+argument-hint: "<id|description> [skip] [deep]"
 allowed-tools:
   - Read
   - Write
@@ -28,19 +28,25 @@ Research the codebase and flesh out a captured task with implementation details.
 
 ## Arguments
 
-- `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a skip keyword
+- `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a skip keyword and/or a trailing `deep` keyword
 
 **Parsing rules:**
 - **Skip detection** (first) — set `skip_mode = true` if `$ARGUMENTS` contains any of:
   - Single keywords (per-token, case-insensitive): `skip`, `auto`, `noprompt`, `noinput`
   - Phrases (matched against full argument string, case-insensitive): `skip input`, `no input`, `no prompts`, `just go`, `just do it`
   - Strip skip keywords/phrases from `$ARGUMENTS` before further parsing
-- **Determine argument type** — after removing skip tokens, examine what remains:
+- **Deep detection** (second, after skip stripping, BEFORE the numeric-vs-description decision) — set `deep_mode = true` **only if the remaining argument string ENDS with the token `deep`** (case-insensitive, allowing trailing whitespace). Strip that trailing `deep` token from the remaining string before further parsing.
+  - **CRITICAL — `deep` is END-ANCHORED, unlike `skip`.** `skip` is matched per-token anywhere in the string; `deep` is matched at the END only. This mirrors the trailing-phrase discipline in `skills/plan-capture/SKILL.md` step 2 ("Fix the elaborate system" does not trigger auto-elaborate because `elaborate` is mid-sentence).
+  - **Why end-anchoring is load-bearing here:** in this skill any non-numeric remainder becomes an **auto-capture description**. A per-token match would make `/plan-elaborate Add deep linking support` silently enter deep mode AND capture a mangled description "Add linking support". Only a trailing `deep` may ever set the flag.
+  - Only the bare token `deep` counts. There are no `deep` synonyms and no multi-word `deep` phrases.
+  - `deep` and `skip` are **independent and compose freely** (see step 9.5).
+- **Determine argument type** — after removing skip tokens and any trailing `deep`, examine what remains:
   - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits. Deduplicate.
   - If ANY remaining token is non-numeric → the entire remaining string (including any numbers) is a **task description** for auto-capture. Set `auto_capture = true`.
   - If nothing remains → no IDs and no description (will prompt for IDs)
 - IDs and skip keywords coexist freely.
 - A description and skip keywords coexist freely.
+- A trailing `deep` coexists freely with IDs, a description, and skip keywords.
 
 **Examples:**
 - `/plan-elaborate 1` → elaborate task 1, interactive
@@ -51,6 +57,12 @@ Research the codebase and flesh out a captured task with implementation details.
 - `/plan-elaborate auto` → same as skip
 - `/plan-elaborate Fix login timeout bug` → auto-capture "Fix login timeout bug", then elaborate
 - `/plan-elaborate Add dark mode skip` → auto-capture "Add dark mode", then elaborate in skip mode
+- `/plan-elaborate 1 deep` → elaborate task 1 via the reasoning sub-agent, then confirm interactively
+- `/plan-elaborate 1 deep skip` → deep drafting, then auto-accept with assumption bullets (skip is stripped first, so the remainder still ends with `deep`)
+- `/plan-elaborate 1 skip deep` → identical to the above; skip stripping happens before deep detection, so keyword order does not matter
+- `/plan-elaborate 1 3 deep` → deep-elaborate tasks 1 and 3 sequentially
+- `/plan-elaborate Redesign the auth layer deep` → auto-capture "Redesign the auth layer", then deep-elaborate it
+- `/plan-elaborate Add deep linking support` → auto-capture "Add deep linking support"; **`deep_mode` stays false** — `deep` is mid-string, not the final token, and the description is preserved intact
 
 ## Context
 
@@ -65,6 +77,10 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 2. **Parse and resolve arguments**
    - Check for skip keywords/phrases (see Arguments section) → store as `skip_mode` flag (true/false)
    - Strip skip keywords/phrases from `$ARGUMENTS`
+   - **Then check for a trailing `deep`:** if the remaining string ENDS with the bare token `deep` (case-insensitive, ignoring trailing whitespace), set `deep_mode = true` and strip that trailing token. Otherwise `deep_mode = false`.
+     - This MUST happen **before** the numeric-vs-description decision below, because a description carrying a stray `deep` would otherwise be captured with the keyword still embedded.
+     - **End-anchored, not per-token** (unlike `skip`): `/plan-elaborate Add deep linking support` leaves `deep_mode = false` and captures the description verbatim, because `deep` is not the final token. Only a *trailing* `deep` may set the flag. Same discipline as the trailing phrases in `skills/plan-capture/SKILL.md` step 2.
+     - `deep_mode` and `skip_mode` are independent; both may be true.
    - Examine remaining tokens:
      - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits, deduplicate → store as `task_ids` list. Set `auto_capture = false`.
      - If ANY remaining token is non-numeric → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
@@ -112,6 +128,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
      --- Elaborating task [X] of [N]: #NNN ---
      ```
    - If `skip_mode`: announce once at the start: `Skip mode active — auto-accepting all prompts.`
+   - If `deep_mode`: announce once at the start: `Deep mode active — drafting via reasoning sub-agent.` (Both may be announced; the flags are independent.)
    - On fatal error per task (not found, already completed): log warning `Skipping #NNN: [reason]`, continue to next task
    - Track results in two lists: `elaborated_tasks` (succeeded), `skipped_tasks` (failed/skipped with reason)
 
@@ -129,14 +146,19 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    - Read `.plans/CONTEXT.md`
    - Note tech stack, key patterns, important files
    - Prepare a brief context summary for the research agent
+   - Read `.plans/config.json` and remember `research_model` from `models.research` (see **Model selection** in `CLAUDE.md`). Set it ONLY when the `models` key is present AND defines a `research` entry. **When `models.research` is absent there is no default value — the research spawns below pass no `model:` parameter at all**, exactly as today, so the sub-agent inherits the session model. Do NOT substitute `"opus"` or any other literal. Read this once per run; both research spawn sites (step 8 and step 11's Path C "Research more") use this remembered value and never restate the default.
+   - In the same read, also remember `reasoning_model` from `models.reasoning` — set it ONLY when the `models` key is present AND defines a `reasoning` entry, otherwise leave it unset. It is consulted only by the `deep` path (step 9.5).
 
 8. **Spawn research sub-agent**
-   Use the Task tool to spawn an Explore agent for codebase research:
+   Use the Task tool to spawn an Explore agent for codebase research.
+
+   **Model:** when `research_model` was set in step 7, pass `model: [research_model]`; when `models.research` was absent, pass **no `model:` parameter at all**.
 
    ```
    Task tool parameters:
    - subagent_type: "Explore"
    - description: "Research task #NNN"
+   - model: [research_model]   ← include this line ONLY when models.research is set; otherwise omit it entirely
    - prompt: |
        Research this task for a plans-cc elaboration:
 
@@ -187,6 +209,114 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    - Review "Reusable Existing Code" — simplify How steps to use existing code instead of creating new abstractions
    - Surface any "Approach Warnings" to the user before finalizing the approach
    - Note "Open Questions" for user discussion
+
+9.5. **Deep drafting via reasoning sub-agent (conditional)**
+
+   This step decides *who drafts* the task sections — a reasoning sub-agent, or the main
+   loop inline. It does NOT decide anything else. **Every interactive gate stays in the
+   main loop** (see "What stays in the main loop" below); the sub-agent only produces a
+   draft that the existing Paths A/B and step 12 then act on exactly as they do today.
+
+   **a. Should this path run?**
+
+   Run the reasoning spawn when **both** of these hold:
+
+   1. **Trigger** — either:
+      - `deep_mode` is true (an explicit `deep` argument **forces** this path regardless of the heuristic below), OR
+      - the task is **NOT simple** by step 10's criteria. Use those criteria **verbatim** — task type is `refactor`; research has open questions that need user input; or the description contains "investigate", "figure out", "explore", "design", "architecture". Do **not** invent a second rubric here; evaluate step 10's NOT-simple test early and reuse the result.
+   2. **Capability** — the Task tool is available AND `reasoning_model` was set in step 7 (i.e. `.plans/config.json` has a `models` key defining a `reasoning` entry).
+
+   **If the trigger fires but capability is missing** (Task tool unavailable, or `models.reasoning`
+   absent), **fall back to today's inline drafting** — proceed to step 10 unchanged. Never spawn
+   the reasoning agent with no model, and never error. When `deep` was explicitly requested,
+   note the fallback once in the output, e.g.
+   `Deep mode requested, but no models.reasoning configured — drafting inline.`
+
+   **If the trigger does not fire at all**, proceed to step 10 unchanged. The inline path
+   remains the default for everything that is not deep-triggered.
+
+   **b. Spawn the reasoning sub-agent**
+
+   ```
+   Task tool parameters:
+   - subagent_type: "general-purpose"
+   - model: [reasoning_model]        ← always present on this path; if it were absent we would have fallen back above
+   - description: "Draft elaboration for task #NNN"
+   - prompt: |
+       Draft the elaboration sections for a plans-cc task. You are drafting ONLY —
+       you do not write any files, ask any questions, or modify the task.
+
+       ## Task
+       [Task title, `## What` section content, and task type]
+
+       ## Project Context
+       [The CONTEXT.md summary prepared in step 7: tech stack, key patterns, key files]
+
+       ## Research Findings
+       [The full structured findings from the step 8 Explore agent: Relevant Files,
+        Current Patterns, Suggested Approach, Reusable Existing Code, Approach
+        Warnings, Open Questions]
+
+       ## Return Format
+       Return ONLY these sections, as markdown, ready to be dropped into the task file:
+
+       ### Why
+       1-3 sentences on why this task matters.
+
+       ### How Summary
+       Follow the `### How Summary Generation` rules exactly: a 1-3 sentence technical
+       overview of the approach, followed by a `**Files of note:**` bullet list naming
+       the load-bearing files (path + a few words on its role).
+
+       ### How
+       3-7 checkbox steps in the form `- [ ] Step N: [description]`.
+       Tag observation steps with `👁` per the Observation Step Tagging Rules.
+
+       ### Verification
+       How to confirm the work is correct.
+
+       ### Impact Scope
+       OPTIONAL — include only if you can name concrete files to modify / related files.
+
+       ### Open Questions
+       Anything you had to guess at that the user should confirm. May be empty.
+   ```
+
+   The sub-agent's contract is identical in **form** to what the inline path produces —
+   the `## How Summary` must follow the `### How Summary Generation` rules below, and the
+   How checkboxes must follow the Observation Step Tagging Rules below. Point the
+   sub-agent at those conventions in the prompt rather than restating them differently.
+
+   **c. What stays in the main loop (non-negotiable)**
+
+   A sub-agent **cannot call `AskUserQuestion`**. Therefore this step moves *drafting* only,
+   never gating. After the draft returns, continue into steps 10–14 as usual, with the
+   sub-agent's draft standing in for the inline draft:
+
+   - **Step 10's simplicity assessment** still runs, choosing Path A or Path B for the draft.
+   - **Path A's single confirmation prompt** still runs in the main loop, presenting the sub-agent's Why/How/Verification.
+   - **Path B's questions** (Why, approach, open questions, Verification) still run in the main loop, seeded by the sub-agent's draft and its `### Open Questions`.
+   - **Step 12's validation confirmation** still runs on the drafted How steps.
+   - **Step 14's file write, status flip to `elaborated`, read-back assertion, and assumption bullets** all still happen in the main loop, unconditionally.
+
+   Do NOT move any of the above into the sub-agent, and do NOT let the sub-agent write to
+   the task file.
+
+   **d. Composability with `skip_mode`**
+
+   `deep_mode` and `skip_mode` are orthogonal — `deep` selects the *drafter*, `skip` selects
+   whether the *gates* auto-accept:
+
+   - `deep` alone → draft via sub-agent, then confirm interactively (Path A/B prompts run normally).
+   - `deep skip` → draft via sub-agent, then auto-accept every prompt, recording assumption bullets in step 12/14 exactly as skip mode does today.
+   - `skip` alone → today's inline drafting, auto-accepted.
+   - neither → today's behavior, unchanged.
+
+   **e. Fallback after a failed spawn**
+
+   If the sub-agent errors or returns unusable/incomplete output, fall back to inline drafting
+   (step 10 onward) for this task and note it in the output. In a multi-task run this fallback
+   is per-task — other tasks in the loop still attempt the reasoning spawn.
 
 10. **Assess task simplicity**
 
@@ -409,7 +539,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        - Replace Verification section content
 
        **If "Research more":**
-       - Spawn Explore agent (same as step 8) with focus on remaining work
+       - Spawn Explore agent (same as step 8, including its model rule: `model: [research_model]` when `models.research` is set, no `model:` parameter at all when absent) with focus on remaining work
        - Present findings and ask what to add/change
        - Update How section based on new research
 
@@ -667,3 +797,10 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 - **Auto-capture failure**: Print error and stop — do not attempt elaboration without a task file
 - **Description that looks like numbers**: If ALL tokens are numeric, they're IDs, not a description. "42" is ID 042. "Fix bug 42" is a description (has non-numeric tokens).
 - **User responds with tweaks after elaboration**: Apply the requested changes to the task file (update How steps, Why, Verification, etc.), re-display the confirmation, and STOP. Do not proceed to execution — the user must invoke `/plan-execute` explicitly.
+- **Description containing "deep" mid-string**: `deep_mode` stays false and the description is captured verbatim. `/plan-elaborate Add deep linking support` auto-captures "Add deep linking support" — `deep` is not the final token, so it is part of the description, never a keyword. This is why `deep` detection is END-anchored while `skip` is per-token.
+- **Description legitimately ENDING in the word "deep"**: the trailing token is consumed as the keyword — `/plan-elaborate Make the search index deep` captures "Make the search index deep" **minus** the final word and turns deep mode on. This is the accepted, documented cost of a trailing keyword (identical to `/plan-capture`'s trailing phrases). To keep such a description intact, rephrase it (`Make the search index deeper`, `Deepen the search index`) or capture first with `/plan-capture` and elaborate by ID.
+- **`deep` with no IDs** (`/plan-elaborate deep`): after stripping, nothing remains — so there is no description and no IDs. Retain `deep_mode`, prompt for IDs (step 4), then deep-elaborate the tasks the user names. Same handling as `/plan-elaborate skip`.
+- **`deep` and `skip` together**: they compose and are order-independent, because skip stripping runs first. `deep` alone = draft via sub-agent then confirm interactively; `deep skip` = draft via sub-agent then auto-accept with assumption bullets.
+- **`deep` with multiple IDs**: each task in the loop is deep-elaborated independently; a reasoning-spawn failure on one task falls back to inline drafting for that task only.
+- **`deep` requested but `models.reasoning` absent**: fall back to today's inline drafting silently — never spawn a reasoning sub-agent with no model, and never error. Note it once in the output.
+- **`deep` requested but the Task tool is unavailable**: same fallback — inline drafting.

@@ -47,12 +47,15 @@ Run a completeness audit on a task. Verifies that all affected files, tests, and
    - Collect all file paths mentioned across these sections
 
 5. **Spawn audit agent**
-   Use the Task tool to spawn an Explore agent:
+   Use the Task tool to spawn an Explore agent.
+
+   **Model:** read `.plans/config.json`. When the `models` key is present AND defines a `research` entry, pass `model: [research_model]` where `research_model` is `models.research` (see **Model selection** in `CLAUDE.md`). When the `models` key or the `research` entry is absent, pass **no `model:` parameter at all** — this read-only agent then inherits the session model, exactly as today. Do NOT substitute `"opus"` or any other literal default.
 
    ```
    Task tool parameters:
    - subagent_type: "Explore"
    - description: "Audit task #NNN completeness"
+   - model: [research_model]   ← include this line ONLY when models.research is set; otherwise omit it entirely
    - prompt: |
        Audit the completeness of this task implementation plan.
 
