@@ -53,6 +53,7 @@ Display a focused overview of a single task: what it is, current progress, and w
    - What section content
    - Why section content
    - How Summary section content (overview + "Files of note" list)
+   - Diagnosis section content (bug tasks only — the `**Most likely:**` / `**Evidence:**` / `**Confidence:**` / `**Alternative:**` / `**To confirm:**` lines), if present
    - How section content (including checkboxes)
    - Verification section content
 
@@ -94,6 +95,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## How Summary
    [How Summary section content — overview + "Files of note" list]
 
+   ## Diagnosis
+   [Diagnosis section content — bug tasks only; omitted entirely otherwise]
+
    ## Progress: 0/N steps (not started)
    - [ ] Step 1 description
    - [ ] Step 2 description
@@ -120,6 +124,9 @@ Display a focused overview of a single task: what it is, current progress, and w
 
    ## How Summary
    [How Summary section content — overview + "Files of note" list]
+
+   ## Diagnosis
+   [Diagnosis section content — bug tasks only; omitted entirely otherwise]
 
    ## Progress: X/N steps ████░░ XX%
 
@@ -151,6 +158,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## How Summary
    [How Summary section content — overview + "Files of note" list]
 
+   ## Diagnosis
+   [Diagnosis section content — bug tasks only; omitted entirely otherwise]
+
    ## Completed Steps (X/N)
    - [x] Step 1 description
    - [x] Step 2 description
@@ -179,6 +189,9 @@ Display a focused overview of a single task: what it is, current progress, and w
    ## How Summary
    [How Summary section content — overview + "Files of note" list]
 
+   ## Diagnosis
+   [Diagnosis section content — bug tasks only; omitted entirely otherwise]
+
    ## Completed Steps (N/N)
    - [x] Step 1 description
    - [x] Step 2 description
@@ -196,6 +209,7 @@ Display a focused overview of a single task: what it is, current progress, and w
 8. **Handle sparse task files**
    - If Why section is empty: omit it from display
    - If How Summary section is empty or still the `_To be filled during elaboration_` placeholder: omit it from display (don't render an empty section)
+   - The Diagnosis section is rendered only for `bug`-type tasks, and only when present and non-placeholder. For every non-bug task, omit it **always** — a `feature`, `refactor`, or `chore` task must never show a `## Diagnosis` heading, even an empty one. For a bug task with no Diagnosis section (e.g. captured before this section existed, or not yet elaborated), omit it too.
    - If How section is empty: show "No steps defined"
    - If Verification is empty: omit it from display
 

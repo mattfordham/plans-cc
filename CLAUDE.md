@@ -321,6 +321,15 @@ Task files include a `## How Summary` section positioned **between `## Why` and 
 - `/plan-capture` seeds it as a `_To be filled during elaboration_` placeholder.
 - `/plan-show` renders it after Why and before the How/Progress checkboxes, and omits it when empty or still a placeholder.
 
+### Diagnosis Section
+
+Bug task files include a `## Diagnosis` section positioned **between `## How Summary` and `## How`**. It states the root-cause hypothesis **out loud**, so it can be reviewed. Without it the theory still forms — it just hides inside a How step, a causal claim with no stated evidence and no confidence.
+
+- Generated automatically during `/plan-elaborate` for `bug`-type tasks only (never prompted), per the `### Diagnosis Generation` rules in that skill; regenerated whenever the How steps change, so the two stay in sync. Never emitted for `feature`, `refactor`, or `chore` tasks.
+- **Not seeded by `/plan-capture`** — unlike How Summary, there is no placeholder. Elaboration inserts the section when it writes, following the `## Impact Scope` precedent for a conditionally-present section.
+- `/plan-show` renders it after How Summary and before the How/Progress checkboxes for bug tasks, and omits it entirely otherwise.
+- **It is a hypothesis, not a finding.** It carries an explicit `**Confidence:** high|medium|low` and a `**To confirm:**` line, and that To-confirm becomes Step 1 of `## How` — confirm the hypothesis, then fix, never the reverse. A disproved hypothesis is struck through and annotated (`~~[cause]~~ — disproved: [what ruled it out]`), never deleted: knowing what was already ruled out is the most valuable thing the section holds.
+
 ### The `**Build:**` task-header field
 
 An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`) that routes a task's component build through a dedicated build skill rather than the generic `plan-executor` sub-agent. Format:

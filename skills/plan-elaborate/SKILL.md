@@ -141,6 +141,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
      - If `elaborated` or `in-progress`: proceed with **further elaboration** (see step 11, Path C)
      - If `completed`: log `Skipping #NNN: already completed. Run /plan-reopen NNN first.` and continue to next task
      - If not found: log `Skipping #NNN: not found. Run /plan-list to see available tasks.` and continue to next task
+   - **Read the `**Type:**` header value into `task_type`** (one of `bug`, `feature`, `refactor`, `chore`). Read this once per task, here, from the task header only — never re-derive it from the task body. Both step 8 (which research prompt variant to send) and step 9.5 (whether to generate a `## Diagnosis` section) consume this remembered value; do not re-read the header at those sites.
 
 7. **Load project context**
    - Read `.plans/CONTEXT.md`
@@ -153,6 +154,12 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    Use the Task tool to spawn an Explore agent for codebase research.
 
    **Model:** when `research_model` was set in step 7, pass `model: [research_model]`; when `models.research` was absent, pass **no `model:` parameter at all**.
+
+   **Prompt variant:** the research prompt depends on `task_type` (read in step 6).
+   - `task_type` is **not** `bug` → send the **standard prompt** below, unchanged.
+   - `task_type` **is** `bug` → send the **diagnostic prompt** instead (see "Diagnostic variant" after the standard prompt). A bug task's research question is *why is this broken*, not *where would a fix go*; the standard prompt never asks the former, so the root-cause theory would otherwise form implicitly and land unstated inside a How step.
+
+   **Standard prompt (non-bug tasks):**
 
    ```
    Task tool parameters:
@@ -200,7 +207,78 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        Anything unclear that needs user input
    ```
 
-   **Fallback:** If Task tool is unavailable, fall back to direct research using Glob, Grep, and Read in the main conversation.
+   **Diagnostic variant (bug tasks only — send this INSTEAD of the standard prompt above):**
+
+   Identical Task tool parameters and model rule; only the `## What to Find` and `## Return Format`
+   sections differ.
+
+   ```
+   Task tool parameters:
+   - subagent_type: "Explore"
+   - description: "Research task #NNN"
+   - model: [research_model]   ← include this line ONLY when models.research is set; otherwise omit it entirely
+   - prompt: |
+       Research this bug for a plans-cc elaboration. Your job is to explain WHY the
+       reported symptom happens — not merely where a fix would go.
+
+       ## Task
+       [Task title and What section]
+
+       ## Project Context
+       [Brief summary from CONTEXT.md: tech stack, key patterns]
+
+       ## What to Find
+       1. How to reproduce the reported symptom — the concrete steps, inputs, or conditions that trigger it
+       2. Trace the symptom back through the call path to its ORIGIN — follow it upstream to where the
+          bad state or behavior first arises, not just to the file a fix would touch. The two are often
+          different files; the symptom site is usually the last place to look for the cause.
+       3. Rank candidate causes by evidence. For each, give the `file:line` evidence supporting it and an
+          explicit confidence of `high`, `medium`, or `low`. It is fine — and often correct — to return
+          more than one candidate.
+       4. Name the single observation that would best discriminate between the top candidates: the one
+          check, log line, or experiment whose result would most cheaply rule candidates in or out.
+       5. Existing utilities, hooks, helpers, or modules that already handle part of this task — flag anything reusable
+       6. Anti-patterns to avoid: previous attempts, deprecated approaches, common pitfalls
+
+       ## Return Format
+       Return your findings in this structure:
+
+       ### Relevant Files
+       - `path/to/file` — Why it's relevant
+
+       ### Reproduction
+       The steps/conditions that trigger the symptom (or "Could not determine" and why)
+
+       ### Symptom Trace
+       The call path from the reported symptom back to where the bad state originates
+
+       ### Candidate Causes
+       Ranked most-likely first. For each: the cause, its `file:line` evidence, and a
+       confidence of high / medium / low.
+
+       ### To Confirm
+       The single most discriminating observation to run next
+
+       ### Reusable Existing Code
+       - `path/to/util` — What it does and how it applies
+       (or "None found")
+
+       ### Approach Warnings
+       - [Concerns about over-engineering or simpler alternatives]
+       (or "None")
+
+       ### Open Questions
+       Anything unclear that needs user input
+   ```
+
+   **Field-name compatibility (load-bearing).** Downstream steps consume these findings **by field
+   name**. `### Relevant Files`, `### Reusable Existing Code`, `### Approach Warnings`, and
+   `### Open Questions` are named identically in both variants and MUST stay that way. The diagnostic
+   variant renames exactly two fields — `### Current Implementation` → `### Symptom Trace` and
+   `### Suggested Approach` → `### Candidate Causes` — and adds two new ones (`### Reproduction`,
+   `### To Confirm`). Step 9 maps the two renames back; do not rename anything else.
+
+   **Fallback:** If Task tool is unavailable, fall back to direct research using Glob, Grep, and Read in the main conversation. On a bug task, the fallback research still answers the diagnostic questions above.
 
 9. **Process research findings**
    - Parse the sub-agent's structured response
@@ -209,6 +287,19 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    - Review "Reusable Existing Code" — simplify How steps to use existing code instead of creating new abstractions
    - Surface any "Approach Warnings" to the user before finalizing the approach
    - Note "Open Questions" for user discussion
+
+   **Bug-task field mapping.** When `task_type` is `bug`, step 8 sent the diagnostic variant, whose
+   findings rename two fields. Map them back before doing anything else with the findings:
+   - **`### Candidate Causes` is the source that `### Suggested Approach` would otherwise provide.**
+     Read the top-ranked candidate as the proposed approach: it feeds the How draft (the fix follows
+     from the cause), and it is what step 10's "Suggested Approach has ≤4 steps" simplicity test
+     evaluates. Count the steps implied by acting on the top-ranked candidate.
+   - **`### Symptom Trace` replaces `### Current Implementation`.** Anywhere a step below refers to
+     "Current Implementation", use the Symptom Trace.
+   - `### Reproduction` and `### To Confirm` are additions with no standard-variant counterpart. They
+     are not consumed by steps 9–13; they feed the `## Diagnosis` section (see
+     `### Diagnosis Generation` below) and the Verification section.
+   - Every other field name is identical across both variants and needs no mapping.
 
 9.5. **Deep drafting via reasoning sub-agent (conditional)**
 
@@ -221,9 +312,18 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
    Run the reasoning spawn when **both** of these hold:
 
-   1. **Trigger** — either:
+   1. **Trigger** — any of:
       - `deep_mode` is true (an explicit `deep` argument **forces** this path regardless of the heuristic below), OR
-      - the task is **NOT simple** by step 10's criteria. Use those criteria **verbatim** — task type is `refactor`; research has open questions that need user input; or the description contains "investigate", "figure out", "explore", "design", "architecture". Do **not** invent a second rubric here; evaluate step 10's NOT-simple test early and reuse the result.
+      - the task is **NOT simple** by step 10's criteria. Use those criteria **verbatim** — task type is `refactor`; research has open questions that need user input; or the description contains "investigate", "figure out", "explore", "design", "architecture". Do **not** invent a second rubric here; evaluate step 10's NOT-simple test early and reuse the result. OR
+      - **`task_type` is `bug`.** A stated root-cause hypothesis is worth reasoning-tier drafting even for a small bug, because diagnosis-before-plan is precisely where that tier pays off.
+
+      **This third clause is a 9.5-only trigger and deliberately does NOT change step 10's
+      Path A/B routing.** Do not "sync" the two lists — `bug` must never be added to step
+      10's NOT-simple criteria. Doing so would force every bug, including a one-line typo
+      fix, onto Path B's four-gate interactive flow, and would inflate the skip-mode
+      assumption ledger (which propagates into plan-review's low-confidence block and
+      plan-retrospect's mining signal). A bug task can therefore be drafted by the reasoning
+      sub-agent here and still be routed to Path A by step 10; that combination is intended.
    2. **Capability** — the Task tool is available AND `reasoning_model` was set in step 7 (i.e. `.plans/config.json` has a `models` key defining a `reasoning` entry).
 
    **If the trigger fires but capability is missing** (Task tool unavailable, or `models.reasoning`
@@ -268,6 +368,13 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        overview of the approach, followed by a `**Files of note:**` bullet list naming
        the load-bearing files (path + a few words on its role).
 
+       ### Diagnosis
+       BUG TASKS ONLY — omit this section entirely for feature/refactor/chore tasks.
+       Follow the `### Diagnosis Generation` rules exactly: the stated root-cause
+       hypothesis with `**Most likely:**`, `**Evidence:**`, `**Confidence:**`, any
+       `**Alternative:**` entries, and `**To confirm:**`. Those rules also govern how
+       the `**To confirm:**` line becomes Step 1 of the How checkboxes below.
+
        ### How
        3-7 checkbox steps in the form `- [ ] Step N: [description]`.
        Tag observation steps with `👁` per the Observation Step Tagging Rules.
@@ -283,9 +390,14 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    ```
 
    The sub-agent's contract is identical in **form** to what the inline path produces —
-   the `## How Summary` must follow the `### How Summary Generation` rules below, and the
+   the `## How Summary` must follow the `### How Summary Generation` rules below, a bug
+   task's `## Diagnosis` must follow the `### Diagnosis Generation` rules below, and the
    How checkboxes must follow the Observation Step Tagging Rules below. Point the
    sub-agent at those conventions in the prompt rather than restating them differently.
+
+   Note that the Diagnosis is **not** exclusive to this path — Paths A, B, and C all
+   generate it inline from the same `### Diagnosis Generation` rules. This step only
+   changes *who drafts* it, exactly as it does for the How Summary.
 
    **c. What stays in the main loop (non-negotiable)**
 
@@ -361,6 +473,14 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        **Auto-generate the How Summary** per the `### How Summary Generation`
        rules below — derive the overview and "Files of note" list from these How
        steps plus the research "Relevant Files". No confirmation needed.
+
+       **Auto-generate the Diagnosis (bug tasks only).** If `task_type` is `bug`,
+       also auto-generate the `## Diagnosis` section per the `### Diagnosis
+       Generation` rules below, derived from the step 8 diagnostic findings
+       (`Candidate Causes`, `Symptom Trace`, `To Confirm`). No confirmation needed,
+       same as the How Summary. Its `**To confirm:**` line becomes Step 1 of the How
+       checkboxes above, per that block's linkage rule. For non-bug tasks, emit no
+       Diagnosis section at all.
 
     3. **Auto-generate Verification** based on task type:
        - Bug: "Verify the issue no longer occurs; existing tests pass"
@@ -464,6 +584,14 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     "Relevant Files". In skip mode this is auto-accepted; interactively you may show
     it for confirmation, but keep it lightweight (no separate question is required).
 
+    **Diagnosis (bug tasks only):** If `task_type` is `bug`, also generate the
+    `## Diagnosis` section per the `### Diagnosis Generation` rules below, derived
+    from the step 8 diagnostic findings. Same lightweight treatment as the How
+    Summary — no separate user question; auto-accepted in skip mode and shown only
+    in passing when interactive. Its `**To confirm:**` line becomes Step 1 of the
+    agreed How steps, per that block's linkage rule. For non-bug tasks, emit no
+    Diagnosis section at all.
+
     **Verification section:**
 
     **Skip mode shortcut:** If `skip_mode` is true, auto-select the first option (suggested verification) and continue without calling `AskUserQuestion`.
@@ -553,6 +681,20 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
        below so its overview and "Files of note" list stay in sync with the updated
        How steps. (Leave it untouched if only the Verification section changed.)
 
+    6. **Refresh the Diagnosis (bug tasks only):** If `task_type` is `bug`, whenever
+       How steps are added or refined, **regenerate** the `## Diagnosis` per the
+       `### Diagnosis Generation` rules below — following the How Summary precedent
+       exactly. Regenerate it in place; never append a second Diagnosis section.
+       (Leave it untouched if only the Verification section changed.) The one thing
+       regeneration must carry forward: any hypothesis already struck through as
+       disproved stays struck through — that block's never-delete rule outranks a
+       clean rewrite.
+
+       Path C's "Research more" re-run inherits the step 8 diagnostic variant
+       automatically — it spawns the same research agent *by reference* (`same as
+       step 8`), so a re-elaborated bug task gets fresh `Candidate Causes` /
+       `Symptom Trace` / `To Confirm` findings with no extra wiring here.
+
     ---
 
     ### Observation Step Tagging Rules
@@ -612,6 +754,97 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
       How steps and their files. Whenever the How section is generated, regenerated,
       or refined, regenerate the How Summary so the two never drift apart.
 
+    ---
+
+    ### Diagnosis Generation
+
+    The `## Diagnosis` section states the root-cause hypothesis for a bug **out loud**,
+    so it can be reviewed. Without it the theory still forms — it just hides inside a How
+    step ("Re-fetch the CSRF token at `src/auth/session.ts:142`"), a causal claim with no
+    stated evidence and no confidence. It sits **strictly between `## How Summary` and
+    `## How`** in the task file.
+
+    **Bug tasks only.** Generate this section when `task_type` is `bug`. Never emit it for
+    `feature`, `refactor`, or `chore` tasks — for those there is no symptom to explain, and
+    an empty Diagnosis is worse than none.
+
+    **Format (exactly this shape):**
+    ```markdown
+    ## Diagnosis
+
+    **Most likely:** [the cause, in one sentence] (`path/to/file.ext:142`)
+    **Evidence:** [what in the code or trace supports this]
+    **Confidence:** high | medium | low
+
+    **Alternative:** [a competing cause] (`path/to/other.ext:88`) — **Confidence:** low
+
+    **To confirm:** [the single observation that would best discriminate between these]
+    ```
+
+    **Generation rules:**
+    - **Auto-derived, never prompted.** Built automatically from the step 8 diagnostic
+      findings — `### Candidate Causes` (top-ranked → **Most likely**, the rest →
+      **Alternative** entries), `### Symptom Trace` and `### Relevant Files` (→ **Evidence**),
+      and `### To Confirm`. There is NO separate user question for it. In skip mode it is
+      generated without confirmation (same as the How Summary).
+    - **Three mandatory labelled elements:** `**Most likely:**`, `**Confidence:**`, and
+      `**To confirm:**`. Everything else is optional — `**Alternative:**` entries are zero or
+      more, each carrying its own confidence.
+    - **Confidence is `high`, `medium`, or `low`.** Exactly these three words. Not a
+      percentage, not a numeric rank, not the two-valued `[high]`/`[low]` vocabulary used by
+      assumption bullets.
+    - **Cite `file:line` evidence** for the most-likely cause and for each alternative, when a
+      concrete location is known. A hypothesis with no evidence pointer is a guess; say so by
+      marking its confidence `low`.
+    - **This is a hypothesis, not a finding.** Word it as a theory under test, never as settled
+      fact. "Most likely the token is read before the refresh completes" — not "The token is
+      read before the refresh completes." If execution proves it right, that promotion happens
+      later, in the record of the work; it is not the elaborator's call to make.
+    - **A disproved hypothesis is struck through or annotated — NEVER deleted.** When a
+      candidate is ruled out, keep it and mark it (`~~[cause]~~ — disproved: [what ruled it
+      out]`). Knowing what was already ruled out is the most valuable thing the section holds;
+      deleting it invites re-investigating the same dead end. The real hazard is the opposite:
+      a confidently-worded wrong hypothesis left in place with no annotation.
+    - **Stay in sync with How.** Whenever the How section is generated, regenerated, or
+      refined, regenerate the Diagnosis alongside it — the How steps *are* the fix implied by
+      the hypothesis, so the two must never drift apart.
+
+    **Linking `**To confirm:**` into `## How` (mandatory).**
+
+    When a bug task has a `## Diagnosis`, its `**To confirm:**` line MUST become
+    **Step 1** of `## How`, with the first *fix* step coming after it. Confirm the
+    hypothesis, then fix — never the reverse. Without this link the drafter states a
+    theory and then immediately builds a fix on top of it while it is still unconfirmed,
+    which is exactly the defect the Diagnosis section exists to prevent.
+
+    **Tag that Step 1 with `👁` only when confirmation requires the user to observe
+    something the agent cannot** — reproducing in a simulator or browser, reading the
+    output of a running app, judging visual appearance.
+
+    **Do NOT tag it when the confirmation is agent-verifiable** — adding a failing unit
+    test that reproduces the bug, grepping for the suspect branch, running an existing
+    test, or inspecting file contents. This is not a new exception: it is the existing
+    `### Observation Step Tagging Rules` above ("the agent can verify the result itself",
+    "the step writes automated tests or assertions") applied here. Tagging a CLI-verifiable
+    confirmation would bolt a spurious pause point onto an ordinary bug fix and make bug
+    execution needlessly interactive.
+
+    ```markdown
+    ## How
+    - [ ] 👁 Step 1: Reproduce the stale-token 401 in the browser after a 30-minute idle (confirms the Diagnosis before any fix)
+    - [ ] Step 2: Re-fetch the CSRF token on session refresh in `src/auth/session.ts`
+    ```
+    ```markdown
+    ## How
+    - [ ] Step 1: Add a failing unit test that reproduces the off-by-one on an empty page (confirms the Diagnosis; agent-verifiable, so untagged)
+    - [ ] Step 2: Fix the boundary condition in `src/paginate.ts`
+    ```
+
+    When the confirm step *is* `👁`-tagged, the existing machinery already does the rest:
+    `plan-execute` ends its segment at an observation step, and the **Instrumentation
+    dependency rule** above already describes this confirm-then-fix shape. Nothing in the
+    `👁` machinery needs to change for bug tasks.
+
 12. **Validate How steps against codebase**
 
     After generating the How section, validate each step:
@@ -658,10 +891,16 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
 14. **Update task file**
     - **Set Status to `elaborated` (do this first, as its own action — it must not be lost in the prose below):** Change Status from `pending` to `elaborated` — rewrite the `**Status:** pending` header line to `**Status:** elaborated`. The file stays in `.plans/pending/`. This from→to rewrite fires only when the current status is `pending`; if the header already reads `elaborated`, `in-progress`, or any later status (a direct `/plan-elaborate NNN` re-run on an already-advanced task), **leave the existing status untouched** — do not force it back to `elaborated`.
-    - Fill in Why, How Summary, How, Verification, and Impact Scope (if applicable) sections
+    - Fill in Why, How Summary, Diagnosis (bug tasks only), How, Verification, and Impact Scope (if applicable) sections
     - Write the `## How Summary` section **between the `## Why` and `## How` sections**
       (replacing its `_To be filled during elaboration_` placeholder), per the
       `### How Summary Generation` rules
+    - **Bug tasks only:** write the `## Diagnosis` section **between the `## How Summary`
+      and `## How` sections**, per the `### Diagnosis Generation` rules. Write it
+      regardless of which drafter produced it (Path A, Path B, Path C, or the step 9.5
+      reasoning sub-agent). On a re-elaboration, replace the existing Diagnosis in place
+      rather than appending a second one — carrying forward any struck-through disproved
+      hypotheses. For non-bug tasks, write no Diagnosis section at all.
 
     **Propose a build-skill route (only when warranted, never auto-applied):** If the task clearly describes building one or more design-system components/sections AND the project has a `design-system/` directory, propose adding a `**Build:**` field to the task header so `/plan-execute` will route the build through the real `des-build` skill instead of the generic executor. Format (alongside `**Type:**` / `**Status:**`):
     ```
