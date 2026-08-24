@@ -66,6 +66,25 @@ function linkDashboardRuntime() {
   fs.chmodSync(LAUNCHER_PATH, 0o755);
 }
 
+// Remove a managed skill entry, whether it is a real directory or a symlink.
+// This script leaves symlinks here, so after a skill is renamed the old link
+// dangles. fs.rmSync resolves the symlink *target* — with the target gone,
+// `force: true` swallows the ENOENT and the link survives, leaving the old
+// skill name occupying the command namespace. Unlink links directly.
+function removeManagedEntry(fullPath) {
+  let stats;
+  try {
+    stats = fs.lstatSync(fullPath);
+  } catch (err) {
+    return; // already gone
+  }
+  if (stats.isSymbolicLink()) {
+    fs.unlinkSync(fullPath);
+  } else {
+    fs.rmSync(fullPath, { recursive: true, force: true });
+  }
+}
+
 function main() {
   console.log("\n  plans-cc dev — Symlinking skills for development\n");
 
@@ -78,7 +97,7 @@ function main() {
   const existing = fs.readdirSync(TARGET_DIR).filter((d) => MANAGED_SKILL_PREFIXES.some((p) => d.startsWith(p)));
   for (const dir of existing) {
     const fullPath = path.join(TARGET_DIR, dir);
-    fs.rmSync(fullPath, { recursive: true, force: true });
+    removeManagedEntry(fullPath);
   }
   if (existing.length > 0) {
     console.log(`  Removed ${existing.length} existing managed skill(s)`);
