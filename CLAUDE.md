@@ -417,7 +417,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-context` | Update project context |
 | `/plan-capture` | Quick-capture a task (optionally auto-elaborate/execute with trailing phrases) |
 | `/plan-import` | Import tasks from a markdown document |
-| `/plan-extract` | Extract tasks from a meeting transcript or notes prose after discussion |
+| `/plan-mine` | Extract tasks from a meeting transcript or notes prose after discussion |
 | `/plan-elaborate` | Research and flesh out a task (auto-captures if given a description) |
 | `/plan-clarify` | Find ambiguities in an elaborated task and resolve them interactively |
 | `/plan-discuss` | Free-form discussion about a task, or the whole backlog when no ID is given (redundancy, gaps, sequencing); apply agreed changes on request |
@@ -436,7 +436,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-audit` | Audit task completeness — verify all affected files |
 | `/plan-ideas` | List captured ideas or show details of a specific idea |
 | `/plan-pick` | Pick high-value components from an idea to create tasks |
-| `/plan-expand` | Expand an idea into actionable tasks |
+| `/plan-unpack` | Expand an idea into actionable tasks |
 | `/plan-brainstorm` | Explore ideas through guided discussion |
 | `/plan-pause` | Pause an in-progress or in-review task to switch context |
 | `/plan-backlog` | Defer a pending task into `.plans/backlog/` (auto-pauses an active task first) |

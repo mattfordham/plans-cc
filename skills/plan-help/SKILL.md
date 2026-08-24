@@ -33,6 +33,7 @@ Any `plan-*` skill can be run from a sub-directory or sub-repo beneath the proje
 | `/plan-context` | Update project context (tech stack, patterns) |
 | `/plan-capture [description] [discuss \| and elaborate\|execute\|go]` | Quick-capture a new task (optionally discuss, elaborate, and/or execute) |
 | `/plan-import <file>` | Import tasks from a markdown document |
+| `/plan-mine [text \| file]` | Extract tasks from a meeting transcript or notes after discussion |
 | `/plan-elaborate <id\|description>` | Research and flesh out a task (auto-captures if given description) |
 | `/plan-discuss [id] [topic]` | Free-form discussion about a task (with id), or the whole backlog (no id) — redundancy, gaps, sequencing; apply changes on request |
 | `/plan-execute <id\|description>` | Start or continue work (auto-captures/elaborates if needed) |
@@ -49,7 +50,7 @@ Any `plan-*` skill can be run from a sub-directory or sub-repo beneath the proje
 | `/plan-audit <id>` | Audit task completeness — verify all affected files |
 | `/plan-ideas [id]` | List ideas or show details of a specific idea |
 | `/plan-pick <idea-id>` | Pick high-value components from an idea to create tasks |
-| `/plan-expand <id>` | Expand an idea into actionable tasks |
+| `/plan-unpack <id>` | Expand an idea into actionable tasks |
 | `/plan-brainstorm [topic]` | Explore ideas through guided discussion |
 | `/plan-summary` | Summarize work completed in the current session |
 | `/plan-pause <id>` | Pause an in-progress task to switch context |
@@ -176,7 +177,7 @@ capture this                    # Save the synthesized discussion
 /plan-ideas                     # See all captured ideas
 /plan-ideas 1                   # View details of idea #1
 /plan-pick 1                    # Pick best components from idea #1
-/plan-expand 1                  # Decompose entire idea into tasks
+/plan-unpack 1                  # Decompose entire idea into tasks
 ```
 
 ### End-of-Action Markers

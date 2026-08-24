@@ -13,7 +13,7 @@ description: Pick components from an idea to create tasks (selective expand)
 
 # plan-pick
 
-Analyze an idea, surface the highest-value components, and let the user select which ones to turn into tasks. Unlike `/plan-expand` (which proposes a full decomposition of the entire idea), this skill ranks components by priority and ROI, presents them as a multi-select, and only creates tasks for the chosen items. The idea file is updated to track what's been picked, so the user can return later to pick more.
+Analyze an idea, surface the highest-value components, and let the user select which ones to turn into tasks. Unlike `/plan-unpack` (which proposes a full decomposition of the entire idea), this skill ranks components by priority and ROI, presents them as a multi-select, and only creates tasks for the chosen items. The idea file is updated to track what's been picked, so the user can return later to pick more.
 
 ## Arguments
 
@@ -176,7 +176,7 @@ Analyze an idea, surface the highest-value components, and let the user select w
    - Task #[NNN]: [Title] ([YYYY-MM-DD])
    ```
 
-   Also update the `## Expanded Into` section (same as `/plan-expand` does) so that `/plan-ideas` correctly shows the idea as expanded:
+   Also update the `## Expanded Into` section (same as `/plan-unpack` does) so that `/plan-ideas` correctly shows the idea as expanded:
 
    **If no `## Expanded Into` section exists**, append:
    ```markdown

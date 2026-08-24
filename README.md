@@ -150,6 +150,7 @@ node bin/dashboard.js         # local dev from the plans-cc repo
 | `/plan-issue [id] <description>` | Attach a bug report to a task found during manual testing |
 | `/plan-audit <id>` | Verify all affected files are accounted for in the task plan |
 | `/plan-import <file>` | Bulk-import tasks from a markdown document |
+| `/plan-mine [text \| file]` | Extract tasks from a meeting transcript or notes prose after discussion |
 | `/plan-retrospect [report \| across \| seed] [domain]` | Mine completed plan history for named, ranked, cross-project lessons |
 
 ### Idea Exploration
@@ -159,7 +160,7 @@ node bin/dashboard.js         # local dev from the plans-cc repo
 | `/plan-brainstorm [topic]` | Open-ended discussion to explore an idea before committing to tasks |
 | `/plan-ideas [id]` | List all captured ideas, or show details of a specific one |
 | `/plan-pick <idea-id>` | Select the most valuable components from an idea and create tasks |
-| `/plan-expand <idea-id>` | Decompose an entire idea into a full set of actionable tasks |
+| `/plan-unpack <idea-id>` | Decompose an entire idea into a full set of actionable tasks |
 
 ## Task Lifecycle
 
@@ -250,7 +251,7 @@ With the `keep` keyword (e.g. `/plan-execute 1 worktree keep`), the worktree is 
 capture this                              # Save the discussion as an idea
 /plan-ideas                               # See all captured ideas
 /plan-pick 1                              # Cherry-pick the best parts into tasks
-/plan-expand 1                            # Or decompose the whole idea into tasks
+/plan-unpack 1                            # Or decompose the whole idea into tasks
 ```
 
 ### Track and triage

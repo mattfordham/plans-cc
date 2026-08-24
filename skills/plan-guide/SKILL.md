@@ -129,7 +129,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
 
    Browse ideas: `/plan-ideas`
    Pick the best parts: `/plan-pick 1`
-   Full decomposition: `/plan-expand 1`
+   Full decomposition: `/plan-unpack 1`
    ```
 
    **Section: All caught up** (show if no pending/elaborated/in-progress/review tasks)

@@ -51,7 +51,7 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
    ✦ 002 Pricing model (2 insights) → expanded
    ✦ 001 Auth overhaul (4 insights) → expanded
 
-   Next: /plan-ideas <id> to view details, /plan-expand <id> to create tasks
+   Next: /plan-ideas <id> to view details, /plan-unpack <id> to create tasks
    ```
 
    Per-idea format (one line each):
@@ -68,13 +68,13 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
    If not yet expanded:
    ```
    ---
-   Next: /plan-expand NNN to create tasks from this idea
+   Next: /plan-unpack NNN to create tasks from this idea
    ```
 
    If already expanded:
    ```
    ---
-   Already expanded into tasks. Run /plan-expand NNN to add more tasks.
+   Already expanded into tasks. Run /plan-unpack NNN to add more tasks.
    ```
 
 7. **End-of-action marker** (read-only — final line)

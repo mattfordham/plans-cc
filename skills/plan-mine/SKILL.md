@@ -1,5 +1,5 @@
 ---
-name: plan-extract
+name: plan-mine
 disable-model-invocation: true
 argument-hint: "[pasted text | path-to-file]"
 allowed-tools:
@@ -13,7 +13,7 @@ allowed-tools:
 description: Extract tasks from a meeting transcript or notes after discussion and confirmation
 ---
 
-# plan-extract
+# plan-mine
 
 Turn unstructured prose — a meeting summary, transcript, or notes dump — into tasks. Unlike `/plan-import` (which parses a structured markdown file by headers/lists), this skill reads conversational prose, **semantically** pulls out the action items buried in it, **discusses ambiguities with you first**, then proposes a confirm-to-create task list.
 

@@ -1,5 +1,5 @@
 ---
-name: plan-expand
+name: plan-unpack
 disable-model-invocation: true
 argument-hint: "<idea-id>"
 allowed-tools:
@@ -11,7 +11,7 @@ allowed-tools:
 description: Expand an idea into actionable tasks through guided discussion
 ---
 
-# plan-expand
+# plan-unpack
 
 Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-import` (which structurally parses any markdown file), this skill reads an idea document holistically — understanding its context, insights, decisions, and open questions — then proposes a thoughtful decomposition into tasks through interactive discussion.
 

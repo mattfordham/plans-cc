@@ -199,7 +199,7 @@ Recognize these phrases as signals to capture:
    To create tasks from this, run: /plan-import .plans/ideas/NNN-slug.md
    ```
 
-   End-of-action marker (final line): `🟢 BRAINSTORMED · Idea #NNN → Next: /plan-expand NNN`
+   End-of-action marker (final line): `🟢 BRAINSTORMED · Idea #NNN → Next: /plan-unpack NNN`
 
 ## Edge Cases
 
