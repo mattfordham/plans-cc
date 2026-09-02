@@ -128,6 +128,7 @@ This auto-captures, auto-elaborates, and starts executing — all in one command
 | `/plan-status` | Compact dashboard showing all tasks with progress indicators |
 | `/plan-list [filter]` | Filterable task list (by status, type, or `all`) |
 | `/plan-show <id>` | Detailed view of a single task — progress bar, steps, verification criteria |
+| `/plan-explain <id>` | Conceptual view of a single task — the core idea in one line, three bullets of model, and why this shape and not the obvious alternative |
 | `/plan-help` | Full command reference with examples |
 | `plans-cc-dashboard` | Live-updating TUI dashboard that watches `.plans/` and renders task status in real time, mirroring `/plan-status` output. Run it from any project directory that contains a `.plans/` folder. |
 
@@ -262,6 +263,7 @@ capture this                              # Save the discussion as an idea
 /plan-list in-progress                    # What's currently active
 /plan-list review                         # What's ready for review
 /plan-show 3                              # Deep dive on a specific task
+/plan-explain 3                           # How to think about a specific task
 /plan-audit 3                             # Verify nothing was missed
 ```
 

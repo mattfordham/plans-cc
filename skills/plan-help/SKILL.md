@@ -43,6 +43,7 @@ Any `plan-*` skill can be run from a sub-directory or sub-repo beneath the proje
 | `/plan-status` | Dashboard of all work |
 | `/plan-list [filter]` | List tasks with optional filter |
 | `/plan-show <id>` | Show detailed overview of a task |
+| `/plan-explain <id>` | Explain a task's conceptual model — core idea, three bullets, why this shape |
 | `/plan-issue [id] <description>` | Report an issue found during testing |
 | `/plan-delete <id>` | Remove a task |
 | `/plan-combine <id> <id> [id...]` | Merge multiple tasks into one |
@@ -121,6 +122,7 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-list bug                  # All bug tasks
 /plan-list in-progress          # What's active
 /plan-show 1                    # Deep dive on task #1
+/plan-explain 1                 # How to think about task #1
 ```
 
 **Fast track (skip earlier steps automatically):**

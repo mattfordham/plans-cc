@@ -108,6 +108,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
    Start working: `/plan-execute 2`
    Want isolation? `/plan-execute 2 use worktree`
    Want to talk through it first? `/plan-discuss 2`
+   Want the shape of it in three bullets? `/plan-explain 2`
    ```
 
    **Section: Needs elaboration** (show if pending tasks exist)
@@ -149,6 +150,7 @@ Read the current state of `.plans/` and provide contextual guidance on what to d
    - If user has 5+ pending tasks: "Tip: Use `/plan-list` to filter by type (bug, feature, refactor, chore)"
    - If user has 4+ active tasks (any status): "Tip: `/plan-discuss` (no ID) talks through the whole backlog — redundancy, gaps, what to work on next"
    - If user has completed tasks but never used summary: "Tip: `/plan-summary` gives you a recap of work done this session"
+   - If user has completed tasks: "Tip: `/plan-explain <id>` reconstructs how to think about an old task — the core idea and why it was shaped that way"
    - If user has multiple in-progress tasks: "Tip: `/plan-pause` lets you switch between tasks without losing progress"
    - If user has ideas and tasks: "Tip: `/plan-search <keyword>` finds tasks and ideas by content"
    - Default: "Tip: `/plan-help` shows the full command reference"

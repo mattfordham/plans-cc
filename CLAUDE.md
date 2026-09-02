@@ -67,7 +67,7 @@ Longer explanation of what this skill does.
 |-------|----------|-------------|
 | `name` | Yes | Skill name (must match directory name) |
 | `description` | Yes | Short description for skill picker |
-| `disable-model-invocation` | Yes | `true` for most skills. `false` for read-only/capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show, plan-search, plan-guide), for the core lifecycle skills agents need to drive autonomously (plan-elaborate, plan-execute), and for plan-delete (model-invocable despite being destructive — its explicit `yes` confirmation step is the guardrail) |
+| `disable-model-invocation` | Yes | `true` for most skills. `false` for read-only/capture-only skills (plan-capture, plan-issue, plan-status, plan-list, plan-show, plan-explain, plan-search, plan-guide), for the core lifecycle skills agents need to drive autonomously (plan-elaborate, plan-execute), and for plan-delete (model-invocable despite being destructive — its explicit `yes` confirmation step is the guardrail) |
 | `allowed-tools` | No | Tools the skill can use |
 | `argument-hint` | No | Shows in skill picker (e.g., `"<id>"`, `"[description]"`) |
 
@@ -135,7 +135,7 @@ Format: `{emoji} {ACTION_LABEL} · {target}[ → Next: {next-command}]`
 | 🟡 | Review state | review |
 | ✅ | Completion (terminal) | complete |
 | ⏸️ | Paused | pause |
-| 🔵 | Read-only / informational | status, list, show, search, ideas, guide, summary, help, audit, retrospect (report/across) |
+| 🔵 | Read-only / informational | status, list, show, explain, search, ideas, guide, summary, help, audit, retrospect (report/across) |
 | 🔴 | Destructive / warning | delete, issue |
 | 🟣 | Spawn / fan-out | spawn |
 
@@ -429,6 +429,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 | `/plan-status` | Dashboard of all work |
 | `/plan-list` | List tasks with filters or keyword search |
 | `/plan-show` | Show detailed overview of a specific task |
+| `/plan-explain` | Explain a task's conceptual model — core idea, three bullets, why this shape |
 | `/plan-summary` | Summarize work completed in the current session |
 | `/plan-delete` | Remove a task |
 | `/plan-combine` | Merge multiple tasks into a single task |
