@@ -436,6 +436,11 @@ These rules bind every invocation. They are not subject to your judgment about t
          - Read `.gitignore` (create if doesn't exist)
          - If `.worktrees/` not present, append it
       5. Symlink shared .plans/: `ln -s [project-root]/.plans [worktree-path]/.plans`
+      5b. **Symlink the configured `worktree_links` directories** (see the `worktree_links` contract). Read `worktree_links` from `.plans/config.json`; if the key is absent, do nothing here — that is today's behavior exactly. For each entry that exists at the project root and is not already present in the worktree:
+          ```bash
+          ln -s [project-root]/[entry] [worktree-path]/[entry]
+          ```
+          Skip (and report in one line) any entry that does not exist at the project root — a stale config entry is a warning, never a failure. Report the links created so the user can see what the worktree actually has.
       6. Add metadata to task file: `**Worktree:** [absolute-worktree-path]` (below the Branch line)
       7. Set execution working directory to the worktree path for all subsequent steps
 
@@ -461,6 +466,7 @@ These rules bind every invocation. They are not subject to your judgment about t
          - Symlink into parent worktree dir: `ln -s [absolute-path-to-repo]/.worktrees/NNN-slug .worktrees/NNN-slug/[repo-name]`
       3. Symlink non-git subdirectories into worktree dir: for each immediate subdirectory that is NOT a git repo and NOT `.worktrees`, create `ln -s ../../[dir-name] .worktrees/NNN-slug/[dir-name]`
       4. Symlink `.plans/`: `ln -s ../../.plans .worktrees/NNN-slug/.plans`
+      4b. **Symlink the configured `worktree_links` directories.** Step 3 already symlinks every non-git immediate subdirectory of the parent, so parent-level gitignored dirs are usually covered. `worktree_links` adds the entries that are NOT parent-level immediate subdirectories — most importantly a gitignored dir that lives *inside a sub-repo* (e.g. `ensemble_website/design-system`), which no rule above reaches. For each `worktree_links` entry, resolve it relative to the project root, and if it exists and is not already present in the corresponding place in the worktree tree, symlink it to the absolute source path. Absent key ⇒ do nothing.
       5. Ensure `.worktrees/` is in `.gitignore` for each relevant repo AND in the parent directory's `.gitignore`:
          - For each repo: read `[repo]/.gitignore`, append `.worktrees/` if not present
          - For parent: read `.gitignore`, append `.worktrees/` if not present
@@ -972,7 +978,15 @@ These rules bind every invocation. They are not subject to your judgment about t
         git -C [repo-name] worktree prune
         ```
         - If repo had NO changes committed: clean up empty branch: `git branch -d [branch-name]`
-     4. Remove the symlinked parent tree. Every per-repo worktree is gone, so `.worktrees/NNN-slug` now contains nothing but the per-repo symlinks and the `.plans` symlink (targets already removed) — a plain `rm -rf` unlinks only dangling symlinks and the empty dir, touching no real checkout: `rm -rf .worktrees/NNN-slug`
+     4. Remove the symlinked parent tree. Every per-repo worktree is gone, so `.worktrees/NNN-slug` now contains nothing but symlinks: the per-repo ones and `.plans` (dangling or not), plus any **live** `worktree_links` symlinks pointing at real directories under the project root.
+
+        `rm -rf` never follows a symlink to a directory — it unlinks the link itself — so the targets are safe. But because live links are now present, do NOT weaken this to anything that dereferences (never add a trailing slash, never `rm -rf .worktrees/NNN-slug/*/`, never `find -L ... -delete`): a trailing slash on a symlink dereferences it and would delete the real `design-system/` at the project root.
+
+        Strip the symlinks explicitly first, so the recursive delete only ever sees an empty directory:
+        ```bash
+        find .worktrees/NNN-slug -maxdepth 1 -type l -delete
+        rm -rf .worktrees/NNN-slug
+        ```
         - If `.worktrees/` is now empty, remove it too: `rmdir .worktrees 2>/dev/null`
    - **If `keep_mode` is TRUE — PRESERVE the worktree tree:**
      3. **Skip the per-repo `git worktree remove`** for every repo in `relevant_repos` — each per-repo worktree stays on disk.

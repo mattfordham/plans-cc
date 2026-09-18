@@ -287,6 +287,50 @@ ensemble/            # parent — holds .plans/, not itself a git repo
 
 This is not a new project model — it **is** the existing multi-repo shape that `plan-execute` already detects (cwd is not a git repo, so it scans immediate children for `.git`), that `plan-review` arbitrates by disjoint repo sets, and that `plan-complete` tears down per-repo. What discovery adds is *invocation from anywhere inside the tree*: run any `plan-*` skill from a sub-repo (e.g. inside `ensemble_website/`) and it ascends to the centralized `.plans/` at the parent. Plans stay centralized; only the invocation site got flexible.
 
+### Worktree links (`worktree_links`) — cross-skill contract
+
+`git worktree add` checks out **tracked files only**. Anything gitignored — `design-system/`,
+`.env.local`, local fixtures — is simply **absent** from a fresh worktree. This is guaranteed
+for every gitignored path, not an intermittent fault, and it is silent: the worktree looks
+complete. A skill whose source of truth lives in a gitignored directory will therefore find
+nothing there and, if it lacks an input gate, quietly build from whatever else it can infer.
+
+An optional `worktree_links` array in `.plans/config.json` names paths (relative to the
+project root) to symlink into each newly created worktree:
+
+```json
+"worktree_links": ["design-system", ".env.local"]
+```
+
+- **Absent ⇒ today's behavior exactly** — only `.plans/` is symlinked, byte-identical to what
+  every existing project does now. Same absence discipline as `models`.
+- Call sites: `plan-execute` step 7e.5b (single-repo) and 4b (multi-repo), `plan-spawn` step b.5.
+  Each entry that exists at the project root is symlinked to its absolute source path; an entry
+  that does not exist is **skipped with a one-line warning**, never a failure — a stale config
+  entry must not block execution.
+- **Deliberately an allowlist, never an auto-scan of gitignored dirs.** Auto-linking everything
+  git ignores would sweep in `node_modules/`, `.next/`, `dist/`, `.turbo/` — sharing one build
+  cache across concurrent worktrees causes real corruption. The set of gitignored dirs that are
+  *shared inputs* is small and human-chosen; the set that are *per-checkout build state* is
+  large and must stay isolated.
+- **Not seeded by `/plan-init`** — same reasoning as `models`: a generated key reads as an
+  instruction to tune something most projects should leave alone. Documented here, honored when
+  hand-added.
+- **Teardown safety.** These are **live** symlinks to real directories, unlike the dangling
+  ones teardown previously assumed. `git worktree remove` is safe. The multi-repo `rm -rf`
+  path is safe only because `rm -rf` unlinks a symlink rather than following it — so it is
+  preceded by an explicit `find .worktrees/NNN-slug -maxdepth 1 -type l -delete`, and must
+  **never** be weakened to a dereferencing form (a trailing slash, `/*/`, `find -L`), which
+  would delete the real `design-system/` at the project root. Call sites: `plan-execute`
+  multi-repo teardown, `plan-complete` kept-worktree teardown.
+
+**A symlink is not a substitute for an input gate.** `worktree_links` makes the input
+*available*; it cannot make a skill *check* that it loaded. Both halves are required — see
+`des-build`'s Step 1 preflight gate, which aborts when its inputs are unreachable rather than
+degrading. A missing input that produces a plausible artifact is worse than one that errors,
+because a build from nothing still typechecks, lints, and returns HTTP 200, and therefore
+**reports as a clean success.** Verifying the build is not verifying the inputs.
+
 ### Model selection (cross-skill contract)
 
 The model a `plan-*` skill spawns sub-agents with is **configuration, not a hardcoded constant** — an optional `models` object in `.plans/config.json` maps a *role* to a model name, and the spawn sites read it instead of literalizing `"opus"`. Three roles exist, and only three:
@@ -401,7 +445,7 @@ The family runs an **author → sync → build** loop, with an optional on-deman
 |-------|---------|
 | `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, global classes, layout). Offers the optional styleguide opt-in (`config.md`). Stops for human review before any code. |
 | `/des-sync` | Apply step: write the `@theme` token block (`tokens.md`) and `@layer components` / `@utility` class block (`global-classes.md`) into the live Tailwind layer between sentinel markers, idempotently — never touching hand-written CSS. Flags (never writes) styleguide staleness when opted in. |
-| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync` and styleguide staleness to `/des-styleguide`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. |
+| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync` and styleguide staleness to `/des-styleguide`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. **Hard-gated on both inputs** — a Step 1 preflight aborts if the Figma MCP is unreachable or `design-system/` is unreadable, rather than degrading to a plausible-but-wrong build. |
 | `/des-styleguide` | Optional/on-demand: generate (never hand-edit) a single human-openable styleguide page from the reviewed `design-system/` markdown — every token swatch, named global class, and built component rendered at once against the live layer, plus a sync/coverage drift panel. Opt-in via the `config.md` `styleguide:` flag; the only skill that writes the page. |
 
 The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.

@@ -164,6 +164,7 @@ These rules bind every invocation; they are not subject to your judgment about h
       ```bash
       ln -s [project-root]/.plans [worktree-path]/.plans
       ```
+   5. Symlink the configured `worktree_links` directories — follow plan-execute step 7e.5b exactly. Read `worktree_links` from `.plans/config.json`; absent key ⇒ do nothing. For each entry that exists at the project root, `ln -s [project-root]/[entry] [worktree-path]/[entry]`. This matters more here than anywhere else: spawned tasks run autonomously, so a worktree missing a gitignored input (e.g. `design-system/`) fails without anyone watching.
 
    **c. Add metadata to the task file** — below the Status line, add:
    ```

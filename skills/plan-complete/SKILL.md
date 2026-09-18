@@ -343,7 +343,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
          test ! -e [repo]/[repo-worktree-path] || echo "WARNING: [repo]/[repo-worktree-path] still exists — a process may hold it open"
          git -C [repo] worktree prune
          ```
-         Once every per-repo worktree is gone, remove the parent tree at `.worktrees/NNN-slug`. It now contains nothing but the per-repo symlinks and the `.plans` symlink (all their targets already removed above), so a plain `rm -rf .worktrees/NNN-slug` unlinks only dangling symlinks and the empty dir — no real checkout is touched.
+         Once every per-repo worktree is gone, remove the parent tree at `.worktrees/NNN-slug`. It now contains nothing but symlinks: the per-repo ones and `.plans`, plus any **live** `worktree_links` symlinks pointing at real directories under the project root. `rm -rf` unlinks a symlink rather than following it, so those targets are safe — but never weaken this to a form that dereferences (no trailing slash, no `/*/`, no `find -L`), or the real `design-system/` at the project root would be deleted. Strip the symlinks explicitly first so the recursive delete only sees an empty directory:
+         ```bash
+         find .worktrees/NNN-slug -maxdepth 1 -type l -delete
+         rm -rf .worktrees/NNN-slug
+         ```
     3. **Strip the field(s).** This is handled by step 8's existing field-strip (which removed `**Worktree:**`, and `**Repos:**` for multi-repo) — do not duplicate it here.
 
 15. **Commit .plans/ changes**
