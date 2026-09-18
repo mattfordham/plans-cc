@@ -536,6 +536,16 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    **Read the build route (if any):** Look for a `**Build:**` field in the task header (alongside `**Type:**` / `**Status:**`). It has the form `<skill> · <unit1>, <unit2>, ...` (e.g. `**Build:** des-build · CaseStudyCarousel, ContentModule`). If present and the skill is `des-build`, set `build_route = { skill: "des-build", units: [<unit1>, ...] }`; otherwise `build_route = null`. This field is read **only** from the header — never inferred from the task body. (Routing is applied in Steps 10–11.)
 
+   **Missing-route WARNING (flag-only — never auto-routes):** When `build_route` is null, check whether the task *looks* like it should have been routed: a `design-system/` directory exists at the project root AND the task body cites a Figma node URL or names a component/page section as the thing being built. If so, surface a warning in the presented state below and **continue** — do not add the field, do not infer a route, do not abort:
+   ```
+   ⚠️  No build route, but this looks like design-system work
+      design-system/ exists and the task cites <N> Figma node URL(s).
+      Without a **Build:** field this runs through the generic executor with
+      none of des-build's input gates — it will build from inference, not Figma.
+      To route it: add `**Build:** des-build · <Unit>` to the task header and rerun.
+   ```
+   **Why flag-only, and why it is not a contradiction of "never infer from the body":** the no-inference rule governs *routing* — what actually gets executed — and that rule is absolute and unchanged here. This check never changes execution; it only tells a human that a likely-misfiled task is about to take the unguarded path. Same discipline as `/plan-cleanup`'s HISTORY.md cap drift and des-build's global-CSS drift: **flag the drift, point at the fix, never apply it silently.** Auto-routing from body text would be the runaway-routing failure the contract forbids; staying silent is how task 015 shipped a design-system section built from inference. The warning is the only correct middle.
+
    Parse the How section for checkboxes and count:
    - Total checkboxes: count all `- [ ]` and `- [x]` lines in How section
    - Completed: count `- [x]` lines
@@ -552,6 +562,8 @@ These rules bind every invocation. They are not subject to your judgment about t
    [Starting/Continuing] task #NNN: [Title]
    Type: [type] | Branch: [branch-name or "none"]
    Build route: [des-build → unit1, unit2]            ← only show if build_route is set
+   [⚠️  No build route, but this looks like design-system work — see warning above]
+                                                      ← only show if the missing-route WARNING fired
    Test Suite: [Detected: RSpec/Jest/pytest/etc.] or [None detected]
 
    ## Progress (X/Y steps complete)

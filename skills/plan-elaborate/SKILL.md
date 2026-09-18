@@ -906,7 +906,18 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
     ```
     **Build:** des-build · <Component1>, <Component2>
     ```
-    The unit list is the component/section name(s) to build, each becoming one des-build invocation. **This is a deliberate gate, not inference:** surface the suggestion in the normal elaboration interaction and only write the field once the user agrees (in `skip_mode`, you may auto-pick it like any other elaboration decision, but record it as a `- [low]` assumption per the tracking rules below). Never sniff this from task-body keywords on later runs — `/plan-execute` reads the field only, never the body.
+    The unit list is the component/section name(s) to build, each becoming one des-build invocation. **This is a deliberate gate, not inference:** surface the suggestion in the normal elaboration interaction and only write the field once the user agrees. Never sniff this from task-body keywords on later runs — `/plan-execute` reads the field only, never the body.
+
+    **Skip mode shortcut:** If `skip_mode` is true, auto-select "yes, add the route" and write the field, exactly as every other skip-mode prompt auto-selects its first option — then record it as a `- [low]` assumption per the tracking rules below. Do NOT treat the route as optional under skip mode. This branch is **imperative, not permissive**: reading it as "may skip" is what silently drops the route on autonomous (`yolo`) runs, which is precisely when no human is present to notice the field is missing.
+
+    **Evaluate this on EVERY elaboration, including re-elaboration**, and evaluate it *before* writing the How steps — a routed task's How steps should be written as des-build units (`Run /des-build <Unit>`), not as generic implementation steps. A task that already has a `**Build:**` field keeps it (never strip it); a task that lacks one is re-evaluated against the trigger below.
+
+    **Trigger (when "clearly describes building a design-system component/section" is met).** Propose the route when a `design-system/` directory exists AND any of these hold:
+    - The task names a component or page section as the thing being built ("Create the Full-bleed CTA page section", "Build the Hero").
+    - The task body cites one or more **Figma node URLs** as the design source. A Figma node reference is the strongest available signal that the work is design-system fidelity work, and it is exactly the case that most needs des-build's preflight gate.
+    - The task composes existing design-system components into a new visual unit.
+
+    A task meeting the trigger but NOT routed must say why, as a `- [low]` assumption (e.g. the named unit has no `design-system/` spec yet). **Silently omitting the field on a design-system task is the failure this trigger exists to prevent** — without the field, `/plan-execute` sets `build_route = null`, the build-skill branch is skipped entirely, and the ROUTE GUARD never fires because there is no route to guard. The work then runs through the generic executor with **none** of des-build's input gates, and — because it still typechecks, lints, and renders — reports as a clean success while being built from inference rather than from Figma.
 
     **Skip-mode assumption tracking:** If `skip_mode` is true, every auto-accepted prompt in steps 11–12 (Path A confirmation, Path B Why/approach/open-questions/Verification, Path C intent, Path-C "Research more" auto-accept, step 12 validation confirmation) represents a decision made on the user's behalf without explicit input. Capture each such auto-pick as a bullet under the task's `## Assumptions > Initial (from elaboration)` subsection. If the subsection contains a `_To be filled..._` placeholder, replace it; otherwise append.
 
