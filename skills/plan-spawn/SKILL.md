@@ -11,6 +11,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
   - Task
+  - Skill
 description: Run multiple tasks in parallel, each in its own worktree (always autonomous/yolo)
 ---
 

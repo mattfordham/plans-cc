@@ -11,6 +11,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
   - Task
+  - Skill
   - WebFetch
   - WebSearch
   - mcp__trello__get_card
@@ -637,6 +638,18 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    When `build_route` is set (from Steps 9–10), the named build units are built by invoking the build skill directly from this orchestrator (which holds the Skill tool — a plan-executor sub-agent does not), NOT by spawning plan-executor. For `build_route.skill == "des-build"`:
 
+   - **ROUTE GUARD — a build route that cannot fire is a HARD FAILURE, never a fallback.** Before the first unit, confirm the **Skill tool is actually available in this session**. If it is not — or if any `Skill` invocation below returns tool-unavailable / tool-not-permitted — **ABORT the execution immediately.** Do NOT build the units yourself. Do NOT route them to `plan-executor`. Do NOT read `design-system/` and write the component from the main session. Leave the task's status unchanged, write nothing to `## Changes`, and emit:
+     ```
+     🔴 BLOCKED · Task #NNN — build route `<skill>` could not be invoked
+     Reason: the Skill tool is not available to /plan-execute in this session.
+     Units not built: <unit1>, <unit2>, ...
+     The build skill enforces input gates (des-build aborts on unreachable Figma or
+     unreadable design-system/). Building these units without it silently bypasses
+     those gates and produces a plausible-but-unsourced component.
+     Fix: ensure `Skill` is listed in plan-execute's allowed-tools and rerun.
+     ```
+     **Why this is an abort and not a degraded path:** the whole point of routing a unit to `des-build` is that des-build refuses to build from missing inputs. Falling back to generic execution reaches the same files with *none* of those gates, and — because the result still typechecks, lints, and renders — reports as a clean success. A silently-degraded build is strictly worse than no build. This mirrors des-build's own Step 1 preflight discipline: **never substitute a weaker source for a required one.**
+   - **Never describe work as done by the build skill unless a `Skill` invocation actually ran.** The `## Changes` entry for a unit must reflect the real path taken; writing "Built X via /des-build" when the Skill tool never fired makes the task record falsely claim the input gates were honored. This is the same prohibition as des-build's "never cite a file you did not observably read."
    - **Iterate one des-build call per unit**, in listed order (des-build builds a single component/section at a time, and a later unit may need an earlier one to already exist). For each unit:
      - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"` (append ` verify` when the task's Verification or How asks for a self-verify pass against the Figma frame).
      - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
