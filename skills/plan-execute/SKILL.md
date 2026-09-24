@@ -947,7 +947,12 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    Steps:
 
-   1. **Determine the dev-server port and command — never hardcoded.** Read the project's `AGENTS.md` and/or `CLAUDE.md` for the convention (many projects use `PORT=<base + task number> yarn dev`, e.g. base `3000` + task `7` → `3007`). Compute `port = base + <task number>` using the base found in the project docs. If no base/convention is documented, record `Visual comparison NOT run: no dev-server port convention documented in AGENTS.md/CLAUDE.md` in the output AND in `## Changes`, and proceed to finish (do NOT guess a port).
+   1. **Determine the dev-server port and command — first source wins.** The port is always per-task, `port = base + <task number>` (e.g. base `3000` + task `7` → `3007`), so concurrent worktrees never collide. Resolve `base` and the start command in this order:
+      1. **`.plans/SKILL_NOTES.md`** — a dev-server note in the `## plan-execute` or `## all` section applied at Step 1.5 (e.g. `- Dev server: PORT=<4000 + task number> pnpm dev`). This is the recommended place to record the convention.
+      2. **The project's `AGENTS.md` and/or `CLAUDE.md`** — many projects document `PORT=<base + task number> yarn dev`.
+      3. **Default** — base `3000`, and the project's `dev` script run with the package manager its lockfile indicates (`yarn.lock` → `yarn dev`, `pnpm-lock.yaml` → `pnpm dev`, else `npm run dev`). Print one line saying the default was used, e.g. `Dev server: no port convention found — defaulting to PORT=3007 (base 3000 + task 7). Record the convention in .plans/SKILL_NOTES.md to override.`
+      - If the project has no `dev` script and no documented start command, record `Visual comparison NOT run: no dev-server start command found` in the output AND in `## Changes`, and proceed to finish.
+      - A note giving a **fixed** port (e.g. "runs on port 4000") is read as the base, not the literal port. The `+ task number` offset still applies.
    2. **Start the dev server** in the worktree on that port, in the background, and record the SHA it was started at (`git rev-parse HEAD`) per the Dev-server rule. `browser_wait_for` / poll until `/review/<slug>` returns **200**.
       - **If the dev server won't start or `/review/<slug>` does not return 200, that is a FAILED stage.** Record `Visual comparison NOT run: dev server did not start` or `... review page returned <code>, not 200` loudly in the output AND in `## Changes`. **Do NOT fall back to a code-only comparison.** Stop the server (if it started) and proceed to finish.
    3. **For each named Figma frame** the task references (desktop, mobile, and variant states such as grid/list or open/closed):

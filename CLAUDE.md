@@ -402,7 +402,7 @@ section is one instruction — "prefer pnpm over npm", "the dev server runs on p
 
 ```markdown
 ## all
-- The dev server runs on port 4000, not 3000.
+- Dev server: PORT=<4000 + task number> pnpm dev
 
 ## plan-execute
 - After building, run `pnpm lint --fix` before finishing.
@@ -499,7 +499,7 @@ The installer ships these automatically (they live under `skills/`); cleanup cov
 
 **Plan-execute → des-build routing.** A plan task can be routed to the real `/des-build` skill via an explicit `**Build:**` field in its header (see "The `**Build:**` task-header field" below). When set, `/plan-execute` invokes `des-build` once per named component instead of routing the build through the generic `plan-executor` sub-agent — which is necessary because a sub-agent has no Skill tool and structurally cannot invoke another skill, whereas the top-level `/plan-execute` orchestrator can. The field is read only from the task header, never inferred from task body content.
 
-**The automatic visual-comparison stage is plan-execute's, not des-build's.** After a routed build finishes, `/plan-execute` owns a visual-comparison stage: it creates an isolated review page per component, starts the worktree dev server, waits for the `/review/<slug>` page to return 200, and re-invokes `des-build … verify <url>` so the *measured* browser comparison runs against a real render. This is required because `/plan-execute` has the Playwright MCP but deliberately **not** the Figma MCP (Figma access belongs to des-build alone — see the `**Build:**` field notes), so it cannot measure against Figma itself; only des-build can, which is why plan-execute supplies the URL and des-build does the measuring. The stage is hard: if the Skill tool is unavailable, the dev server won't start, the review page isn't 200, or the Figma/Playwright MCP is unavailable, plan-execute records `Visual comparison NOT run: <reason>` LOUDLY (in output and in `## Changes`) and NEVER reports the stage as passed and NEVER falls back to a code-only comparison and calls it verified.
+**The automatic visual-comparison stage is plan-execute's, not des-build's.** After a routed build finishes, `/plan-execute` owns a visual-comparison stage: it creates an isolated review page per component, starts the worktree dev server on a per-task port (`base + task number`; base from `.plans/SKILL_NOTES.md`, else the project's `AGENTS.md`/`CLAUDE.md`, else `3000`), waits for the `/review/<slug>` page to return 200, and re-invokes `des-build … verify <url>` so the *measured* browser comparison runs against a real render. This is required because `/plan-execute` has the Playwright MCP but deliberately **not** the Figma MCP (Figma access belongs to des-build alone — see the `**Build:**` field notes), so it cannot measure against Figma itself; only des-build can, which is why plan-execute supplies the URL and des-build does the measuring. The stage is hard: if the Skill tool is unavailable, the dev server won't start, the review page isn't 200, or the Figma/Playwright MCP is unavailable, plan-execute records `Visual comparison NOT run: <reason>` LOUDLY (in output and in `## Changes`) and NEVER reports the stage as passed and NEVER falls back to a code-only comparison and calls it verified.
 
 ## All Skills
 
