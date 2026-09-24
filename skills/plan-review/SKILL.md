@@ -28,6 +28,12 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
    - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
+1.5. **Apply per-project skill notes** (see **Per-project skill notes** in `CLAUDE.md`)
+   - Optional-read with a silent default, exactly like `models` / `plan_comments`: read `.plans/SKILL_NOTES.md` if it exists. **If the file is missing or empty, do nothing and print nothing — this is today's behavior, byte-identical.**
+   - When present, apply the `## all` section plus this skill's own `## plan-review` section (ignore every other `## <skill-name>` section). Treat each note as an instruction that adjusts how the steps below run.
+   - **Priority order: the task file's own instructions > SKILL_NOTES > this skill's defaults.** A note may add steps or change a default; it can **never** turn off a hard-failure / safety rule (e.g. the `.plans`-protection checkout guard, or the review-concurrency guard).
+   - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-review`). Print nothing when the file is absent or empty.
+
 2. **Parse and resolve task ID**
    - Accept flexible ID formats: "1", "01", "001"
    - Zero-pad to 3 digits for file lookup
@@ -199,6 +205,12 @@ Review a task that has completed execution (typically via worktree workflow). **
         - Ask user to describe what they observed (they can type in the "Other" text field, or describe in the follow-up)
         - Update state file Observations section: replace the `⏳ Deferred to review` marker with `✗ [user's observation]`, keeping the provenance parenthetical
         - Spawn plan-executor sub-agent to fix the issue, including the user's observation and the current branch context in the prompt. Read `.plans/config.json`: spawn with `model: [executor_model]`, where `executor_model` is `models.executor` ONLY when the `models` key is present AND defines an `executor` entry; a missing `models` key or `executor` entry ⇒ `"opus"` (backwards compatible — see **Model selection** in `CLAUDE.md`). Remember this value for any repeat fix spawn in this review rather than restating the default. In the same read, when `plan_comments` is explicitly `false`, the fix prompt MUST include the `## Code Comment Policy` block from plan-execute step 11c's template (never write code comments referencing the plan, task number, task title, or step numbers)
+          - **Forward per-project skill notes to the sub-agent.** The plan-executor sub-agent does NOT see `.plans/` or skill notes unless they are passed in its prompt. If `.plans/SKILL_NOTES.md` exists and its `## plan-executor` or `## all` sections are non-empty, add this block to the fix prompt (a standalone block — this fix spawn passes no CONTEXT.md, so no anchor is required; omit the whole block when SKILL_NOTES.md is absent or both sections are empty, today's behavior byte-identical):
+            ```markdown
+            ## Project Skill Notes
+            [The verbatim contents of the `## plan-executor` and `## all` sections from .plans/SKILL_NOTES.md.]
+            Honor these notes while applying the fix. **Priority order: this task's own instructions > these skill notes > your defaults.** A note may add steps or change a default; it can NEVER turn off a hard-failure or safety rule (e.g. never write screenshots/binaries into the repo, never run the full test suite).
+            ```
         - After fix, **ask user to re-observe** using `AskUserQuestion` again with the same format
         - If user says "Something's wrong" again after 2 fix attempts, suggest:
           ```
@@ -250,9 +262,22 @@ Review a task that has completed execution (typically via worktree workflow). **
    - High-confidence (`- [high]`) items are intentionally omitted from the default review summary to keep it uncluttered. A future flag (e.g., `/plan-review NNN --all-assumptions`) could surface them; not implemented today.
    - If zero `- [low]` matches are found: omit the `⚠ Low-confidence assumptions to verify:` block entirely. Do not render an empty heading or a "no items" placeholder.
 
+   **9.a.2. Collect the visual-comparison table (pre-render step)**
+
+   Mirroring 9.a, before assembling the summary output, scan the task file's `## Changes` section for a Figma-vs-rendered comparison table so it can be surfaced at the top of the summary next to the URL. This is written by `/plan-execute`'s visual-comparison stage (step 11c.5) for des-build-routed / Figma-frame tasks.
+
+   - Read the task file once. Locate the `## Changes` section heading.
+     - If the section is absent, empty, or still the `_To be filled during execution_` placeholder: treat as empty, skip the block entirely, and continue rendering the rest of the summary. No warning. **This is a no-op for every task without a comparison table — fully backwards compatible.**
+   - Within `## Changes`, look for a `### Visual comparison (Figma vs rendered)` sub-heading followed by a markdown table (columns: `Element | Property | Figma | Rendered | Status`), OR a `Visual comparison NOT run: <reason>` line.
+     - If a table is present: capture the sub-heading and the full table verbatim (header row, separator row, and every data row — both `fixed` and `still differs` rows are meaningful, so keep all).
+     - If instead a `Visual comparison NOT run: <reason>` line is present: capture that line verbatim — a not-run stage is exactly what the reviewer must see, never hide it.
+     - If neither is present: omit the block entirely (older tasks and non-visual tasks have no comparison to show).
+
    **9.b. Render the summary**
 
    If the low-confidence collection in 9.a produced one or more bullets, prepend a `⚠ Low-confidence assumptions to verify:` block to the summary, BEFORE the `**Branch:**` / `**Type:**` metadata, the diff stats, and the completed steps. The block goes at the very top so the reviewer sees it first.
+
+   If the visual-comparison collection in 9.a.2 captured a table (or a `Visual comparison NOT run:` line), render it as a `## Visual comparison (Figma vs rendered)` block **at the top of the review, right next to the URL/branch line** (immediately after the `**Branch:**` / `**Type:**` metadata, before the `## Summary`). This surfaces the measured fidelity check first, where the reviewer is deciding whether to open the page. If 9.a.2 captured nothing, omit this block entirely (no heading, no placeholder) — a task without a comparison renders exactly as it does today.
 
    Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Manually exercise the changes on this branch and confirm the verification criteria above hold`.
 
@@ -266,6 +291,10 @@ Review a task that has completed execution (typically via worktree workflow). **
 
    **Branch:** [branch-name]
    **Type:** [type] | **Status:** [status]
+
+   [If 9.a.2 captured a comparison table or a "Visual comparison NOT run:" line, render it here — this block is omitted entirely otherwise:]
+   ## Visual comparison (Figma vs rendered)
+   [The verbatim table captured in 9.a.2, OR the verbatim `Visual comparison NOT run: <reason>` line]
 
    ## Summary
    [First 2-3 sentences from the What section]
@@ -314,3 +343,5 @@ Review a task that has completed execution (typically via worktree workflow). **
 - **Task file has no `## Assumptions` section**: Older tasks captured before assumption-tracking won't have the section. Step 9.a treats this as zero low-confidence items and omits the `⚠` block silently — never error or warn.
 - **`## Assumptions` section present but no `- [low]` lines**: Omit the `⚠` block entirely; do not render an empty heading or "no items" message.
 - **High-confidence (`- [high]`) assumptions**: Not surfaced by default. A future `--all-assumptions` flag could include them; for now, the default review summary stays uncluttered.
+- **Task `## Changes` has no visual-comparison table**: Older tasks and non-visual (non-des-build) tasks have no `### Visual comparison (Figma vs rendered)` block. Step 9.a.2 treats this as nothing to render and omits the block silently — never error or warn. Backwards compatible.
+- **`## Changes` has a `Visual comparison NOT run:` line instead of a table**: Surface that line verbatim at the top of the review — a not-run stage is precisely what the reviewer must see; never hide or downgrade it.

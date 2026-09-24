@@ -120,6 +120,8 @@ Initialize the `.plans/` directory structure for lightweight task management.
      "segment_threshold": 4
    }
    ```
+   - Do **not** seed a `models` or `worktree_links` key — those are opt-in, documented in `CLAUDE.md`, and honored only when hand-added.
+   - Do **not** create `.plans/SKILL_NOTES.md`. It is an **optional, hand-authored** per-project notes file (`## all` + per-skill `## <skill-name>` sections) that several skills read if present; absent, every skill behaves exactly as today. Like `models`/`worktree_links`, it is documented in `CLAUDE.md` (see **Per-project skill notes**) and never generated here.
 
 7. **Configure git tracking for `.plans/`**
    - Skip if not inside a git repo (`git rev-parse --git-dir 2>/dev/null` fails).

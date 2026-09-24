@@ -15,6 +15,12 @@ allowed-tools:
   - WebFetch
   - WebSearch
   - mcp__trello__get_card
+  - mcp__playwright__browser_navigate
+  - mcp__playwright__browser_resize
+  - mcp__playwright__browser_take_screenshot
+  - mcp__playwright__browser_evaluate
+  - mcp__playwright__browser_snapshot
+  - mcp__playwright__browser_wait_for
 description: Start or continue working on a task (auto-captures/elaborates if needed)
 ---
 
@@ -119,6 +125,12 @@ These rules bind every invocation. They are not subject to your judgment about t
 1. **Verify initialization**
    - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
    - If no root is found, error: "Not initialized. Run `/plan-init` first."
+
+1.5. **Apply per-project skill notes** (see **Per-project skill notes** in `CLAUDE.md`)
+   - Optional-read with a silent default, exactly like `models` / `plan_comments`: read `.plans/SKILL_NOTES.md` if it exists. **If the file is missing or empty, do nothing and print nothing — this is today's behavior, byte-identical.**
+   - When present, apply the `## all` section plus this skill's own `## plan-execute` section (ignore every other `## <skill-name>` section — the `## plan-executor` and `## all` sections are forwarded to the sub-agent separately in Step 11c, not applied here). Treat each note as an instruction that adjusts how the steps below run.
+   - **Priority order: the task file's own instructions > SKILL_NOTES > this skill's defaults.** A note may add steps or change a default; it can **never** turn off a hard-failure / safety rule (e.g. the build-route abort, or des-build's Figma/design-system preflight abort — a note cannot make an unguarded build acceptable).
+   - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-execute`). Print nothing when the file is absent or empty.
 
 2. **Parse and resolve arguments**
    - Check for worktree keywords/phrases (see Arguments section) → store as `worktree_mode` flag (true/false). If true, also set `branch_mode = true`.
@@ -663,7 +675,8 @@ These rules bind every invocation. They are not subject to your judgment about t
      **Why this is an abort and not a degraded path:** the whole point of routing a unit to `des-build` is that des-build refuses to build from missing inputs. Falling back to generic execution reaches the same files with *none* of those gates, and — because the result still typechecks, lints, and renders — reports as a clean success. A silently-degraded build is strictly worse than no build. This mirrors des-build's own Step 1 preflight discipline: **never substitute a weaker source for a required one.**
    - **Never describe work as done by the build skill unless a `Skill` invocation actually ran.** The `## Changes` entry for a unit must reflect the real path taken; writing "Built X via /des-build" when the Skill tool never fired makes the task record falsely claim the input gates were honored. This is the same prohibition as des-build's "never cite a file you did not observably read."
    - **Iterate one des-build call per unit**, in listed order (des-build builds a single component/section at a time, and a later unit may need an earlier one to already exist). For each unit:
-     - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"` (append ` verify` when the task's Verification or How asks for a self-verify pass against the Figma frame).
+     - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"`.
+     - **Do NOT append `verify` here (no page exists yet).** During the build-unit step the throwaway review page has not been created and no dev server is running in the worktree, so a `verify` at this point could only be des-build's *code-only* check — which is not a real verification and must never be reported as one. The real, measured verification happens later in the **visual-comparison stage** (Step 11c.5), once the review page exists and a dev server is up, by re-invoking des-build with the review-page URL (`verify <url>`). If a unit's How/Verification explicitly asks for a code-only checklist during build, that is fine — but it is a code-only check, not a verification, and the measured pass still runs at 11c.5.
      - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
      - **Autonomous deferral (mirror of the observation-step rule below):** when `worktree_mode` is true OR `yolo_mode` is true, the invocation prompt MUST instruct des-build to NOT pause with AskUserQuestion for non-linear desktop↔mobile reflow — it records the chosen interpretation as a noted assumption and continues, deferring the choice to review. When both are false, des-build may pause and ask normally.
      - **Comment policy:** when `plan_comments_off` (from Step 9), the invocation prompt MUST instruct des-build to never write code comments referencing the plan, task number, task title, or step numbers — write only comments that explain the code itself.
@@ -834,6 +847,11 @@ These rules bind every invocation. They are not subject to your judgment about t
    ## Project Context
    [Abbreviated CONTEXT.md content - tech stack, key patterns, testing info]
 
+   [If .plans/SKILL_NOTES.md exists AND its `## plan-executor` or `## all` sections are non-empty, include the block below IMMEDIATELY AFTER the Project Context block. The plan-executor sub-agent does NOT see .plans/ or skill notes unless they are passed in this prompt, so this injection is the ONLY way it learns them. Omit the entire block — heading and all — when SKILL_NOTES.md is absent or both sections are empty (today's behavior, byte-identical):]
+   ## Project Skill Notes
+   [The verbatim contents of the `## plan-executor` and `## all` sections from .plans/SKILL_NOTES.md.]
+   Honor these notes while executing your segment. **Priority order: this task's / segment's own instructions > these skill notes > your defaults.** A note may add steps or change a default; it can NEVER turn off a hard-failure or safety rule (e.g. never write screenshots/binaries into the repo, never run the full test suite).
+
    ## Code Comment Policy
    [If plan_comments_off, include this section:]
    NEVER write code comments that reference the plan, task number, task title, or
@@ -867,6 +885,19 @@ These rules bind every invocation. They are not subject to your judgment about t
    Verify that your changes address all files listed in Impact Scope. If you modify a file
    not listed in Impact Scope, note it as a Deviation. If an Impact Scope file seems
    unnecessary after reading the code, note that as a Deviation too.
+
+   ## Review Page (design-system / build-route tasks)
+   [If build_route is set, OR the task names Figma frames and its How steps call for
+   a throwaway review page, include this section:]
+   As part of normal execution, create the throwaway review page that renders the
+   built component(s) with inline sample data, at the path this project uses for it
+   (commonly `src/app/(frontend)/review/<slug>/page.tsx` — take the exact directory
+   from the project's existing conventions; do NOT invent a new layout). The page
+   imports the built component(s) and passes representative inline sample data so the
+   component renders in isolation. This page is what the later visual-comparison stage
+   navigates to and measures against Figma — without it there is nothing to measure.
+   **Never write screenshots, images, or binary artifacts into the repo** (this is
+   already the repo-hygiene rule) — the review page is source, not an image.
 
    ## Observation Steps
    [If the segment's final step is an observation step, include this section:]
@@ -905,6 +936,43 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    Write these BEFORE returning your structured response. The reviewer will see them at the top of `/plan-review NNN` output.
    ```
+
+   **c.5. Visual-comparison stage** (runs AFTER the last How step / all segments, and BEFORE the finish steps 11d/11e)
+
+   **When this stage runs:** only when `build_route` is set (a des-build-routed task) OR the task otherwise names one or more Figma frames AND a throwaway review page was created (Step 11c review-page section). If neither holds, this stage is a **no-op** — skip it silently and proceed to 11d/11e exactly as before (fully backwards compatible).
+
+   This is the *real, measured* verification — the point at which the rendered page is compared to Figma. It replaces the false confidence of a build-time code-only `verify` (which is why Step 11's build-unit route no longer appends `verify`). The measured comparison is performed by **re-invoking des-build with the review-page URL** (`/des-build <unit> verify <url>`) via the **Skill tool** — des-build owns the Figma MCP tools and the measured-comparison procedure (Step 8a); the orchestrator owns only Playwright and the Skill tool, and never calls the Figma MCP directly (see the **Figma MCP access belongs to des-build** contract in `CLAUDE.md`).
+
+   **ROUTE GUARD (same discipline as the build-skill route):** re-invoking des-build requires the Skill tool. If it is unavailable, do NOT measure the page yourself with a partial toolset and do NOT report the stage as passed — record `Visual comparison NOT run: Skill tool unavailable to re-invoke des-build` loudly in the output AND in `## Changes`, then proceed to finish.
+
+   Steps:
+
+   1. **Determine the dev-server port and command — never hardcoded.** Read the project's `AGENTS.md` and/or `CLAUDE.md` for the convention (many projects use `PORT=<base + task number> yarn dev`, e.g. base `3000` + task `7` → `3007`). Compute `port = base + <task number>` using the base found in the project docs. If no base/convention is documented, record `Visual comparison NOT run: no dev-server port convention documented in AGENTS.md/CLAUDE.md` in the output AND in `## Changes`, and proceed to finish (do NOT guess a port).
+   2. **Start the dev server** in the worktree on that port, in the background, and record the SHA it was started at (`git rev-parse HEAD`) per the Dev-server rule. `browser_wait_for` / poll until `/review/<slug>` returns **200**.
+      - **If the dev server won't start or `/review/<slug>` does not return 200, that is a FAILED stage.** Record `Visual comparison NOT run: dev server did not start` or `... review page returned <code>, not 200` loudly in the output AND in `## Changes`. **Do NOT fall back to a code-only comparison.** Stop the server (if it started) and proceed to finish.
+   3. **For each named Figma frame** the task references (desktop, mobile, and variant states such as grid/list or open/closed):
+      - Re-invoke des-build via the Skill tool: `skill: "des-build"`, `args: "<unit> verify http://localhost:<port>/review/<slug>"`. des-build performs the measured comparison (Step 8a): it takes the Figma screenshot + `get_design_context`, resizes the Playwright viewport to the frame width, sets up the variant state, and measures the page with `getComputedStyle` / `getBoundingClientRect`. **It checks the `html` font-size against the design system first.** It judges the two screenshots for *structure* and does **not** compute an automatic pixel-diff score.
+      - The orchestrator's cwd is already the worktree (Step 7e), so des-build measures the correct checkout.
+   4. **Fix, then re-measure, at most 2×.** Turn each real difference into a specific fix (property, Figma value, rendered value, file) and either spawn a `plan-executor` sub-agent (`model: [executor_model]` from Step 9) to apply it or re-invoke des-build with the URL. Then re-measure. Stop after the 2nd fix round regardless.
+   5. **Record a comparison table in the task's `## Changes` section** — one row per checked element, columns: `element · property · Figma · rendered · status`, where status is `fixed`, `still differs`, or `accepted-as-assumption`. **Both fixed and still-differing rows appear.** Example:
+      ```
+      ### Visual comparison (Figma vs rendered)
+      | Element | Property | Figma | Rendered | Status |
+      |---|---|---|---|---|
+      | Heading | font-size | 32px | 32px | fixed |
+      | Filter bar | columns | 12 | 8 | still differs |
+      | Search field | width | content | 320px | accepted-as-assumption |
+      ```
+   6. **Stop the dev server** unless the worktree is kept (`keep_mode` true) — a kept worktree stays reviewable, so leaving the server documented for `/plan-review` is fine, but by default stop it after measuring.
+
+   **Guard rules (write and honor all of these):**
+   - **If the Figma MCP OR the Playwright MCP is unavailable, write `Visual comparison NOT run: <reason>` LOUDLY in the output AND in `## Changes` — never skip quietly, and never report the stage as passed.** (des-build enforces the Figma half at its Step 1 preflight; the Playwright half is enforced here and in des-build Step 8a.)
+   - **If the dev server won't start or the review page ≠ 200, report a FAILED stage — no code-only fallback.** A code comparison presented as a page comparison is exactly the silent degradation this stage exists to prevent.
+   - **Differences under 1px attributable to sub-pixel rounding do NOT count.**
+   - **When unattended (`worktree_mode` OR `yolo_mode` — which this stage always is, since it runs before the worktree finish), do NOT stop to ask.** Fix what is clearly wrong and list every remaining difference in the comparison table so it surfaces at review.
+   - **Never save screenshots, images, or binary artifacts into the repo** — screenshots are for comparing only. The plan-executor already enforces this; the orchestrator must too. Only the comparison *table* (text) is written, and only into the task file's `## Changes`.
+
+   **Observation provenance:** this stage takes a runtime observation (the measured page). Assert `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD` immediately before and after; if HEAD moved, the measurement is **VOID** — discard it and re-run rather than recording a stale result.
 
    **d. After all segments complete**
 

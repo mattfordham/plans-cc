@@ -84,6 +84,7 @@ capture → elaborate → execute (worktree) → review → complete
   PROGRESS.md     # Current work status
   HISTORY.md      # Completed work archive
   config.json     # Settings
+  SKILL_NOTES.md  # Optional, hand-authored per-project skill notes (absent = default behavior)
   pending/        # Active task files
     001-fix-auth-bug.md
     002-add-dark-mode.md

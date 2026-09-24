@@ -1,7 +1,7 @@
 ---
 name: des-build
 disable-model-invocation: false
-argument-hint: "<component or section name> [verify]"
+argument-hint: "<component or section name> [verify [url]]"
 allowed-tools:
   - Read
   - Write
@@ -12,7 +12,13 @@ allowed-tools:
   - mcp__figma-dev-mode-mcp-server__get_design_context
   - mcp__figma-dev-mode-mcp-server__get_metadata
   - mcp__figma-dev-mode-mcp-server__get_screenshot
-description: Build a Next.js + Tailwind component by reading design-system/ first; use only its tokens/patterns, and optionally self-verify the render against the Figma frame. Requires BOTH a reachable Figma Dev Mode MCP and a readable design-system/ — aborts rather than degrading if either is missing.
+  - mcp__playwright__browser_navigate
+  - mcp__playwright__browser_resize
+  - mcp__playwright__browser_take_screenshot
+  - mcp__playwright__browser_evaluate
+  - mcp__playwright__browser_snapshot
+  - mcp__playwright__browser_wait_for
+description: Build a Next.js + Tailwind component by reading design-system/ first; use only its tokens/patterns, and optionally self-verify the render against the Figma frame. Requires BOTH a reachable Figma Dev Mode MCP and a readable design-system/ — aborts rather than degrading if either is missing. With `verify <url>`, measures the live rendered page against Figma via Playwright; with `verify` alone it is a code-only check that is NEVER reported as verified.
 ---
 
 # des-build
@@ -23,10 +29,13 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
 
 ## Arguments
 
-- `$ARGUMENTS`: `<component or section name>` to build, with an optional trailing `verify` keyword.
+- `$ARGUMENTS`: `<component or section name>` to build, with an optional trailing `verify` keyword and an optional trailing URL after `verify`.
   - `/des-build Hero` — build the Hero component.
-  - `/des-build Hero verify` — build, then run the self-verify checklist against the Figma frame.
-  - `/des-build Hero` invoked when `Hero` already exists, with `verify` — verify the existing render without rebuilding.
+  - `/des-build Hero verify` — build, then run the **code-only** self-verify checklist against the Figma frame (no page render — see Step 8). This path never reports itself as "verified".
+  - `/des-build Hero verify http://localhost:3007/review/hero` — build (or reuse the existing render), then run the **measured** browser comparison against the live page at that URL (see Step 8, with-URL mode). This is the only path that measures the *rendered* page.
+  - `/des-build Hero` invoked when `Hero` already exists, with `verify [url]` — verify the existing render without rebuilding.
+
+**Parsing the `verify` argument:** after the component name, if the next token is `verify`, set `verify_mode = true`. If a token follows `verify` and looks like a URL (starts with `http://` or `https://`), set `verify_url` to it; otherwise `verify_url` is null. `verify` with a URL → the measured browser comparison (Step 8, with-URL mode). `verify` with no URL → the code-only checklist (Step 8, no-URL mode).
 
 ## Steps
 
@@ -67,6 +76,10 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
       ```
       Cite real line counts and a real absolute path from real tool results. **Never cite a file you did not observably read** — a fabricated source citation is what lets a structurally-wrong build pass as sourced, and it is the single most damaging thing this skill can do.
 
+   d. **Apply per-project skill notes** (see **Per-project skill notes** in the plans-cc `CLAUDE.md`). `des-build` has no project-root discovery of its own, so anchor this read here at Step 1: if a `.plans/` directory is reachable from the current working directory (walk up to the nearest ancestor holding `.plans/config.json`), read `.plans/SKILL_NOTES.md` when it exists and apply the `## all` section plus this skill's own `## des-build` section. **If `.plans/` is unreachable, or the file is missing or empty, do nothing and print nothing** — skip silently (today's behavior, byte-identical). Optional-read + silent-default discipline, exactly like `models` / `worktree_links`.
+      - **Priority order: the task file's / caller's own instructions > SKILL_NOTES > this skill's defaults.** A note may add steps or change a default; it **can never turn off** the preflight gate above (a. and b.) or any hard-failure rule — an unreachable Figma MCP or unreadable `design-system/` still ABORTS regardless of any note.
+      - When notes were applied, print exactly one line: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md`. Print nothing otherwise.
+
 2. **Read the design system (the defining instruction)**
    - Before writing ANY code, READ:
      - `design-system/tokens.md`
@@ -105,21 +118,41 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
    - This is the loop that converges the system over time — surface every gap and one-off you hit.
    - **Styleguide staleness flag (flag only — never build the page).** Read `design-system/config.md`; if it declares a `styleguide:` flag, the project has opted into a styleguide page. After a build, **FLAG** that the newly built component is not yet reflected in the styleguide and tell the user to run `/des-styleguide` to regenerate it. `des-build` NEVER creates or modifies the styleguide page itself — same flag-only discipline as the Step 3 global-CSS drift check (which flags but never syncs). If `config.md` is absent or has no `styleguide:` key, emit nothing.
 
-8. **`verify` mode (Phase 3 self-verify)**
-   - Run when invoked with `verify` (or optionally right after a build). Compare the build against the Figma frame using the DevTools-style checklist below.
-   - **Verify the root font-size matches the contract FIRST** (from `tokens.md`; assume root 16px unless `tokens.md` says otherwise). The px↔rem mapping is only valid while it holds.
-   - For each discrepancy, report:
-     - the **property**,
-     - the Figma **px** value,
-     - the rendered **px** value (resolve rem → px at the contract root size),
-     - the **fix**.
-   - Focus on **type size, line-height, and spacing**.
+8. **`verify` mode — two modes, chosen by whether a URL was given**
+
+   `verify` runs when invoked with `verify` (or optionally right after a build). Which mode runs is decided by `verify_url` (parsed in Arguments):
+
+   - **`verify_url` is set → WITH-URL mode: a *measured* browser comparison.** This is the only mode that reads the *rendered* page.
+   - **`verify_url` is null → NO-URL mode: a *code-only* check.** It inspects the emitted Tailwind classes/tokens, never a page. **It MUST report itself as a code-only check and MUST NEVER report "verified".**
+
+   Both modes still **verify the root font-size against the contract FIRST** (from `tokens.md`; assume root 16px unless `tokens.md` says otherwise). The px↔rem mapping is only valid while it holds. In WITH-URL mode read the real `html` font-size from the page (Step 8a); in NO-URL mode take it from `tokens.md` and say so.
+
+   **8a. WITH-URL mode (`/des-build <X> verify <url>`) — measure the rendered page.**
+   - Use the Playwright MCP tools. For each Figma frame the component targets (desktop, mobile, and any variant states — grid/list, open/closed, etc.):
+     1. `mcp__playwright__browser_navigate` to `<url>`, then `mcp__playwright__browser_wait_for` until the page/content is present.
+     2. `mcp__playwright__browser_resize` to that frame's width (from the Figma frame).
+     3. Set up the same state the Figma variant shows (click toggles, open menus, type into search, etc.).
+     4. Take the Figma screenshot (`mcp__figma-dev-mode-mcp-server__get_screenshot`) and read the node's properties (`get_design_context`). Take the page screenshot (`mcp__playwright__browser_take_screenshot`) / snapshot (`mcp__playwright__browser_snapshot`).
+     5. **Measure the page, not the code.** Use `mcp__playwright__browser_evaluate` to read `getComputedStyle` and `getBoundingClientRect` for the key elements — headings/body text (font-size, line-height, letter-spacing, weight), containers/grids (widths, column count, gaps, padding), repeated items (card size, spacing). Check the `html` font-size against the design system first.
+     6. Compare the measured px to the Figma px. For each discrepancy report the **property**, the Figma **px**, the rendered **px**, and the **fix**.
+     7. **Judge the two screenshots side by side** for *structure*: missing/extra elements, wrong order or alignment, different content in a slot, wrong glyphs or icons. **Do NOT compute an automatic pixel-diff score** — font rendering and sample content make it noisy.
+   - **This mode is the real verification.** Its marker is `🔵 VERIFIED` (Step 9).
+
+   **8b. NO-URL mode (`/des-build <X> verify`) — code-only checklist (NEVER "verified").**
+   - Run today's code-derived DevTools-style checklist: for each discrepancy report the **property**, the Figma **px**, the rendered **px** (resolve rem → px at the contract root size *as authored in the classes*, since no page is rendered), and the **fix**. Focus on **type size, line-height, and spacing**.
    - **The "rem trap":** a computed px that is NOT a clean multiple of the base unit is usually a stray arbitrary value — flag it against `composition.md`.
-   - IGNORE sub-pixel rounding under 1px.
+   - **GUARD — a code-only check is NOT a visual verification.** With no URL nothing renders a page, so these px values are *read out of the emitted classes*, not measured from the browser. **You MUST state plainly, at the top of the output, `Code-only check — no page render. Values read from emitted classes, not measured. This is NOT a visual verification.`** and **you MUST NOT emit a `🔵 VERIFIED` marker** — use the `🔵 CODE-ONLY CHECK` marker (Step 9). To actually verify the render, re-run with a URL: `/des-build <X> verify <url>`.
+
+   **Guard rules (both modes):**
+   - **If the Figma MCP OR the Playwright MCP is unavailable, say so LOUDLY and NEVER report "passed".** In WITH-URL mode a missing Playwright MCP means the page cannot be measured — abort the measured comparison, print the unavailability plainly, and do NOT silently fall back to the code-only checklist and call it verified. In either mode a missing Figma MCP means there is nothing to compare against — same discipline as the Step 1 preflight.
+   - **If the dev server won't respond or the review page does not return 200, that is a FAILED stage — report it and STOP; do NOT fall back to comparing code.** A code comparison dressed up as a page comparison is exactly the silent degradation this skill exists to prevent.
+   - **Differences under 1px attributable to sub-pixel rounding do NOT count** — ignore them.
+   - **When running unattended (invoked by `/plan-execute` under yolo/worktree mode), do NOT stop to ask.** Fix what is clearly wrong and list every remaining difference in the comparison table so it surfaces at review.
 
 9. **End-of-action marker**
-   - In build mode, final line: `🟢 BUILT · <Component> → Next: /des-build <Component> verify`
-   - In verify mode, final line: `🔵 VERIFIED · <Component>`
+   - In build mode, final line: `🟢 BUILT · <Component> → Next: /des-build <Component> verify <url>`
+   - In verify **WITH-URL** mode (measured browser comparison), final line: `🔵 VERIFIED · <Component>`
+   - In verify **NO-URL** mode (code-only check), final line: `🔵 CODE-ONLY CHECK · <Component> → Next: /des-build <Component> verify <url>` — never `🔵 VERIFIED` (a code-only check is not a verification).
 
 ## Reference: human-side DevTools verify workflow
 
@@ -140,5 +173,10 @@ When a human verifies a render against the Figma frame in browser DevTools:
 - **Token / value not in the system**: escalate — propose adding it to the system, don't hardcode it.
 - **Non-linear desktop↔mobile reflow unresolved**: confirm your interpretation + breakpoint plan (AskUserQuestion) before building. In an autonomous/non-interactive context (signalled by the invocation prompt, e.g. when `/plan-execute` invokes this under yolo/worktree mode), do NOT pause — choose the most faithful interpretation, record it as a noted assumption, and continue so it surfaces at review.
 - **`verify` with no build present**: build the component first, or compare the existing render if one already exists.
+- **`verify` with no URL**: this is a **code-only check**, not a visual verification. It reads px out of the emitted classes (no page is rendered), MUST say so plainly at the top of its output, and MUST end with the `🔵 CODE-ONLY CHECK` marker — never `🔵 VERIFIED`. To measure the real render, re-run with a URL.
+- **`verify <url>` but Playwright MCP unavailable**: the page cannot be measured. Say so LOUDLY, do NOT report "passed", and do NOT silently fall back to the code-only checklist and call it verified. Reconnect Playwright MCP, then rerun.
+- **`verify <url>` but dev server / review page does not return 200**: FAILED stage — report it and STOP. Do NOT fall back to comparing code; a code comparison presented as a page comparison is the silent degradation this skill prevents.
+- **Sub-pixel rounding under 1px**: ignore — not a real discrepancy.
+- **Unattended verify (invoked by `/plan-execute` under yolo/worktree)**: do NOT stop to ask; fix what is clearly wrong and list the rest in the comparison table so it surfaces at review.
 - **Recurring pattern discovered mid-build**: build with it, but note it for folding back into `composition.md` / `components.md`.
 - **`styleguide:` flag set in `design-system/config.md`**: after a build, FLAG that the new component is not yet reflected in the styleguide and point the user to `/des-styleguide`. `des-build` only flags; it NEVER creates or edits the styleguide page (same flag-only discipline as the Step 3 drift check). If `config.md` is absent or has no `styleguide:` key, emit nothing.

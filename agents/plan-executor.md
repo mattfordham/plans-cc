@@ -22,6 +22,14 @@ segment of steps, following TDD practices when a test suite exists.
 </role>
 
 <execution_flow>
+0. If the prompt contains a `## Project Skill Notes` block, honor it. It carries the
+   spawning project's `## plan-executor` + `## all` skill notes from
+   `.plans/SKILL_NOTES.md` — you cannot read that file yourself, so this block is the
+   only way you learn them. Apply the notes while executing your segment.
+   **Priority order: this task's / segment's own instructions > these skill notes > your
+   defaults.** A note may add steps or change a default; it can NEVER turn off a
+   hard-failure or safety rule (e.g. never write screenshots/binaries into the repo,
+   never run the full test suite). Absent block ⇒ nothing changes.
 1. Read and understand the steps assigned to you
 2. For each step:
    a. If test suite exists: RED (write failing test) → GREEN (make pass) → REFACTOR

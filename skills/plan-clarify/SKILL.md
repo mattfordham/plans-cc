@@ -42,6 +42,12 @@ Complements `/plan-elaborate`: elaborate generates structure, clarify hardens it
    - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
    - If no root is found, error: "Not initialized. Run `/plan-init` first."
 
+1.5. **Apply per-project skill notes** (see **Per-project skill notes** in `CLAUDE.md`)
+   - Optional-read with a silent default, exactly like `models` / `plan_comments`: read `.plans/SKILL_NOTES.md` if it exists. **If the file is missing or empty, do nothing and print nothing — this is today's behavior, byte-identical.**
+   - When present, apply the `## all` section plus this skill's own `## plan-clarify` section (ignore every other `## <skill-name>` section). Treat each note as an instruction that adjusts how the steps below run.
+   - **Priority order: the task file's own instructions > SKILL_NOTES > this skill's defaults.** A note may add steps or change a default; it can **never** turn off a hard-failure / safety rule.
+   - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-clarify`). Print nothing when the file is absent or empty.
+
 2. **Parse arguments**
    - Detect skip keywords/phrases (see Arguments) → `skip_mode`
    - Strip them from `$ARGUMENTS`

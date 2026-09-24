@@ -391,6 +391,49 @@ An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`)
 - **`/plan-execute` warns (flag-only) when a likely design-system task has no route.** When `build_route` is null but `design-system/` exists and the body cites a Figma node URL or names a component/section, Step 9 surfaces a `⚠️ No build route, but this looks like design-system work` warning and **continues** — it never adds the field, never infers a route, never aborts. This does not weaken "never infer routing from the body": that rule governs what *executes*, and it is unchanged. The warning changes nothing about execution; it only tells a human that a misfiled task is about to take the unguarded path. Same discipline as HISTORY.md cap drift and des-build's global-CSS drift — **flag it, point at the fix, never apply it silently.** Note the ROUTE GUARD above cannot cover this case: with no field there is no route, so there is nothing to guard. A missing field is therefore the *quieter* failure of the two, and the one that shipped a design-system section built from inference in practice.
 - **Figma MCP access belongs to `des-build`, never to `/plan-execute`.** The three `mcp__figma-dev-mode-mcp-server__*` tools are declared in des-build's own `allowed-tools`; the orchestrator declares none and calls none. Do not add them. Granting the orchestrator Figma access would let it reproduce des-build's work *without* des-build's preflight gate — a second silent-degradation path around the guard above, and it would make the abort look like an obstacle to route around rather than the only correct outcome. The capability stays with the skill that has the discipline.
 
+### Per-project skill notes (`.plans/SKILL_NOTES.md`) — cross-skill contract
+
+An **optional**, hand-authored markdown file at `.plans/SKILL_NOTES.md` that lets a
+project nudge how skills run without editing the skill files. It is organized into an
+`## all` section (notes that apply to every reading skill) plus per-skill `## <skill-name>`
+sections (e.g. `## plan-execute`, `## des-build`, `## plan-executor`). Each bullet under a
+section is one instruction — "prefer pnpm over npm", "the dev server runs on port 4000",
+"always run `typecheck` before finishing".
+
+```markdown
+## all
+- The dev server runs on port 4000, not 3000.
+
+## plan-execute
+- After building, run `pnpm lint --fix` before finishing.
+
+## des-build
+- This project's review pages live under `app/(preview)/`.
+```
+
+- **Absent ⇒ today's behavior exactly.** A project with no `SKILL_NOTES.md` — which is
+  every existing project — produces byte-identical behavior to before this contract existed.
+  Same absence discipline as `models` / `worktree_links`: a missing or empty file means
+  *do nothing and print nothing*.
+- **Read call sites (7 skills).** Each reads the file at its Step 1 (sub-step 1.5) and applies
+  its own `## <skill-name>` section plus the shared `## all` section, ignoring every other
+  section: `plan-execute`, `plan-review`, `plan-elaborate`, `plan-clarify`, `plan-complete`,
+  `des-build`, `des-author`. In addition, `plan-execute` and `plan-review` **forward** the
+  `## plan-executor` + `## all` sections into every `plan-executor` sub-agent prompt (as a
+  `## Project Skill Notes` block) — a sub-agent never sees `.plans/` or the notes file itself,
+  so injection is the only channel by which it learns them.
+- **Priority order: the task file's own instructions > SKILL_NOTES > the skill's defaults.**
+  A note may add steps or change a default; it can **never** turn off a hard-failure or
+  safety rule — it cannot make an unguarded build acceptable (des-build's Figma/design-system
+  preflight abort, the `**Build:**` route abort), authorize writing screenshots/binaries into
+  the repo, or authorize running the full test suite. A note that tries to is ignored.
+- Each reading skill prints exactly one line when notes were applied
+  (`Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md`) and prints nothing when the
+  file is absent or empty.
+- **Not seeded by `/plan-init`** — same reasoning as `models` / `worktree_links`: a generated
+  file reads as an instruction to tune something most projects should leave alone. Documented
+  here, mentioned by `/plan-init` and `/plan-help`, and honored when hand-authored.
+
 ### Checkbox Progress Tracking
 
 The How section uses markdown checkboxes to track step-by-step progress:
@@ -449,12 +492,14 @@ The family runs an **author → sync → build** loop, with an optional on-deman
 |-------|---------|
 | `/des-author` | Phase 1: read connected Figma Dev Mode MCP and author/refine the reviewed `design-system/` markdown (tokens, components, composition, global classes, layout). Offers the optional styleguide opt-in (`config.md`). Stops for human review before any code. |
 | `/des-sync` | Apply step: write the `@theme` token block (`tokens.md`) and `@layer components` / `@utility` class block (`global-classes.md`) into the live Tailwind layer between sentinel markers, idempotently — never touching hand-written CSS. Flags (never writes) styleguide staleness when opted in. |
-| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync` and styleguide staleness to `/des-styleguide`; `verify` mode folds in a Phase 3 px-vs-px self-verify against the Figma frame. **Hard-gated on both inputs** — a Step 1 preflight aborts if the Figma MCP is unreachable or `design-system/` is unreadable, rather than degrading to a plausible-but-wrong build. |
+| `/des-build` | Phase 2: build a Next.js + Tailwind component by reading `design-system/` first, using only its tokens/patterns/global classes; flags global-CSS drift to `/des-sync` and styleguide staleness to `/des-styleguide`. `verify <url>` runs a **measured** browser comparison (Playwright) of the *rendered* page at that URL against the Figma frame, reporting per-property Figma-px vs rendered-px diffs (marker `🔵 VERIFIED`); `verify` with **no URL** is a **code-only check** that inspects the emitted classes/tokens without rendering a page and NEVER reports "verified" (marker `🔵 CODE-ONLY CHECK`). **Hard-gated on both inputs** — a Step 1 preflight aborts if the Figma MCP is unreachable or `design-system/` is unreadable, rather than degrading to a plausible-but-wrong build. |
 | `/des-styleguide` | Optional/on-demand: generate (never hand-edit) a single human-openable styleguide page from the reviewed `design-system/` markdown — every token swatch, named global class, and built component rendered at once against the live layer, plus a sync/coverage drift panel. Opt-in via the `config.md` `styleguide:` flag; the only skill that writes the page. |
 
 The installer ships these automatically (they live under `skills/`); cleanup covers both the `plan-` and `des-` prefixes.
 
 **Plan-execute → des-build routing.** A plan task can be routed to the real `/des-build` skill via an explicit `**Build:**` field in its header (see "The `**Build:**` task-header field" below). When set, `/plan-execute` invokes `des-build` once per named component instead of routing the build through the generic `plan-executor` sub-agent — which is necessary because a sub-agent has no Skill tool and structurally cannot invoke another skill, whereas the top-level `/plan-execute` orchestrator can. The field is read only from the task header, never inferred from task body content.
+
+**The automatic visual-comparison stage is plan-execute's, not des-build's.** After a routed build finishes, `/plan-execute` owns a visual-comparison stage: it creates an isolated review page per component, starts the worktree dev server, waits for the `/review/<slug>` page to return 200, and re-invokes `des-build … verify <url>` so the *measured* browser comparison runs against a real render. This is required because `/plan-execute` has the Playwright MCP but deliberately **not** the Figma MCP (Figma access belongs to des-build alone — see the `**Build:**` field notes), so it cannot measure against Figma itself; only des-build can, which is why plan-execute supplies the URL and des-build does the measuring. The stage is hard: if the Skill tool is unavailable, the dev server won't start, the review page isn't 200, or the Figma/Playwright MCP is unavailable, plan-execute records `Visual comparison NOT run: <reason>` LOUDLY (in output and in `## Changes`) and NEVER reports the stage as passed and NEVER falls back to a code-only comparison and calls it verified.
 
 ## All Skills
 
