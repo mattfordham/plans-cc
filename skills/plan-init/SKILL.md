@@ -7,6 +7,7 @@ allowed-tools:
   - Edit
   - Bash
   - Glob
+  - AskUserQuestion
 description: Bootstrap the .plans/ directory for task management
 ---
 
@@ -120,8 +121,8 @@ Initialize the `.plans/` directory structure for lightweight task management.
      "segment_threshold": 4
    }
    ```
-   - Do **not** seed a `models` or `worktree_links` key — those are opt-in, documented in `CLAUDE.md`, and honored only when hand-added.
-   - Do **not** create `.plans/SKILL_NOTES.md`. It is an **optional, hand-authored** per-project notes file (`## all` + per-skill `## <skill-name>` sections) that several skills read if present; absent, every skill behaves exactly as today. Like `models`/`worktree_links`, it is documented in `CLAUDE.md` (see **Per-project skill notes**) and never generated here.
+   - Do **not** seed a `models` or `worktree_links` key — those are opt-in, documented in `CLAUDE.md`, and honored only when hand-added. They are never seeded and never offered here.
+   - Do **not** write `.plans/SKILL_NOTES.md` in this step. It is an **optional** per-project notes file (`## all` + per-skill `## <skill-name>` sections) that several skills read if present; absent, every skill behaves exactly as today. Unlike `models`/`worktree_links`, it is **offered** in step 9 — pre-filled from detected project signals — and created **only on the user's explicit consent**. Declining writes nothing. It is documented in `CLAUDE.md` (see **Per-project skill notes**).
 
 7. **Configure git tracking for `.plans/`**
    - Skip if not inside a git repo (`git rev-parse --git-dir 2>/dev/null` fails).
@@ -136,7 +137,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
      - Ensure `.gitignore` exists; create it if missing.
      - If it exists and does not end with a newline, append a newline first.
      - Append `.plans` (no trailing slash) followed by a newline. **Do not use the trailing-slash form `.plans/`** — that pattern matches only directories, so a stray `.plans` symlink could slip past the ignore rule, get committed, and then clobber the real `.plans/` directory on a later `git checkout` (causing an ELOOP / lost task files). The slashless `.plans` ignores a directory, file, or symlink of that name.
-     - Remember for step 10 that `.gitignore` should be staged alongside the init commit.
+     - Remember for step 11 that `.gitignore` should be staged alongside the init commit.
    - If **Check in**: do nothing.
 
 8. **Ask about plan references in code comments**
@@ -149,18 +150,64 @@ Initialize the `.plans/` directory structure for lightweight task management.
    - If **No plan references**: edit `.plans/config.json`, setting `"plan_comments": false` (the step-6 template default stays `true`).
    - If **Allow plan references**: do nothing (the template already wrote `true`).
 
-9. **Display confirmation**
+9. **Offer to seed `.plans/SKILL_NOTES.md` (opt-in — never forced)**
+
+   `.plans/SKILL_NOTES.md` is the optional per-project notes file several skills read at their Step 1.5 (see CLAUDE.md **Per-project skill notes**). Most projects never gain it because nobody knows to hand-author it, so offer a pre-filled one here. It is **opt-in**: the file is written only on the user's explicit consent, and declining writes **nothing**, so behavior stays byte-identical to a project that never had the file. This step is the single source of truth for the detection + offer; `/plan-context` reuses it for already-initialized projects.
+
+   a. **Read first.** If `.plans/SKILL_NOTES.md` already exists (e.g. this is the partial-initialization repair path from step 1), do **not** prompt and do **not** touch it. Note `Skill notes: .plans/SKILL_NOTES.md already present — left as-is` for step 10 and move on.
+
+   b. **Detect project signals** (read-only, from the project root). This mirrors the dev-server detection in `skills/plan-execute/SKILL.md` step 11c.5 so the seeded note is exactly what that step reads back:
+      - **Package manager** — from the lockfile: `pnpm-lock.yaml` → `pnpm`, `yarn.lock` → `yarn`, `bun.lockb` → `bun`, `package-lock.json` → `npm`. With a `package.json` but no lockfile, assume `npm`. With no `package.json` at all, there is no package-manager signal.
+      - **Dev script** — `package.json` `scripts.dev` exists (just its presence; do not copy its body).
+      - **Port convention** — grep `AGENTS.md` and `CLAUDE.md` at the project root for a `PORT=<base + task number>` pattern (e.g. `PORT=<4000 + task number> yarn dev`) and take its numeric base.
+      - **Design system** — a `design-system/` directory exists at the project root.
+
+   c. **No signals → skip silently.** If none of the four signals was detected, there is nothing to pre-fill: do not prompt, do not write a file, and print nothing about skill notes in step 10.
+
+   d. **Build the proposed file body** in the documented `## all` + per-skill format — only lines backed by a detected signal, never guesses:
+      - Under `## all`:
+        - A package-manager bullet when a package manager was detected: `- Package manager: <pm> (use <pm> for installs and scripts, never another package manager)`.
+        - A dev-server bullet **only when a `dev` script exists**, in the exact shape plan-execute reads: `- Dev server: PORT=<BASE + task number> <pm> dev`, where `BASE` is the base from the port convention if one was found, else `3000` (plan-execute's default). For npm the command is `npm run dev`. No dev script → omit this bullet (a package-manager bullet may still stand alone).
+      - Only when `design-system/` exists, append a `## des-build` section holding a **commented placeholder** — an HTML comment, not a bullet — e.g. `<!-- - Review pages live under app/(preview)/ — set this to your project's review-page location -->`. The review-page location cannot be detected, so a concrete path would be a guess; and reading skills count bullets as notes, so a comment keeps their `applied <n> note(s)` line honest (the placeholder is not a note until the user uncomments it).
+      - If `## all` would be empty (e.g. only `design-system/` was detected), omit the `## all` heading and propose just the `## des-build` section.
+
+      Worked example — `pnpm-lock.yaml`, a `dev` script, `PORT=<4000 + task number> pnpm dev` in `AGENTS.md`, and a `design-system/` directory:
+
+      ```markdown
+      ## all
+      - Package manager: pnpm (use pnpm for installs and scripts, never another package manager)
+      - Dev server: PORT=<4000 + task number> pnpm dev
+
+      ## des-build
+      <!-- - Review pages live under app/(preview)/ — set this to your project's review-page location -->
+      ```
+
+   e. **Offer, don't force.** Show the proposed body in a fenced `markdown` block, then ask via `AskUserQuestion`:
+      - Question: "Create `.plans/SKILL_NOTES.md` with these pre-filled notes? Skills read it to follow project conventions (package manager, dev-server port)."
+      - Header: "Skill notes"
+      - Options:
+        1. **Skip (recommended)** — Write nothing (today's behavior). You can create `.plans/SKILL_NOTES.md` by hand any time.
+        2. **Accept** — Write the proposed file as shown.
+        3. **Edit** — Adjust the notes before writing.
+      - **Skip** → write nothing. No stub, no empty file.
+      - **Accept** → write `.plans/SKILL_NOTES.md` with the proposed body exactly as shown.
+      - **Edit** → take the user's adjustments (free text via "Other", or ask a follow-up asking what to change), apply them to the proposal, re-show the revised body in a fenced block, then write it. If the edits leave the file with no content (no bullets and no sections), write **nothing** and treat it as Skip.
+      - Remember for step 10 which outcome applied, and on write the number of bullets (notes) in the file — HTML-comment placeholders are not counted.
+      - This step **never** touches `config.json` and never records the decline anywhere (no `skill_notes_declined`-style key — that would be a phantom config key; see CLAUDE.md **Model selection**). Absence of the file is the complete record of a decline.
+
+10. **Display confirmation**
    Show:
    - Confirmation that `.plans/` was created
    - List of files created
    - Whichever applies: "Added `.plans/` to `.gitignore`" or "Tracking `.plans/` in git"
    - Whichever applies: "Plan references in code comments: allowed" or "Plan references in code comments: disabled"
+   - Whichever applies from step 9: "Created `.plans/SKILL_NOTES.md` (N notes)", "Skill notes: skipped (create `.plans/SKILL_NOTES.md` any time — see CLAUDE.md)", or "Skill notes: `.plans/SKILL_NOTES.md` already present — left as-is". Omit the line entirely when step 9 skipped silently because no signals were detected.
    - Suggest next steps:
      - `/plan-context` to set up project context
      - `/plan-capture <description>` to capture your first task
      - `/plan-help` to see all commands
 
-10. **Commit changes**
+11. **Commit changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
    - Read `.plans/config.json` for `git_commits` setting
@@ -183,12 +230,12 @@ Initialize the `.plans/` directory structure for lightweight task management.
        ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-11. **Register project (best-effort telemetry)**
+12. **Register project (best-effort telemetry)**
     - Run via Bash, best-effort and silent: `node ~/.claude/plans-cc/plan-touch.js "$PWD" 2>/dev/null || true`
     - This registers the project in the system-wide plans registry for the desktop dashboard.
     - Ignore any error and do NOT surface output to the user. Never let this break the skill.
 
-12. **End-of-action marker**
+13. **End-of-action marker**
     - Output as the final line: `🟢 INITIALIZED · .plans/ ready → Next: /plan-capture`
 
 ## Edge Cases
@@ -196,4 +243,5 @@ Initialize the `.plans/` directory structure for lightweight task management.
 - **Already initialized**: If `.plans/config.json` exists in cwd, show error with suggestion to use `/plan-status`
 - **Partial initialization**: If `.plans/` exists but is missing files, offer to repair by creating missing files only
 - **Nested under an existing root**: If cwd has no `.plans/` but an ancestor does, ask before creating a nested root (see step 1) — the recommended path is to use the existing ancestor root, since all skills discover it automatically
+- **SKILL_NOTES offer** (step 9): never written without explicit consent — **Skip** (the recommended default) and an Edit that empties the proposal both write nothing, byte-identical to today. Already present (e.g. on the repair path) → no prompt, file untouched. No detectable signals (no lockfile/`package.json`, no `dev` script, no port convention, no `design-system/`) → no prompt, no file, no confirmation line. The decline is never recorded in `config.json`.
 - **Not in a project directory**: Proceed anyway (user knows best where to put their plans)

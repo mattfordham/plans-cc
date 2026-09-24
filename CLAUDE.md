@@ -355,7 +355,7 @@ The model a `plan-*` skill spawns sub-agents with is **configuration, not a hard
 
 **Only a Task-tool spawn site can honor a model key.** A skill body is markdown that Claude follows *in the main session*, on whatever model that session was launched with — a skill cannot switch its own model mid-run. So a role key only means something where a `Task` call actually names a model. A key like `models.elaborate` (or `models.review`, or any per-skill name) is **structurally inert**: nothing could ever read it, and it would sit in config.json looking functional while doing nothing. Never add one. Roles are named after *what kind of sub-agent gets spawned*, never after the skill that spawns it — which is precisely why there are three roles and not one per skill.
 
-This failure mode has precedent in this repo: `segment_threshold` is written into every generated config by `skills/plan-init/SKILL.md:120` and **read by nothing** — `plan-execute` step 10 hardcodes "segments of 3-4 steps" regardless. It is a phantom key that has looked configurable for its entire existence. Do not grow the collection.
+This failure mode has precedent in this repo: `segment_threshold` is written into every generated config by `skills/plan-init/SKILL.md:121` and **read by nothing** — `plan-execute` step 10 hardcodes "segments of 3-4 steps" regardless. It is a phantom key that has looked configurable for its entire existence. Do not grow the collection.
 
 ### How Summary Section
 
@@ -393,7 +393,7 @@ An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`)
 
 ### Per-project skill notes (`.plans/SKILL_NOTES.md`) — cross-skill contract
 
-An **optional**, hand-authored markdown file at `.plans/SKILL_NOTES.md` that lets a
+An **optional** markdown file at `.plans/SKILL_NOTES.md` (hand-authored, or seeded on explicit consent, see below) that lets a
 project nudge how skills run without editing the skill files. It is organized into an
 `## all` section (notes that apply to every reading skill) plus per-skill `## <skill-name>`
 sections (e.g. `## plan-execute`, `## des-build`, `## plan-executor`). Each bullet under a
@@ -430,9 +430,18 @@ section is one instruction — "prefer pnpm over npm", "the dev server runs on p
 - Each reading skill prints exactly one line when notes were applied
   (`Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md`) and prints nothing when the
   file is absent or empty.
-- **Not seeded by `/plan-init`** — same reasoning as `models` / `worktree_links`: a generated
-  file reads as an instruction to tune something most projects should leave alone. Documented
-  here, mentioned by `/plan-init` and `/plan-help`, and honored when hand-authored.
+- **Offered, never created without consent.** `/plan-init` step 9 offers a pre-filled file,
+  and `/plan-context` makes the same offer (by reference to that step) when
+  `.plans/SKILL_NOTES.md` is absent. The proposal is built only from detected signals:
+  lockfile package manager, `scripts.dev`, a `PORT=<base + task number>` convention in
+  `AGENTS.md`/`CLAUDE.md`, and a `design-system/` directory. **Skip** is the recommended
+  default. Declining writes nothing, so the result is byte-identical to today. No signals
+  means no offer. An existing file is never re-offered or touched. The decline is never
+  recorded in `config.json`, because the absence of the file is the whole record, and a
+  `skill_notes_declined`-style key would be a phantom key. This is deliberately an offer and
+  not a seed: a silently generated file reads as an instruction to tune something most
+  projects should leave alone. `models` and `worktree_links` remain **never seeded and never
+  offered**. The file is still honored when hand-authored.
 
 ### Checkbox Progress Tracking
 

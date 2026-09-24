@@ -7,6 +7,7 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
+  - AskUserQuestion
 description: Update project context with tech stack, patterns, and key information
 ---
 
@@ -120,7 +121,14 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    [Preserve existing if present, otherwise: "_Anything else relevant_"]
    ```
 
-8. **Commit .plans/ changes**
+8. **Offer to seed `.plans/SKILL_NOTES.md` (only when absent — opt-in, never forced)**
+   This is the same offer `/plan-init` makes, for projects that were initialized before it existed or that skipped it. It is the **only** interactive step in this skill. It fires only when the file is absent **and** at least one signal is detected.
+   - **Gate: file present → do nothing.** If `.plans/SKILL_NOTES.md` already exists, skip this step entirely: no prompt, no read-back, no overwrite, and nothing printed about skill notes in the summary. An existing file is never re-offered or touched.
+   - **File absent** → follow `skills/plan-init/SKILL.md` step 9 (b)–(e) exactly: detect the four signals (package manager from lockfile, `scripts.dev`, port convention in `AGENTS.md`/`CLAUDE.md`, `design-system/` presence), skip silently when none is found, build the pre-filled `## all` + per-skill proposal, and offer **Skip (recommended)** / **Accept** / **Edit** via `AskUserQuestion`. Do not re-derive the recipe here. That step is the single source of truth.
+   - **Skip** (or an Edit that empties the proposal) writes **nothing**. The decline is not recorded anywhere (no `config.json` key), so a later `/plan-context` run offers again while the file is still absent. This is intended: the absence of the file is the complete record.
+   - Remember the outcome (created with N notes / skipped / no signals) for step 10. An accepted file is picked up by step 9's `git add .plans/`.
+
+9. **Commit .plans/ changes**
    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
    - If not a git repo: skip silently
    - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
@@ -136,7 +144,7 @@ Update the project's CONTEXT.md with relevant information about the codebase.
      ```
    - If commit fails (e.g. hooks): warn but do not fail the skill
 
-9. **Display summary**
+10. **Display summary**
    Show what was detected and written:
    ```
    Updated .plans/CONTEXT.md
@@ -146,8 +154,11 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    - Testing: Jest (tests/, npm test)
    - Structure: 5 directories mapped
 
+   Created .plans/SKILL_NOTES.md (2 notes)
+
    Review and edit CONTEXT.md if needed.
    ```
+   - The skill-notes line reflects step 8: "Created `.plans/SKILL_NOTES.md` (N notes)" or "Skill notes: skipped (create `.plans/SKILL_NOTES.md` any time, see CLAUDE.md)". Omit the line entirely when the file was already present or no signals were detected.
 
    End-of-action marker (final line): `🟢 CONTEXT UPDATED`
 
@@ -158,3 +169,4 @@ Update the project's CONTEXT.md with relevant information about the codebase.
 - **Large monorepo**: Focus on current directory only, note scope in Overview
 - **No tests detected**: Write "Not detected" in Testing section, suggest adding test config
 - **Mixed test frameworks**: List all detected frameworks
+- **SKILL_NOTES offer** (step 8): gated on the file being absent. An existing `.plans/SKILL_NOTES.md` is never re-offered, overwritten, or mentioned. When the file is absent: no signals → no prompt; **Skip** or an emptied Edit → no file, byte-identical to today. The decline is not remembered, so the next run offers again while the file is still absent.
