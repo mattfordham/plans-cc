@@ -140,11 +140,14 @@ capture → elaborate → execute (worktree) → review → complete
 /plan-execute 5 yolo                                # Autonomous execution on existing task #5
 /plan-capture Add dark mode discuss                 # Capture → clarifying conversation → elaborate
 /plan-execute Fix bug yolo discuss                  # Capture → clarifying gate → autonomous yolo run
+/plan-capture Fix badge --base feature/x and go     # Capture with **Base:** feature/x → branch from / merge into it
 ```
 
 **Keywords on `/plan-execute`:** `branch` / `use branch`, `worktree` / `use worktree`, and `yolo` / `autonomous`. `yolo` implies `worktree` + `branch` + skip-mode elaboration + deferred observations + status → `review` on completion. Low-confidence assumptions surface at the top of `/plan-review`.
 
 **The `discuss` keyword** (on `/plan-capture <desc> discuss` and `/plan-execute <desc> yolo discuss`) front-loads a short, options-first clarifying conversation about a freshly-captured idea *before* a plan is committed, then chains into elaboration. It only fires after an auto-capture (v1 scope) — an existing task id like `/plan-execute 5 discuss` does NOT trigger it; use the standalone `/plan-discuss 5` to discuss an existing task. Because the gate is open-ended (it runs until you say "go"), `yolo discuss` is intentionally NOT fully unattended — it pauses for the upfront conversation before autonomy begins.
+
+**The `--base <branch>` flag** (on any capture: `/plan-capture`, or a description passed to `/plan-execute` / `/plan-elaborate`) writes a `**Base:** <branch>` header so the task branches from, rebases onto, and merges into that branch instead of the default. It's the only argument-level way to set a base — one is never inferred — and it errors with an existing task id; edit the header for those.
 
 **Switch between tasks:**
 ```

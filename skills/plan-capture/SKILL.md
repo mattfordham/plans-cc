@@ -1,7 +1,7 @@
 ---
 name: plan-capture
 disable-model-invocation: false
-argument-hint: "[description] [discuss | elaborate | and execute|go]"
+argument-hint: "[description] [--base <branch>] [discuss | elaborate | and execute|go]"
 allowed-tools:
   - Read
   - Write
@@ -22,7 +22,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
 ## Arguments
 
-- `$ARGUMENTS`: Optional task description, optionally followed by an auto-proceed phrase (e.g., "Fix login timeout bug", "Fix login bug and elaborate", "Fix login bug and go with branch", "Add dark mode discuss", "Add dark mode discuss and go")
+- `$ARGUMENTS`: Optional task description, optionally followed by an auto-proceed phrase (e.g., "Fix login timeout bug", "Fix login bug and elaborate", "Fix login bug and go with branch", "Add dark mode discuss", "Add dark mode discuss and go"). May also carry an explicit `--base <branch>` flag anywhere (e.g. "Fix badge count --base feature/notification-badges and go") to set the task's `**Base:**` field — see step 2.
 
   The trailing `discuss` keyword front-loads a short, options-first clarifying conversation about the freshly-captured idea before any plan is committed, then chains into elaboration. It implies `elaborate` (like `execute` implies `elaborate`) and composes with the execute/go/branch/worktree phrases.
 
@@ -36,7 +36,15 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
 2. **Parse arguments for description and auto-proceed intent**
 
-   Check `$ARGUMENTS` for trailing auto-proceed phrases. Match against the **end** of the argument string only (case-insensitive). Order matters — check longest patterns first to avoid partial matches:
+   **First, extract an explicit `--base` flag** (before the trailing-phrase match below, so a flag placed at the end never hides a trailing phrase):
+   - Look for the token `--base` followed by a branch name (`--base feature/x`), or the single token `--base=feature/x`, anywhere in `$ARGUMENTS`. The flag is the literal `--base` only — case-sensitive, no synonyms, no bare `base` keyword.
+   - If found: store the branch name as `capture_base` and strip the flag and its value from `$ARGUMENTS`. Validate it with `git check-ref-format --branch <name>`; if invalid (or `--base` has no value), error: `--base needs a valid branch name (got: "<value>").` and stop without capturing.
+   - Do NOT check that the branch exists — `/plan-execute` creates a missing base locally per the **Resolve target branch** contract in `CLAUDE.md`.
+   - If not found: `capture_base = null` (the default — no `**Base:**` field is written).
+   - **This flag is the ONLY way capture sets `**Base:**`.** Never infer a base from the description ("this belongs on the badges feature", "part of feature/x"), from the current checkout, or from other tasks. A description that merely mentions a branch is just description text.
+   - When invoked by `/plan-execute` or `/plan-elaborate` auto-capture, the caller has already extracted the flag and passes `capture_base` in; use that value.
+
+   Then check the remaining `$ARGUMENTS` for trailing auto-proceed phrases. Match against the **end** of the argument string only (case-insensitive). Order matters — check longest patterns first to avoid partial matches:
 
    | Pattern (at end of `$ARGUMENTS`) | Result |
    |---|---|
@@ -98,12 +106,13 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
         **Build:** des-build · Component1, Component2
         Absence = no build-skill routing (the default). -->
 
-   <!-- Optional, OMITTED by default. NEVER auto-set at capture (set by hand or via
-        /plan-discuss). When present, the task branches FROM, rebases ONTO, and merges
-        INTO this branch instead of the repo default — see the "Resolve target branch"
-        and "The **Base:** task-header field" contracts in CLAUDE.md. Place it directly
-        under **Status:** (after **Blocked by:** when that field is present):
-        **Base:** feature/notification-badges
+   <!-- Optional, OMITTED by default. Written ONLY when `capture_base` is set by an
+        explicit `--base <branch>` flag (step 2) — never inferred. When present, the task
+        branches FROM, rebases ONTO, and merges INTO this branch instead of the repo
+        default — see the "Resolve target branch" and "The **Base:** task-header field"
+        contracts in CLAUDE.md. Place it directly under **Status:** (after **Blocked by:**
+        when that field is present):
+        **Base:** [capture_base]
         Absence = the repo default branch (today's behavior, byte-for-byte). -->
 
    ## What
@@ -318,4 +327,6 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 - **Elaboration failure stops the chain**: Task is still captured successfully, but auto-execute is skipped
 - **Task content is NEVER an execute trigger**: Only an explicit trailing `execute`/`go` phrase sets `auto_execute=true`. Text inside the task description that names a build skill, tool, command, or file ("Use des-build for this", "implement with the X helper", "run the migration") describes *what to do during a later execute* — it does not authorize execution now. `discuss` and `elaborate` chains end at the elaborated task with a `Next: /plan-execute NNN` hint, and you must hard-stop there. Reading task content as license to build is the single most important failure to avoid.
 - **Seeding the `**Build:**` field (the one narrow exception, and ONLY a field — never an execute trigger)**: If the description is an explicit routing directive that names a build skill (e.g. begins "Use des-build to build the Hero…"), you MAY seed a `**Build:**` field in the task header so a later `/plan-execute` routes that build through the real skill (format: `**Build:** des-build · Hero`, listing the component/section unit(s)). This is the sole sanctioned place task body text influences the field, and it happens **only at capture time, deliberately** — `/plan-execute` later reads the field, never re-derives it from the body. Seeding the field does NOT change the execution gate one bit: the task is still only captured (the hard-stop rule above stands), and an explicit trailing `execute`/`go` is still required to build. When in doubt, omit the field — its absence simply means no routing.
+- **`--base <branch>` is the only way capture sets `**Base:**`**: `/plan-capture Fix badge count --base feature/notification-badges` writes `**Base:** feature/notification-badges` under `**Status:**` and captures "Fix badge count". The flag can sit anywhere and composes with every trailing phrase (`… --base feature/x and go with worktree`). Without the flag, no `**Base:**` is written — even if the description names a branch ("Fix the badge count on feature/notification-badges" captures that text verbatim and sets nothing). Never infer a base. Unlike the `**Build:**` seeding exception above, there is no body-text path to this field at all.
+- **`--base` with an invalid or missing branch name**: Error and capture nothing (`--base needs a valid branch name`). Never fall back to capturing without the base — the user asked for one.
 - **No trailing phrase**: Fully backwards-compatible with original behavior

@@ -1,7 +1,7 @@
 ---
 name: plan-execute
 disable-model-invocation: false
-argument-hint: "<id|description> [steps N-M] [branch|worktree] [keep] [discuss]"
+argument-hint: "<id|description> [--base <branch>] [steps N-M] [branch|worktree] [keep] [discuss]"
 allowed-tools:
   - Read
   - Write
@@ -53,6 +53,9 @@ These rules bind every invocation. They are not subject to your judgment about t
 - `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a branch keyword and/or step filter
 
 **Parsing rules:**
+- **`--base` flag extraction** (before everything else) — if `$ARGUMENTS` contains the literal token `--base` followed by a branch name, or the single token `--base=<branch>`, store the name as `capture_base` and strip the flag and its value before any other parsing (so `feature/x` is never mistaken for a description word or a keyword). Case-sensitive, no synonyms, no bare `base` keyword.
+  - Valid **only with an auto-capture description** — it is handed to plan-capture, which writes `**Base:**` into the new task's header (see plan-capture step 2). If the remaining arguments turn out to be task IDs, error: `--base only applies when capturing a new task. To set the base of an existing task, edit its **Base:** header line or use /plan-discuss NNN.` and stop — never rewrite the base of an existing task, which may already be branched from somewhere else.
+  - The flag is the ONLY argument-level way to set a base. Never infer one from the description, the current checkout, or other tasks.
 - **Worktree keyword detection** (first) — set `worktree_mode = true` if `$ARGUMENTS` contains any of (case-insensitive): `worktree`, `use worktree`, `with worktree`
   - Strip worktree keywords from `$ARGUMENTS` before further parsing
   - `worktree_mode = true` implies `branch_mode = true` (worktrees always use branches)
@@ -119,6 +122,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 - `/plan-execute Fix bug discuss` → auto-capture, hold an upfront clarifying conversation, then auto-elaborate and execute
 - `/plan-execute Fix bug yolo discuss` → auto-capture, run the clarifying gate first (pauses for the user), then the full autonomous yolo run
 - `/plan-execute Fix bug branch discuss` → auto-capture, clarifying gate, then execute on a git branch
+- `/plan-execute Fix badge count --base feature/notification-badges yolo` → auto-capture with `**Base:** feature/notification-badges`, then run autonomously on a worktree branched from that base
+- `/plan-execute 5 --base feature/x` → error: `--base` only applies to a new capture
 
 ## Steps
 
@@ -133,6 +138,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-execute`). Print nothing when the file is absent or empty.
 
 2. **Parse and resolve arguments**
+   - Extract the `--base <branch>` / `--base=<branch>` flag first (see Arguments section) → store as `capture_base` (or null), and strip it from `$ARGUMENTS`. Validate with `git check-ref-format --branch <name>`; invalid or missing value → error `--base needs a valid branch name (got: "<value>").` and stop.
    - Check for worktree keywords/phrases (see Arguments section) → store as `worktree_mode` flag (true/false). If true, also set `branch_mode = true`.
    - Strip worktree keywords from `$ARGUMENTS`
    - Check for YOLO keywords/phrases (see Arguments section) → store as `yolo_mode` flag (true/false). If true, also set `worktree_mode = true` AND `branch_mode = true`.
@@ -152,6 +158,7 @@ These rules bind every invocation. They are not subject to your judgment about t
      - If ANY remaining token is non-numeric AND `step_filter` is NOT set → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
      - If ANY remaining token is non-numeric AND `step_filter` IS set → ambiguous. Discard `step_filter`, treat entire original remaining string as a description. Set `auto_capture = true`. (Step filters only work with existing task IDs.)
      - If nothing remains → `task_ids` is empty, `auto_capture = false`
+   - If `capture_base` is set and `auto_capture` is false → error `--base only applies when capturing a new task. To set the base of an existing task, edit its **Base:** header line or use /plan-discuss NNN.` and stop before touching any task.
 
 2.5. **Normalize external content** (only if `auto_capture` is true AND `task_ids` is empty)
 
@@ -207,6 +214,7 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    Read `skills/plan-capture/SKILL.md` and follow its steps 1–8 (capture only, no auto-proceed chaining) using `capture_description` as the task description:
    - Verify initialization, generate ID, slugify, infer type, write task file, update config, update PROGRESS.md
+   - Pass `capture_base` through: when set, the task file gets `**Base:** [capture_base]` under `**Status:**` (plan-capture step 6). When null, no `**Base:**` is written.
    - Store the newly created task ID
 
    Show brief confirmation:
@@ -1363,6 +1371,7 @@ These rules bind every invocation. They are not subject to your judgment about t
 - **Task not found**: "Task #NNN not found. Run `/plan-list` to see available tasks."
 - **Task not elaborated (pending)**: Offer to auto-elaborate inline instead of stopping
 - **Auto-capture failure**: Print error and stop entirely
+- **`--base` with an existing task ID**: Error and stop — the flag only sets `**Base:**` on a fresh auto-capture. Changing an existing task's base (which may already have a branch cut from somewhere else) is a deliberate edit to its header or a `/plan-discuss` decision, never a side effect of an execute invocation.
 - **Auto-elaborate failure**: Print warning, continue — elaboration gate in step 7a handles it
 - **Description that looks like numbers**: If ALL tokens are numeric, they're IDs. "42" is ID 042. "Fix bug 42" is a description.
 - **Changes section already has content**: Build on it, don't overwrite

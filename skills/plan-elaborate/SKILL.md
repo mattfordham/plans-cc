@@ -1,7 +1,7 @@
 ---
 name: plan-elaborate
 disable-model-invocation: false
-argument-hint: "<id|description> [skip] [deep]"
+argument-hint: "<id|description> [--base <branch>] [skip] [deep]"
 allowed-tools:
   - Read
   - Write
@@ -31,6 +31,7 @@ Research the codebase and flesh out a captured task with implementation details.
 - `$ARGUMENTS`: One or more task IDs, OR a task description, optionally followed by a skip keyword and/or a trailing `deep` keyword
 
 **Parsing rules:**
+- **`--base` flag extraction** (before everything else) — same rule as `/plan-execute`: the literal token `--base` followed by a branch name, or `--base=<branch>`, anywhere in `$ARGUMENTS` → store as `capture_base` and strip it. Valid only with an auto-capture description (passed to plan-capture, which writes `**Base:**`); with task IDs, error `--base only applies when capturing a new task. To set the base of an existing task, edit its **Base:** header line or use /plan-discuss NNN.` Never infer a base.
 - **Skip detection** (first) — set `skip_mode = true` if `$ARGUMENTS` contains any of:
   - Single keywords (per-token, case-insensitive): `skip`, `auto`, `noprompt`, `noinput`
   - Phrases (matched against full argument string, case-insensitive): `skip input`, `no input`, `no prompts`, `just go`, `just do it`
@@ -63,6 +64,7 @@ Research the codebase and flesh out a captured task with implementation details.
 - `/plan-elaborate 1 3 deep` → deep-elaborate tasks 1 and 3 sequentially
 - `/plan-elaborate Redesign the auth layer deep` → auto-capture "Redesign the auth layer", then deep-elaborate it
 - `/plan-elaborate Add deep linking support` → auto-capture "Add deep linking support"; **`deep_mode` stays false** — `deep` is mid-string, not the final token, and the description is preserved intact
+- `/plan-elaborate Add unread badge --base feature/notification-badges` → auto-capture "Add unread badge" with `**Base:** feature/notification-badges`, then elaborate
 
 ## Context
 
@@ -81,6 +83,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
    - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-elaborate`). Print nothing when the file is absent or empty.
 
 2. **Parse and resolve arguments**
+   - Extract the `--base <branch>` / `--base=<branch>` flag first (see Arguments section) → `capture_base` (or null); strip it. Validate with `git check-ref-format --branch <name>`; invalid or missing value → error `--base needs a valid branch name (got: "<value>").` and stop.
    - Check for skip keywords/phrases (see Arguments section) → store as `skip_mode` flag (true/false)
    - Strip skip keywords/phrases from `$ARGUMENTS`
    - **Then check for a trailing `deep`:** if the remaining string ENDS with the bare token `deep` (case-insensitive, ignoring trailing whitespace), set `deep_mode = true` and strip that trailing token. Otherwise `deep_mode = false`.
@@ -91,6 +94,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
      - If ALL remaining tokens are numeric → task IDs. Zero-pad each to 3 digits, deduplicate → store as `task_ids` list. Set `auto_capture = false`.
      - If ANY remaining token is non-numeric → the entire remaining string is a task description. Set `auto_capture = true`. Store as `capture_description`.
      - If nothing remains → `task_ids` is empty, `auto_capture = false`
+   - If `capture_base` is set and `auto_capture` is false → error `--base only applies when capturing a new task. To set the base of an existing task, edit its **Base:** header line or use /plan-discuss NNN.` and stop.
 
 3. **Auto-capture** (only if `auto_capture` is true)
 
@@ -98,6 +102,7 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
    Read `skills/plan-capture/SKILL.md` and follow its steps 1–8 (capture only, no auto-proceed chaining) using `capture_description` as the task description:
    - Verify initialization, generate ID, slugify, infer type, write task file, update config, update PROGRESS.md
+   - Pass `capture_base` through: when set, the task file gets `**Base:** [capture_base]` under `**Status:**`; when null, no `**Base:**` is written
    - Store the newly created task ID
 
    Show brief confirmation:
