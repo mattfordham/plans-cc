@@ -896,6 +896,11 @@ These rules bind every invocation. They are not subject to your judgment about t
    imports the built component(s) and passes representative inline sample data so the
    component renders in isolation. This page is what the later visual-comparison stage
    navigates to and measures against Figma — without it there is nothing to measure.
+   **Set the page's document title to name what is being reviewed** (e.g.
+   `Review: <Component>` — in Next.js App Router, `export const metadata = { title:
+   "Review: Contact" }` in the page) so the user can tell several review tabs apart
+   when reviewing them side by side in the browser. Never leave it inheriting the
+   site's default title.
    **Never write screenshots, images, or binary artifacts into the repo** (this is
    already the repo-hygiene rule) — the review page is source, not an image.
 
