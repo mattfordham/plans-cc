@@ -55,6 +55,7 @@ This is the inverse of `/plan-restore`.
    - Append a `**Paused:** [ISO timestamp YYYY-MM-DDTHH:MM]` line to the Notes section (create the section if absent).
 
    **Branch/worktree commit + checkout (mirrors plan-pause step 6):**
+   - **Switch back to the DEFAULT branch, never the base.** Even when the task carries a `**Base:**` header, backlog switches the checkout back to the repo **default** branch below — NOT the base. Backlog auto-pauses first and parks the checkout at a clean resting point, and this is the SAME decision `plan-pause` makes; the base is itself in-flight work that may not exist locally, so the default branch is the only reliably-present resting point. (See the `### The `**Base:**` task-header field` contract in `CLAUDE.md`.) Do NOT change the `git checkout [default-branch]` commands below.
    - **Multi-repo task** (has a `**Repos:**` field or a `(multi-repo: ...)` parenthetical on the `**Branch:**` line): for each listed repo — `cd [repo] && git status --porcelain`; if dirty, `cd [repo] && git add -A && git commit -m "plan: backlog #NNN - [title]"`; determine that repo's default branch (`cd [repo] && git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, fallback main/master); if not already on it, `cd [repo] && git checkout [default-branch]`. Then skip the single-repo handling below.
    - **Single-repo task with a `**Branch:**` field:** `git rev-parse --git-dir 2>/dev/null` to confirm a git repo (skip silently if not); `git status --porcelain`; if dirty, `git add -A && git commit -m "plan: backlog #NNN - [title]"`; determine the default branch (`git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, fallback main/master); if not already on it, `git checkout [default-branch]`.
    - **Worktree handling:** if the task has a `**Worktree:**` field, the work happened in a separate checkout. Commit any uncommitted changes there (`cd [worktree] && git status --porcelain` → `git add -A && git commit ...`) as above; the main checkout's branch does not need switching. Do NOT remove the worktree — `/plan-restore` + `/plan-execute` may resume it.
@@ -74,6 +75,7 @@ This is the inverse of `/plan-restore`.
      ```bash
      mv .plans/pending/NNN-slug.md .plans/backlog/NNN-slug.md
      ```
+   - Backlog is a **location, not a status** — the move preserves ALL of the task's header metadata verbatim, including any `**Base:**`, `**Branch:**`, `**Repos:**`, and `**Worktree:**` fields. Never strip a header field when shelving.
 
 9. **Update PROGRESS.md**
    - Remove the task from the "Active Work" section if present.

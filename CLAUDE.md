@@ -101,7 +101,7 @@ pending   elaborated  in-progress          review │  in-review │  completed
                                              └─┘          └─┘ (archived)
                                         (pause back to review)
 
-In a multi-repo project, multiple tasks may be in-review concurrently when their repo sets are disjoint. Single-repo projects normally stay one-at-a-time (the lone review occupies the shared main checkout) — UNLESS a task was executed with `keep` (e.g. `/plan-execute 1 worktree keep`), which preserves the execution worktree so the task is reviewed inside its own checkout. A kept-worktree task never occupies the shared main checkout, so two `keep`-executed single-repo tasks can be in review/in-review at the same time. Teardown of a kept worktree moves to `/plan-complete` (merge → remove worktree → strip the `**Worktree:**` field). The merge never checks out the default branch in a directory this session does not own: `/plan-complete` dispatches on where the default branch is checked out — nowhere and fast-forwardable (`git fetch .`), in our own cwd (plain `git merge`), elsewhere (refuse and stop), or nowhere but diverged (merge inside a throwaway worktree). Merge and teardown are **independent**: `git worktree remove` removes a checkout, not a branch, so the ordering is chosen for cleanliness, not correctness.
+In a multi-repo project, multiple tasks may be in-review concurrently when their repo sets are disjoint. Single-repo projects normally stay one-at-a-time (the lone review occupies the shared main checkout) — UNLESS a task was executed with `keep` (e.g. `/plan-execute 1 worktree keep`), which preserves the execution worktree so the task is reviewed inside its own checkout. A kept-worktree task never occupies the shared main checkout, so two `keep`-executed single-repo tasks can be in review/in-review at the same time. Teardown of a kept worktree moves to `/plan-complete` (merge → remove worktree → strip the `**Worktree:**` field). The merge never checks out the default branch in a directory this session does not own: `/plan-complete` dispatches on where the default branch is checked out — nowhere and fast-forwardable (`git fetch .`), in our own cwd (plain `git merge`), elsewhere (refuse and stop), or nowhere but diverged (merge inside a throwaway worktree). Merge and teardown are **independent**: `git worktree remove` removes a checkout, not a branch, so the ordering is chosen for cleanliness, not correctness. When a task carries a `**Base:**` header, the branch-from / rebase-onto / merge-into target throughout is that base branch instead of the default branch, per the **Resolve target branch** contract.
 
 brainstorm → expand → elaborate → execute → complete
    │            │
@@ -331,6 +331,24 @@ degrading. A missing input that produces a plausible artifact is worse than one 
 because a build from nothing still typechecks, lints, and returns HTTP 200, and therefore
 **reports as a clean success.** Verifying the build is not verifying the inputs.
 
+### Resolve target branch (cross-skill contract)
+
+Every git-lifecycle skill picks the branch it branches FROM, rebases ONTO, and merges INTO by the same rule, referenced elsewhere by name as *"per the **Resolve target branch** contract in CLAUDE.md."*
+
+**The canonical rule:** the **target branch** is the task's `**Base:**` header value when that field is present and non-empty; OTHERWISE it is the repo's default branch, resolved by the existing idiom `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main`, then `master`.
+
+- **Absence = today's behavior exactly.** When `**Base:**` is absent, OR when its value equals the resolved default branch, every consuming site MUST behave byte-for-byte identically to today. This is opt-in only — same absence discipline as `models` / `worktree_links` / `**Build:**`. A task with no `**Base:**` field produces the exact git operations it produced before this contract existed.
+
+- **Consuming sites (auditable list):**
+  - **`plan-execute`** — branches/switches FROM the target (single- and multi-repo, branch and worktree modes). If the target branch does not exist locally in a repo, it is created from that repo's default branch, with a one-line notice; the base is NEVER pushed.
+  - **`plan-review`** — rebases ONTO the target; shows the diff as `<target>...<task-branch>`.
+  - **`plan-complete`** — merges INTO the target across the full A/B/C/D checkout dispatch (see the Task Lifecycle paragraph). If the base no longer exists at completion, it **hard-errors and stops** — it NEVER silently falls back to `main`.
+  - **`plan-pause` / `plan-backlog`** — deliberately switch the checkout back to the **default** branch, NOT the base, when parking a task. See the `### The `**Base:**` task-header field` section for the reasoning.
+
+- **Multi-repo semantics.** A task carries ONE `**Base:**` value, and it applies to every repo in the task's repo set. Each repo resolves that value against **its own** default branch and creates the base locally, per repo, as needed. There is no per-repo base override.
+
+- **Scope boundaries.** The base is **never pushed** (creation is local-only), and it is **never auto-set at capture** — see the `**Base:**` header-field section for how it is set.
+
 ### Model selection (cross-skill contract)
 
 The model a `plan-*` skill spawns sub-agents with is **configuration, not a hardcoded constant** — an optional `models` object in `.plans/config.json` maps a *role* to a model name, and the spawn sites read it instead of literalizing `"opus"`. Three roles exist, and only three:
@@ -390,6 +408,24 @@ An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`)
 - **The field must actually get set, or every guard downstream is dead code.** `/plan-elaborate` evaluates the route on **every** elaboration (including re-elaboration) and **before** writing the How steps, so a routed task's How steps are written as des-build units rather than generic implementation steps. Under `skip_mode` (which is what `yolo` runs use) the proposal is **auto-accepted and written**, recorded as a `- [low]` assumption — imperative, exactly like every other skip-mode prompt, never "may". The trigger is a `design-system/` directory plus any of: the task names a component/section as the thing being built, the body cites **Figma node URLs** (the strongest signal, and the case that most needs des-build's gate), or it composes existing design-system components into a new visual unit. A task meeting the trigger but deliberately not routed must say why as a `- [low]` assumption.
 - **`/plan-execute` warns (flag-only) when a likely design-system task has no route.** When `build_route` is null but `design-system/` exists and the body cites a Figma node URL or names a component/section, Step 9 surfaces a `⚠️ No build route, but this looks like design-system work` warning and **continues** — it never adds the field, never infers a route, never aborts. This does not weaken "never infer routing from the body": that rule governs what *executes*, and it is unchanged. The warning changes nothing about execution; it only tells a human that a misfiled task is about to take the unguarded path. Same discipline as HISTORY.md cap drift and des-build's global-CSS drift — **flag it, point at the fix, never apply it silently.** Note the ROUTE GUARD above cannot cover this case: with no field there is no route, so there is nothing to guard. A missing field is therefore the *quieter* failure of the two, and the one that shipped a design-system section built from inference in practice.
 - **Figma MCP access belongs to `des-build`, never to `/plan-execute`.** The three `mcp__figma-dev-mode-mcp-server__*` tools are declared in des-build's own `allowed-tools`; the orchestrator declares none and calls none. Do not add them. Granting the orchestrator Figma access would let it reproduce des-build's work *without* des-build's preflight gate — a second silent-degradation path around the guard above, and it would make the abort look like an obstacle to route around rather than the only correct outcome. The capability stays with the skill that has the discipline.
+
+### The `**Base:**` task-header field
+
+An **optional** header field (alongside `**ID:**` / `**Type:**` / `**Status:**`) that overrides the branch a task branches FROM, rebases ONTO, and merges INTO — pointing it at a base branch other than the repo default. Format:
+
+```
+**Base:** feature/notification-badges
+```
+
+- Placed in the header directly under `**Status:**` (after `**Blocked by:**` when that field is present).
+- **Absence = no base override** — the default, fully backwards-compatible. A task with no `**Base:**` field branches from, rebases onto, and merges into the repo default branch exactly as before. Opt-in only. Most tasks have no `**Base:**` field.
+- **Set deliberately, never inferred from body text.** It is added by hand or via `/plan-discuss` — it is NEVER inferred from the task body, NEVER auto-set at capture time, and NEVER seeded by `/plan-init` (same reasoning as `models` / `worktree_links`: a generated key reads as an instruction to tune something most projects should leave alone).
+- **Read by the git-lifecycle skills via the Resolve target branch contract.** `plan-execute`, `plan-review`, and `plan-complete` all resolve their target branch from this field per the `### Resolve target branch (cross-skill contract)` section above — the field itself is inert data; that contract is where it takes effect.
+- **Multi-repo:** the single `**Base:**` value applies to every repo in the task's repo set; each repo resolves it against its own default and creates it locally as needed (see the Resolve target branch contract).
+- **Preserved by every header-rewriting skill** — `plan-elaborate`, `plan-clarify`, `plan-discuss`, `plan-reopen`, `plan-pause`, and `plan-combine` must carry the field through unchanged when they rewrite a task header. `plan-combine`, which builds a fresh merged file, **asks which `**Base:**` to keep** when the tasks being merged disagree on it.
+- **Displayed** by `/plan-show` (and by `/plan-status` / `/plan-list` wherever a task's branch info is shown) when set; omitted when absent.
+- **`plan-pause` and `plan-backlog` switch the checkout back to the DEFAULT branch after pausing/shelving — NOT to the base.** Those operations park the checkout at a clean resting point, and the base is itself in-flight work that may not exist locally; returning to the default branch is the only reliably-present resting point. (This is a deliberate exception to "the base is the task's branch target": it governs the *resting* checkout, not the branch-from/merge-into target.)
+- **If the base branch no longer exists at completion**, `/plan-complete` **STOPS with a clear error** rather than falling back to `main` — a base that has vanished (deleted, renamed, never pushed by a collaborator) is a condition the user must resolve, not one to paper over by silently merging into the wrong branch.
 
 ### Per-project skill notes (`.plans/SKILL_NOTES.md`) — cross-skill contract
 

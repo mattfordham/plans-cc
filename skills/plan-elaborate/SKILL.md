@@ -918,6 +918,8 @@ Reference `.plans/CONTEXT.md` to understand the project's tech stack, patterns, 
 
     **Evaluate this on EVERY elaboration, including re-elaboration**, and evaluate it *before* writing the How steps — a routed task's How steps should be written as des-build units (`Run /des-build <Unit>`), not as generic implementation steps. A task that already has a `**Build:**` field keeps it (never strip it); a task that lacks one is re-evaluated against the trigger below.
 
+    **An existing `**Base:**` header field is likewise PRESERVED untouched across (re-)elaboration — never stripped, never altered** (mirroring the `**Build:**` precedent above).
+
     **Trigger (when "clearly describes building a design-system component/section" is met).** Propose the route when a `design-system/` directory exists AND any of these hold:
     - The task names a component or page section as the thing being built ("Create the Full-bleed CTA page section", "Build the Hero").
     - The task body cites one or more **Figma node URLs** as the design source. A Figma node reference is the strongest available signal that the work is design-system fidelity work, and it is exactly the case that most needs des-build's preflight gate.

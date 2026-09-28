@@ -161,7 +161,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
    **Identify files to search:**
    - Parse the task's Changes section for modified file paths
-   - If the task has a `**Branch:**` field, also run `git diff --name-only [default-branch]...[task-branch]` to get all changed files
+   - If the task has a `**Branch:**` field, also run `git diff --name-only [target-branch]...[task-branch]` to get all changed files, where `[target-branch]` is resolved per the **Resolve target branch** contract in `CLAUDE.md` (the task's `**Base:**` when set, else the default branch). With no `**Base:**` field this is the default branch — byte-for-byte the previous behavior.
    - If no files can be identified, skip this step silently
 
    **Search for common debug patterns using Grep:**
@@ -254,61 +254,66 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     - Check if task file has `**Branch:**` field
     - If no branch field, skip to step 16
     - Get the branch name from the task file
-    - Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master
-    - **REQUIRED: You MUST use the `AskUserQuestion` tool here** — do NOT skip this or print instructions for the user to follow manually. Call AskUserQuestion with:
+    - **Resolve the target branch ONCE here, per the **Resolve target branch** contract in `CLAUDE.md`.** Read the task's `**Base:**` header field: if it is present and non-empty, `[target-branch]` is that base branch; OTHERWISE `[target-branch]` is the repo default, resolved by the existing idiom `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main`, then `master`. This single `[target-branch]` value feeds EVERY downstream site in this step and step 16 — cases A/B/C/D, the find-checkout query, the fast-forward `git merge-base --is-ancestor` check, the throwaway merge worktree (`git worktree add ... [target-branch]`), the case-C refusal text, and the confirmation. Because they all derive from this one value, they pick up the base automatically. **When `**Base:**` is absent, OR when its value equals the resolved default, `[target-branch]` IS the default and every emitted git command and prompt/confirmation string below is byte-for-byte identical to today.**
+    - **Base-missing hard error (fires ONLY when `**Base:**` is present).** Immediately after resolving `[target-branch]`, if the task HAS a `**Base:**` field AND that base branch does NOT exist locally (`git rev-parse --verify --quiet [target-branch]` exits non-zero) AND `[target-branch]` is not the resolved default branch, STOP with:
+      ```
+      🔴 BLOCKED · Task #NNN — base branch '[target-branch]' no longer exists. Cannot merge. (Never falls back to the default branch.)
+      ```
+      Leave status unchanged and do NOT run any merge steps. Do NOT silently fall back to `main`/the default. When the task has NO `**Base:**` field this check does not fire — behavior is unchanged.
+    - **REQUIRED: You MUST use the `AskUserQuestion` tool here** — do NOT skip this or print instructions for the user to follow manually. The prompt and options name the REAL resolved `[target-branch]` (so when Base is set they read "merge to feature/x"). Call AskUserQuestion with:
       - Header: "Merge branch"
-      - Question: "Branch '[branch-name]' is ready to merge to [default-branch]. What would you like to do?"
+      - Question: "Branch '[branch-name]' is ready to merge to [target-branch]. What would you like to do?"
       - Options:
-        1. "Merge and delete branch" — Merge to [default-branch] and delete the feature branch
-        2. "Merge and keep branch" — Merge to [default-branch] but keep the feature branch
+        1. "Merge and delete branch" — Merge to [target-branch] and delete the feature branch
+        2. "Merge and keep branch" — Merge to [target-branch] but keep the feature branch
         3. "Skip merge" — Leave branch as-is, I'll handle it manually
     - **After user responds via AskUserQuestion:**
 
       - **If "Skip merge":** Note in the completion message that the branch was not merged. Do NOT run any of the merge steps below.
 
-      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[default-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it. The cwd-relative git commands here (Case A's `git fetch .`, Case D's `git worktree add .worktrees/.merge-NNN`) rely on the **Project-root discovery** invariant from step 1: after that step's `cd`, cwd IS the discovered project root, so `.worktrees/` resolves at the root even when the session was started from a sub-repo. (Git semantics, the merge dispatch, and teardown are unchanged — this note only pins *where* cwd is.)
+      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[target-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it. The cwd-relative git commands here (Case A's `git fetch .`, Case D's `git worktree add .worktrees/.merge-NNN`) rely on the **Project-root discovery** invariant from step 1: after that step's `cd`, cwd IS the discovered project root, so `.worktrees/` resolves at the root even when the session was started from a sub-repo. (Git semantics, the merge dispatch, and teardown are unchanged — this note only pins *where* cwd is. `[target-branch]` was resolved once above per the **Resolve target branch** contract; when the task has no `**Base:**` field it IS the default and every command here is byte-for-byte what it was before.)
 
-        **Detect where `[default-branch]` is checked out, if anywhere:**
+        **Detect where `[target-branch]` is checked out, if anywhere:**
         ```bash
-        git worktree list --porcelain | grep -B2 "^branch refs/heads/[default-branch]$" | head -1 | cut -d' ' -f2
+        git worktree list --porcelain | grep -B2 "^branch refs/heads/[target-branch]$" | head -1 | cut -d' ' -f2
         ```
-        Call this `[default-checkout-path]` (empty = checked out nowhere).
+        Call this `[target-checkout-path]` (empty = checked out nowhere).
 
-        **Test whether the task branch fast-forwards onto the default** (exit 0 = yes, is a descendant):
+        **Test whether the task branch fast-forwards onto the target** (exit 0 = yes, is a descendant):
         ```bash
-        git merge-base --is-ancestor [default-branch] [task-branch]
+        git merge-base --is-ancestor [target-branch] [task-branch]
         ```
 
         Now pick the case:
 
-        - **Case A — `[default-checkout-path]` is empty AND fast-forward test passed.** The default is checked out nowhere and the task branch is strictly ahead. Advance the ref with zero working-tree effect:
+        - **Case A — `[target-checkout-path]` is empty AND fast-forward test passed.** The target is checked out nowhere and the task branch is strictly ahead. Advance the ref with zero working-tree effect:
           ```bash
-          git fetch . [task-branch]:[default-branch]
+          git fetch . [task-branch]:[target-branch]
           ```
-          (If `[default-branch]` is later checked out somewhere unexpected, this fatals with exit 128 rather than stomping — treat that as case C and report.)
+          (If `[target-branch]` is later checked out somewhere unexpected, this fatals with exit 128 rather than stomping — treat that as case C and report.)
 
-        - **Case B — `[default-checkout-path]` equals this session's own current working directory** (`git rev-parse --show-toplevel`). The default is already checked out right here. First assert the tree is clean:
+        - **Case B — `[target-checkout-path]` equals this session's own current working directory** (`git rev-parse --show-toplevel`). The target is already checked out right here. First assert the tree is clean:
           ```bash
           git status --porcelain
           ```
-          If that prints anything, **refuse** — do not merge over uncommitted work: report `Cannot merge: [default-branch] is checked out here with uncommitted changes. Commit or stash them, then re-run /plan-complete NNN.` and STOP. If clean, merge in place:
+          If that prints anything, **refuse** — do not merge over uncommitted work: report `Cannot merge: [target-branch] is checked out here with uncommitted changes. Commit or stash them, then re-run /plan-complete NNN.` and STOP. If clean, merge in place:
           ```bash
           git merge [task-branch]
           ```
 
-        - **Case C — `[default-checkout-path]` is non-empty and is NOT this session's own working directory.** Another session may own that directory. **Refuse and STOP** — do not fall through to completion. Print VERBATIM:
+        - **Case C — `[target-checkout-path]` is non-empty and is NOT this session's own working directory.** Another session may own that directory. **Refuse and STOP** — do not fall through to completion. Print VERBATIM:
           ```
-          Cannot merge: [default-branch] is checked out at
-            [default-checkout-path]
+          Cannot merge: [target-branch] is checked out at
+            [target-checkout-path]
           which is not this session's working directory.
 
           Another session may be working there. Complete this task from that
           directory, or re-run /plan-complete NNN once it is free.
           ```
 
-        - **Case D — `[default-checkout-path]` is empty but the fast-forward test FAILED** (the branches diverged). Merge in an isolated throwaway worktree so no shared tree is touched. Every command below is addressed with `git -C` and never depends on the current directory — a `cd` in one command does not persist into the next:
+        - **Case D — `[target-checkout-path]` is empty but the fast-forward test FAILED** (the branches diverged). Merge in an isolated throwaway worktree so no shared tree is touched. Every command below is addressed with `git -C` and never depends on the current directory — a `cd` in one command does not persist into the next:
           ```bash
-          git worktree add -q .worktrees/.merge-NNN [default-branch]
+          git worktree add -q .worktrees/.merge-NNN [target-branch]
           git -C .worktrees/.merge-NNN merge --no-ff [task-branch] -m "merge: #NNN [title]"
           ```
           - **On merge conflict:** abort the merge *inside the throwaway worktree* (`git merge --abort` run from the project root fails with `fatal: There is no merge to abort` and silently leaves the worktree mid-conflict), tear it down, then STOP and report the conflict for manual resolution:
@@ -318,7 +323,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
             test ! -e .worktrees/.merge-NNN || echo "WARNING: .worktrees/.merge-NNN still exists — a process may hold it open"
             git worktree prune
             ```
-          - **On clean merge:** tear down the throwaway worktree (the merge commit already landed on `[default-branch]`):
+          - **On clean merge:** tear down the throwaway worktree (the merge commit already landed on `[target-branch]`):
             ```bash
             git worktree remove .worktrees/.merge-NNN || git worktree remove --force .worktrees/.merge-NNN
             test ! -e .worktrees/.merge-NNN || echo "WARNING: .worktrees/.merge-NNN still exists — a process may hold it open"
@@ -335,7 +340,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
     **Merge and teardown are independent.** `git worktree remove` removes a *checkout*, not a *branch* — the branch ref and all its commits survive in the main repo's `.git` regardless of removal order (the same truth plan-spawn states in its "Invariant" after `git worktree remove`). The ordering below is chosen for cleanliness, not correctness.
 
-    1. **Merge.** The merge was already handled by step 14 above via its A/B/C/D decision table — do NOT re-merge, do NOT `cd` to the project root and `git checkout [default-branch]`. If the user chose "Skip merge" in step 14, skip merging here too. (Step 14 never checks out inside this kept worktree; its case dispatch keeps the merge off the worktree's tree.)
+    1. **Merge.** The merge was already handled by step 14 above via its A/B/C/D decision table — do NOT re-merge, do NOT `cd` to the project root and `git checkout [target-branch]` (`[target-branch]` being the value step 14 resolved per the **Resolve target branch** contract; with no `**Base:**` field it is the default branch, unchanged from before). If the user chose "Skip merge" in step 14, skip merging here too. (Step 14 never checks out inside this kept worktree; its case dispatch keeps the merge off the worktree's tree.)
     2. **Remove the worktree** using the canonical teardown sequence (`remove` → `remove --force` fallback → `test ! -e` warning → `git worktree prune`).
        - **Single-repo:**
          ```bash
@@ -382,10 +387,12 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     Summary: {one sentence from Changes section — same capped sentence written to HISTORY.md in step 11, without the ` → completed/...` pointer}
 
     Archived to: .plans/completed/{id}-{slug}.md
-    Branch: {branch-name} merged to {default-branch}
+    Branch: {branch-name} merged to {target-branch}
 
     Next: /plan-status or /plan-capture
     ```
+
+    (`{target-branch}` is the value resolved once in step 14 per the **Resolve target branch** contract — the task's `**Base:**` when set, else the default branch. When no `**Base:**` field is present it IS the default, so this line reads exactly as it did before, e.g. `merged to main`.)
 
     **Example output (copy this style exactly):**
 

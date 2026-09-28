@@ -208,7 +208,7 @@ Files are only edited when the user signals "update the plan" (or equivalent). C
 - **Completed task**: direct to `/plan-reopen`.
 - **User signals update but the change is ambiguous** (e.g. "update the plan" with no concrete proposal on the table): offer to summarize the recent thread into a concrete proposed edit, then wait for confirmation.
 - **User signals update for something outside the current task file** (e.g. "add this to task #5"): decline — this skill only edits the loaded task. Suggest `/plan-discuss 5` separately.
-- **Edit fails to match exact text** (whitespace / invisible char mismatch): fall back to reading the full file, rewriting the section in memory, and using `Write` to overwrite. Warn the user that a larger rewrite occurred so they can sanity-check the diff.
+- **Edit fails to match exact text** (whitespace / invisible char mismatch): fall back to reading the full file, rewriting the section in memory, and using `Write` to overwrite. Warn the user that a larger rewrite occurred so they can sanity-check the diff. This skill only edits body sections, never header metadata — the full-file-rewrite fallback MUST preserve every header metadata field verbatim (including `**Base:**`, `**Branch:**`, `**Worktree:**`, `**Repos:**`).
 - **User wants to add a new step**: allowed. Insert at the requested position (or end of How by default); preserve checkbox states on unchanged steps; renumber only if steps were explicitly numbered in prose.
 - **User wants to remove a step**: allowed. Confirm in chat first (show which step and its checkbox state). If the step was already `[x]`, double-check before removing — that work is presumably done.
 - **User wants to reorder steps**: allowed. Preserve each step's checkbox state through the reorder.

@@ -50,6 +50,7 @@ Display a focused overview of a single task: what it is, current progress, and w
    - Status (from `**Status:**` line)
    - Created (from `**Created:**` line)
    - Completed (from `**Completed:**` line, if present)
+   - Base (from `**Base:**` line, if present — read from the header only; never infer it)
    - What section content
    - Why section content
    - How Summary section content (overview + "Files of note" list)
@@ -115,6 +116,7 @@ Display a focused overview of a single task: what it is, current progress, and w
    # Task #NNN: [Title]
 
    **Status:** in-progress | **Type:** [type] | **Created:** [date]
+   **Base:** [base]
 
    ## Summary
    [First sentence or two from What section]
@@ -151,6 +153,7 @@ Display a focused overview of a single task: what it is, current progress, and w
 
    **Status:** review | **Type:** [type] | **Created:** [date]
    **Branch:** [branch-name]
+   **Base:** [base]
 
    ## Summary
    [First sentence or two from What section]
@@ -207,6 +210,7 @@ Display a focused overview of a single task: what it is, current progress, and w
    - Include X/N count and percentage
 
 8. **Handle sparse task files**
+   - The `**Base:**` line (in the in-progress and review templates) is rendered ONLY when the task header has a non-empty `**Base:**` field; when the field is absent, omit the line entirely so the output is byte-for-byte identical to a task with no base. Never infer or synthesize a base value.
    - If Why section is empty: omit it from display
    - If How Summary section is empty or still the `_To be filled during elaboration_` placeholder: omit it from display (don't render an empty section)
    - The Diagnosis section is rendered only for `bug`-type tasks, and only when present and non-placeholder. For every non-bug task, omit it **always** — a `feature`, `refactor`, or `chore` task must never show a `## Diagnosis` heading, even an empty one. For a bug task with no Diagnosis section (e.g. captured before this section existed, or not yet elaborated), omit it too.

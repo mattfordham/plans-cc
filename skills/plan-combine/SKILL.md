@@ -121,6 +121,24 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
    - If ALL source tasks are `elaborated`: combined status = `elaborated`
    - If ANY source task is `pending`: combined status = `pending`
 
+   **Base logic (determine combined `**Base:**`):**
+   - Collect the `**Base:**` value from each source task.
+   - If NONE of the source tasks have a `**Base:**` field: the combined task has **no** `**Base:**` field — omit it entirely (byte-for-byte today's behavior).
+   - If ALL source tasks that have a `**Base:**` field share the SAME value: carry that value into the combined header (Step 10 writes `**Base:** <value>` under `**Status:**`).
+   - If source tasks have DIFFERING `**Base:**` values: use `AskUserQuestion` to ask which base to keep:
+     ```
+     question: "Source tasks have different base branches. Which base should the combined task use?"
+     header: "Base"
+     options:
+       - label: "[distinct base value 1]"
+         description: "Used by task #NNN"
+       - label: "[distinct base value 2]"
+         description: "Used by task #NNN"
+       - label: "No base"
+         description: "Combined task branches from / merges into the repo default"
+     ```
+     Write the chosen value into the combined header (or omit the `**Base:**` field entirely if "No base" is chosen).
+
    **Content merging:**
 
    *What section:*
@@ -186,6 +204,7 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
     - Generate new slug from combined title
     - Write to `.plans/pending/NNN-new-slug.md`
     - Use Created date from earliest source task
+    - If Step 9's Base logic determined a combined base, write `**Base:** <value>` in the header under `**Status:**`; otherwise omit the `**Base:**` field entirely (no-base sources ⇒ no `**Base:**` field).
 
 11. **Delete source task files**
     - Delete all source task files except the one being kept (lowest ID)
@@ -242,6 +261,7 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
 - **Task in review**: Block "Cannot combine #NNN — task is in review."
 - **Task completed**: Block "Cannot combine #NNN — task is already completed."
 - **Task has branch**: Warn about orphaned branch, ask to proceed
+- **Source tasks disagree on `**Base:**`**: Per Step 9's Base logic, prompt with `AskUserQuestion` (header "Base") listing each distinct base value plus a "No base" option; write the chosen value into the combined header (or omit `**Base:**` if "No base"). When no source task has a `**Base:**` field, the combined task has none either (no prompt).
 - **No arguments**: List pending tasks, prompt for which to combine
 - **Duplicate IDs**: Deduplicate silently (e.g., "2 2 3" becomes "2 3")
 - **All tasks have same ID**: Error after deduplication "Need at least 2 different task IDs."

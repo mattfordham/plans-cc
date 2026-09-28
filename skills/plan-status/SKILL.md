@@ -81,6 +81,7 @@ The dashboard must be the **final message of the turn**. All scanning, parsing, 
    - `Branch:` — omit if BRANCH is NONE.
    - `Sub-repos:` — omit if SUBREPOS is NONE. Format: `name → branch` separated by ` · `.
    - Blank line between branch info and the summary counts line.
+   - A task's `**Base:**` field is per-task metadata and is intentionally NOT surfaced in this compact dashboard. The top `Branch:` line is the repo's current checkout, not a task field, so a base does not belong there; the per-task rows are deliberately compact and get no Base column. This omission is by design, not an oversight — a task's base is shown by `/plan-show <id>` instead.
 
    **Summary counts line** uses the COUNTS values: `<pending> pending · <elaborated> ready · <in-progress> in progress · <review> ready for review · <in-review> in review · <completed> completed`.
 

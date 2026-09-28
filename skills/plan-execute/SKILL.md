@@ -393,10 +393,12 @@ These rules bind every invocation. They are not subject to your judgment about t
         - Determine branch type and generate suggested branch name as below (same logic)
         - Follow the same branch question / auto-accept flow as below
         - Do NOT create branches yet — defer to after step 7d determines `relevant_repos`
-        - After step 7d completes: for each sub-repo in `relevant_repos`, apply the same pre-switch check before creating the branch:
+        - After step 7d completes: for each sub-repo in `relevant_repos`, resolve `target` for THAT sub-repo per the **Resolve target branch** contract in CLAUDE.md (the task's `**Base:**` value if present and non-empty, else that sub-repo's default branch — the single `**Base:**` value applies to every repo, each resolving it against its own default), then apply the same pre-switch check before creating the branch:
           - Get sub-repo's current branch: `cd [sub-repo] && git rev-parse --abbrev-ref HEAD`
-          - If it matches any in-progress task's `**Branch:**` field (excluding the task being started), determine that sub-repo's default branch (`git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main` then `master`) and run `cd [sub-repo] && git checkout [default-branch]`; print the same notice
-          - Then create the branch: `cd [sub-repo] && git checkout -b [branch-name]`
+          - If it matches any in-progress task's `**Branch:**` field (excluding the task being started), run `cd [sub-repo] && git checkout [target]`; print the same notice (naming `[target]`)
+          - If `target` does not exist locally in this sub-repo, create it from the sub-repo's default branch first per the create-if-missing rule in step 7c below (`git branch <target> <default-branch>`, one-line notice, NEVER pushed)
+          - Then create the branch from target: `cd [sub-repo] && git checkout -b [branch-name] [target]`
+          - When `**Base:**` is absent (target == default), these commands are byte-for-byte unchanged from today.
         - Branch metadata format: `**Branch:** [branch-name] (multi-repo: [comma-separated repo names])`
       - Determine branch type from task type:
         - `bug` → "fix"
@@ -404,14 +406,17 @@ These rules bind every invocation. They are not subject to your judgment about t
         - `refactor` → "refactor"
         - `chore` → "chore"
       - Generate suggested branch name: `[type]/NNN-[slug]` (e.g., `feature/001-add-dark-mode`)
+      - **Resolve the target branch** (the branch to branch/switch FROM): read the task's `**Base:**` header field (if present) and set `target` per the **Resolve target branch** contract in CLAUDE.md — `target` is the `**Base:**` value when that field is present and non-empty, OTHERWISE the repo's default branch. `target` is used at every branch-creation and pre-switch site below.
+        - **Create-if-missing rule (referenced by all four branch-creation/pre-switch sites):** If `target` does not exist locally in the repo being branched, create it from that repo's default branch first (`git branch <target> <default-branch>`), print a one-line notice `Base branch <target> not found in <repo> — created locally from <default-branch> (not pushed).`, and NEVER push it.
+        - When `**Base:**` is absent, `target` IS the default branch and every command below is byte-for-byte unchanged from today.
       - **Pre-switch off other in-progress task branches** (single-repo path only):
         - Get current branch: `git rev-parse --abbrev-ref HEAD`
         - Scan `.plans/pending/*.md` for files with `Status: in-progress` (excluding the task being started)
         - For each, extract the `**Branch:**` field value (if present)
         - If current branch matches any of those branch values:
-          - Determine default branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`; if empty, try `main`, then `master`
-          - Run `git checkout [default-branch]`
-          - Print: `Current branch belongs to in-progress task #MMM. Switched to [default-branch] before creating new branch.`
+          - `target` is already resolved above per the **Resolve target branch** contract (the `**Base:**` value if set and non-empty, else the default branch resolved via `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main` then `master`)
+          - Run `git checkout [target]`
+          - Print: `Current branch belongs to in-progress task #MMM. Switched to [target] before creating new branch.`
         - If current branch does not match any in-progress task branch, do nothing — branch from the current checkout as before
       - **Auto-accept shortcut:** If `branch_mode` is true OR `yolo_mode` is true (both set in step 2; yolo implies branch_mode but we list both for clarity), skip the question and immediately create the suggested branch — no `AskUserQuestion` needed.
       - **Otherwise, MUST use `AskUserQuestion` tool** to prompt user about branch creation:
@@ -423,7 +428,7 @@ These rules bind every invocation. They are not subject to your judgment about t
           3. User can also select "Other" to provide a custom branch name
       - If user selects suggested or provides custom name, or auto-accepted via shortcut:
         - **If `worktree_mode` is true:** use worktree creation (step 7e) instead of `git checkout -b`
-        - **Otherwise:** Create and checkout branch: `git checkout -b [branch-name]`
+        - **Otherwise:** Create and checkout branch from target (create `target` first if missing, per the create-if-missing rule above): `git checkout -b [branch-name] [target]` — this falls back to today's behavior when target == the default branch.
         - Add branch metadata to task file: `**Branch:** [branch-name]` (below the Status line)
       - If user selects "No branch": continue without creating branch (also disables `worktree_mode`)
 
@@ -442,9 +447,10 @@ These rules bind every invocation. They are not subject to your judgment about t
       **Single-repo path** (when `multi_repo_mode` is false):
       1. Get project root: `git rev-parse --show-toplevel`
       2. Check not already in a worktree: `git rev-parse --is-inside-work-tree` and `git rev-parse --show-superproject-working-tree`
-         - If already in a worktree: warn "Already inside a worktree. Falling back to normal branch mode.", set `worktree_mode = false`, create branch with `git checkout -b [branch-name]` instead, and skip remaining worktree steps
-      3. Create worktree: `git worktree add .worktrees/NNN-slug -b [branch-name]`
+         - If already in a worktree: warn "Already inside a worktree. Falling back to normal branch mode.", set `worktree_mode = false`, create branch from target with `git checkout -b [branch-name] [target]` instead (create `target` first if missing, per the create-if-missing rule in step 7c; byte-for-byte unchanged when target == default), and skip remaining worktree steps
+      3. Create worktree branched from target: `git worktree add .worktrees/NNN-slug -b [branch-name] [target]`
          - Where NNN-slug matches the task filename stem (e.g., `003-fix-login`)
+         - `target` is resolved in step 7c per the **Resolve target branch** contract; create it first if missing, per the create-if-missing rule in step 7c. When target == the default branch, this is byte-for-byte unchanged from today.
       4. Ensure `.worktrees/` is in `.gitignore`:
          - Read `.gitignore` (create if doesn't exist)
          - If `.worktrees/` not present, append it
@@ -475,7 +481,8 @@ These rules bind every invocation. They are not subject to your judgment about t
       Steps:
       1. Create parent-level worktree directory: `mkdir -p .worktrees/NNN-slug`
       2. For each repo in `relevant_repos`:
-         - Create per-repo worktree: `cd [repo] && git worktree add .worktrees/NNN-slug -b [branch-name]`
+         - Resolve `target` for THIS repo per the **Resolve target branch** contract (the task's `**Base:**` value if set and non-empty, else this repo's own default); create it locally from this repo's default first if missing, per the create-if-missing rule in step 7c, and NEVER push it.
+         - Create per-repo worktree branched from target: `cd [repo] && git worktree add .worktrees/NNN-slug -b [branch-name] [target]` — byte-for-byte unchanged from today when target == this repo's default.
          - Symlink into parent worktree dir: `ln -s [absolute-path-to-repo]/.worktrees/NNN-slug .worktrees/NNN-slug/[repo-name]`
       3. Symlink non-git subdirectories into worktree dir: for each immediate subdirectory that is NOT a git repo and NOT `.worktrees`, create `ln -s ../../[dir-name] .worktrees/NNN-slug/[dir-name]`
       4. Symlink `.plans/`: `ln -s ../../.plans .worktrees/NNN-slug/.plans`
@@ -573,6 +580,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    ```
    [Starting/Continuing] task #NNN: [Title]
    Type: [type] | Branch: [branch-name or "none"]
+   Base: [base-branch]                                ← only show if the task has a **Base:** header field (read from the header only, never inferred); omit the line entirely when absent
    Build route: [des-build → unit1, unit2]            ← only show if build_route is set
    [⚠️  No build route, but this looks like design-system work — see warning above]
                                                       ← only show if the missing-route WARNING fired

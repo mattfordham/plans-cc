@@ -98,6 +98,14 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
         **Build:** des-build · Component1, Component2
         Absence = no build-skill routing (the default). -->
 
+   <!-- Optional, OMITTED by default. NEVER auto-set at capture (set by hand or via
+        /plan-discuss). When present, the task branches FROM, rebases ONTO, and merges
+        INTO this branch instead of the repo default — see the "Resolve target branch"
+        and "The **Base:** task-header field" contracts in CLAUDE.md. Place it directly
+        under **Status:** (after **Blocked by:** when that field is present):
+        **Base:** feature/notification-badges
+        Absence = the repo default branch (today's behavior, byte-for-byte). -->
+
    ## What
    [Original description]
 

@@ -189,7 +189,7 @@ Complements `/plan-elaborate`: elaborate generates structure, clarify hardens it
 - **Skip mode with findings**: auto-pick first suggested resolution for each; deferred count is 0.
 - **User aborts mid-walkthrough** (e.g. Esc): apply resolutions collected so far, mark the rest as deferred, still update the file and commit.
 - **Suggested resolution is ambiguous itself**: prefer "Different — I'll specify" as the first option in that case, so the user is nudged to author a concrete answer.
-- **Edit fails to find the exact excerpt** (e.g. whitespace mismatch): fall back to reading the full file, rewriting in memory, and using `Write` to overwrite. Warn the user that a larger rewrite occurred.
+- **Edit fails to find the exact excerpt** (e.g. whitespace mismatch): fall back to reading the full file, rewriting in memory, and using `Write` to overwrite. Warn the user that a larger rewrite occurred. This skill only edits body sections, never header metadata — the full-file-rewrite fallback MUST preserve every header metadata field verbatim (including `**Base:**`, `**Branch:**`, `**Worktree:**`, `**Repos:**`).
 - **Open Questions subsection with non-bullet content** (e.g. prose paragraphs): treat each paragraph as a finding, but cap at the first 10 items to avoid overwhelming prompts.
 - **Issue resolution requires code changes**: the user's answer may describe an approach rather than resolving the issue — record it on the Issue bullet but do not auto-check the box; explain in the confirmation that execution is still needed.
 - **Worktree tasks**: `.plans/pending/NNN-*.md` lookup is the same regardless of worktree branch — no special handling.

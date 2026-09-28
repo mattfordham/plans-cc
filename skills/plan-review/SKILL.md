@@ -72,6 +72,7 @@ Review a task that has completed execution (typically via worktree workflow). **
      - This guards against the case where a previous `/plan-execute` left the shell context positioned inside `.worktrees/NNN-slug/` for a task that has **no** live `**Worktree:**` field (e.g. a non-`keep` task whose worktree was supposed to be removed). The branch lives in the main repo's `.git`; all subsequent steps must run from there. (When `review_in_worktree` is true this error must NOT fire — the worktree is intentional.)
 
 3.6. **Enforce review concurrency by repo set** (only when the original status from step 3 was `review` — i.e. this task is about to *enter* review)
+   - **A non-default `**Base:**` does not change which shared checkout a task occupies (it only changes the branch target), so this guard is unaffected by the base and its logic is unchanged.**
    - **The key is worktree-liveness, not single- vs multi-repo.** A task occupies the shared `MAIN` checkout **if and only if it has NO live `**Worktree:**` field** (i.e. `review_in_worktree` is false for it — it must check its branch out into the shared main working directory). A task **with** a live kept worktree reviews entirely inside its own checkout, so it is **never** assigned `MAIN` and never contends for the shared directory. This is what lets two single-repo *kept-worktree* tasks be `in-review` concurrently — the case that previously serialized. (Multi-repo disjoint-repo-set concurrency, commit 7d6723e, still holds — it falls out of the same per-repo intersection logic below.)
    - **Repo set of a task** (compute for the incoming task and for each existing in-review task):
      - **If the task has a live `**Worktree:**` field** (its path exists on disk → it reviews in its own worktree, never in main): its repo set is its actual repos and **never includes the `MAIN` sentinel**:
@@ -129,19 +130,19 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 6. **Rebase onto latest main**
    - **If `review_in_worktree` is true (from step 3.5):** no logic change to the rebase procedure below — but every git command in this step runs **from the worktree cwd** (and, for multi-repo, from the worktree's per-repo subdirectory) rather than the main project directory.
-   - **If `multi_repo_review` is true (from step 5):** run this entire rebase procedure **once per repo** in `review_repos`, prefixing every git command with `cd [repo] && ` — each repo resolves its **own** default branch (the `origin/HEAD` detection below runs per repo). Scope the conflict-handling `AskUserQuestion` prompts and messages to the current repo (say "[repo]" in them). If the user picks "Resolve in place" or "Abort rebase" for **any** repo, **stop the whole review** — do not advance the remaining repos into a half-rebased state. Otherwise the single-repo procedure below is unchanged.
-   - Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
-   - Fetch latest: `git fetch origin [default-branch]` (ignore errors if remote is unavailable)
+   - **If `multi_repo_review` is true (from step 5):** run this entire rebase procedure **once per repo** in `review_repos`, prefixing every git command with `cd [repo] && ` — each repo resolves its **own** target branch (the target resolution below runs per repo, and a `**Base:**` value applies to every repo, resolved against that repo's own default). Scope the conflict-handling `AskUserQuestion` prompts and messages to the current repo (say "[repo]" in them). If the user picks "Resolve in place" or "Abort rebase" for **any** repo, **stop the whole review** — do not advance the remaining repos into a half-rebased state. Otherwise the single-repo procedure below is unchanged.
+   - Determine the target branch per the **Resolve target branch** contract in `CLAUDE.md`: the task's `**Base:**` header value when present and non-empty; OTHERWISE the repo's default branch (`git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` → main → master). Call the resolved value `[target]`. **When the task has no `**Base:**` field (or its value equals the resolved default), `[target]` IS the default branch and every command below is byte-for-byte identical to the previous default-only behavior.**
+   - Fetch latest: `git fetch origin [target]` (ignore errors if remote is unavailable — a locally-created base is never pushed, so this fetch may find nothing, which is fine)
    - Determine the rebase target — pick whichever is further ahead between local and remote:
-     - If `origin/[default-branch]` exists: check `git merge-base --is-ancestor origin/[default-branch] [default-branch]`
-       - If exit code 0: local is equal or ahead — use `[default-branch]` (local) as the rebase target
-       - If exit code 1: remote is ahead — use `origin/[default-branch]` as the rebase target
-     - If `origin/[default-branch]` doesn't exist (no remote): use `[default-branch]` (local)
+     - If `origin/[target]` exists: check `git merge-base --is-ancestor origin/[target] [target]`
+       - If exit code 0: local is equal or ahead — use `[target]` (local) as the rebase target
+       - If exit code 1: remote is ahead — use `origin/[target]` as the rebase target
+     - If `origin/[target]` doesn't exist (no remote, or a locally-created base that was never pushed): use `[target]` (local) unconditionally — do NOT run the merge-base comparison.
    - Check if rebase is needed: `git merge-base --is-ancestor [rebase-target] HEAD`
      - If exit code 0: branch is already up to date, skip rebase
      - If exit code 1: rebase is needed
    - Run rebase: `git rebase [rebase-target]`
-   - **If rebase succeeds:** inform the user: "Rebased onto latest `[default-branch]` — review reflects current state."
+   - **If rebase succeeds:** inform the user: "Rebased onto latest `[target]` — review reflects current state." (`[target]` is the default branch in the no-`**Base:**` case, so this message is unchanged then.)
    - **If rebase conflicts:**
      - **Do NOT abort yet.** Leave the rebase in progress so the user keeps the in-flight state if they want to resolve in place.
      - Capture the conflicting file list from `git diff --name-only --diff-filter=U`.
@@ -151,7 +152,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 
      Call `AskUserQuestion` with:
      - Header: "Rebase conflict"
-     - Question: "Rebase onto `[default-branch]` hit conflicts in: [files]. The rebase is currently paused. How would you like to proceed?"
+     - Question: "Rebase onto `[target]` hit conflicts in: [files]. The rebase is currently paused. How would you like to proceed?"
      - Options:
        1. "Resolve for me" (description: "I'll resolve the conflicts, stage the files, and continue the rebase, then proceed to the review summary")
        2. "Resolve in place" (description: "Leave the rebase paused — you'll resolve the conflicts and run `git rebase --continue` yourself")
@@ -160,16 +161,16 @@ Review a task that has completed execution (typically via worktree workflow). **
      - **After user responds:**
        - If "Resolve for me":
          - For each file in `git diff --name-only --diff-filter=U`:
-           - Read the file and resolve `<<<<<<<` / `=======` / `>>>>>>>` markers using judgment based on the task's intent (the task file's What/How sections describe what this branch is trying to achieve — favor the branch's changes for files central to the task, favor `[default-branch]` for unrelated drift).
+           - Read the file and resolve `<<<<<<<` / `=======` / `>>>>>>>` markers using judgment based on the task's intent (the task file's What/How sections describe what this branch is trying to achieve — favor the branch's changes for files central to the task, favor `[target]` for unrelated drift).
            - For ambiguous conflicts where intent is unclear, fall back to calling `AskUserQuestion` with the conflict hunk and let the user pick a side.
            - `git add <file>` once resolved.
          - Run `git rebase --continue`.
          - If further conflicts surface (multi-commit rebase): repeat the resolve loop.
          - If `git rebase --continue` fails for a non-conflict reason: report the error, leave the rebase paused, and stop.
-         - On success: tell the user "Resolved conflicts and rebased onto `[default-branch]`." and continue to step 6.5.
+         - On success: tell the user "Resolved conflicts and rebased onto `[target]`." and continue to step 6.5.
        - If "Resolve in place": print the conflicting files and the next-step hints (`git add <file>`, `git rebase --continue`, or `git rebase --abort`), then **stop** — do not proceed to the review summary. The user will re-run `/plan-review NNN` after resolving.
        - If "Abort rebase": run `git rebase --abort` and **stop** — do not proceed to the review summary.
-       - If "Skip rebase": run `git rebase --abort`, warn that the diff is against the branch's original base and may not reflect current `[default-branch]`, then continue to step 6.5.
+       - If "Skip rebase": run `git rebase --abort`, warn that the diff is against the branch's original base and may not reflect current `[target]`, then continue to step 6.5.
 
 6.5. **Mark task as in-review**
    - If the original status from step 3 was `review`:
@@ -245,7 +246,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 10. **Display review summary**
 
-   Determine the default/target branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master.
+   Determine the target branch per the **Resolve target branch** contract in `CLAUDE.md`: the task's `**Base:**` header value when present and non-empty; OTHERWISE the repo's default branch (`git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` → main → master). Call the resolved value `[target]`. **When the task has no `**Base:**` field (or its value equals the resolved default), `[target]` IS the default branch and the diff below is byte-for-byte identical to today.** Also note whether a non-empty `**Base:**` field was present — the header block in 9.b renders a `**Base:**` line only then.
 
    **9.a. Collect low-confidence assumptions (pre-render step)**
 
@@ -290,6 +291,8 @@ Review a task that has completed execution (typically via worktree workflow). **
    # Review: Task #NNN — [Title]
 
    **Branch:** [branch-name]
+   [If the task has a non-empty `**Base:**` field, render this line — otherwise omit it entirely (unchanged output when the field is absent):]
+   **Base:** [base]
    **Type:** [type] | **Status:** [status]
 
    [If 9.a.2 captured a comparison table or a "Visual comparison NOT run:" line, render it here — this block is omitted entirely otherwise:]
@@ -300,8 +303,9 @@ Review a task that has completed execution (typically via worktree workflow). **
    [First 2-3 sentences from the What section]
 
    ## Changes
-   [Single-repo (`multi_repo_review` false): output of `git diff --stat [default-branch]...[branch-name]`.
-    Multi-repo (`multi_repo_review` true): for each repo in `review_repos`, render a `### [repo-name]` sub-heading followed by the output of `cd [repo] && git diff --stat [that-repo's-default-branch]...[branch-name]`.]
+   [Single-repo (`multi_repo_review` false): output of `git diff --stat [target]...[branch-name]`.
+    Multi-repo (`multi_repo_review` true): for each repo in `review_repos`, render a `### [repo-name]` sub-heading followed by the output of `cd [repo] && git diff --stat [that-repo's-target]...[branch-name]`, where `[that-repo's-target]` is the `**Base:**` value (applies to every repo) or that repo's own default.
+    Byte-for-byte unchanged when `[target]` equals the default (the no-`**Base:**` case).]
 
    ## Completed Steps
    - [x] Step 1 description
@@ -337,6 +341,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 - **Rebase conflicts**: Leave the rebase paused, list conflicting files, and prompt the user to choose: have Claude resolve, resolve themselves, abort, or skip — never auto-abort
 - **Already up to date with main**: Skip rebase, proceed to observations/review summary
 - **Local main ahead of origin**: Rebase onto local main (handles merged-but-not-pushed tasks)
+- **Task has a `**Base:**` header**: The rebase target and the `git diff --stat` base become the resolved base branch per the **Resolve target branch** contract, and a `**Base:**` line appears in the summary header. A locally-created base is never pushed, so `origin/[target]` may not exist — the rebase then falls back to the local base unconditionally without a merge-base comparison. When `**Base:**` is absent or equals the default branch, behavior is byte-for-byte unchanged.
 - **No state file**: Skip observation walkthrough — no deferred observations to process
 - **No deferred observations in state file**: Skip observation walkthrough, proceed to review summary
 - **Fix sub-agent changes during observation**: Commit fixes to the branch before continuing to next observation

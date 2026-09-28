@@ -111,6 +111,8 @@ Display a filtered list of tasks in table format.
    Total: X tasks
    ```
 
+   A task's `**Base:**` field is deliberately NOT added as a column here — the list is intentionally compact (no branch column either); a task's base is surfaced by `/plan-show <id>` instead.
+
    **Progress column:**
    - For pending tasks: show `—` (no steps defined yet)
    - For elaborated tasks: show `0/N` (N steps defined, none started)

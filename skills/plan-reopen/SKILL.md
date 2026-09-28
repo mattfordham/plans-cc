@@ -78,6 +78,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 6. **Update task file**
    - Change Status: `completed` → `pending`
    - Remove the `**Completed:**` line entirely
+   - **Preserve an existing `**Base:**` field** — do NOT strip it on reopen. The base is the task's intended integration target regardless of lifecycle position (same handling as `**Branch:**`).
    - **Keep all checkboxes in their current state** — Do NOT reset `[x]` to `[ ]`
    - **If `quick_mode = true`:** Do NOT add new steps to the How section. Skip straight to Notes update.
    - **Otherwise:** Add new unchecked step(s) to the How section based on the reason:

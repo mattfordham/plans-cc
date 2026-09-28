@@ -55,7 +55,7 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    **In-progress flow:**
    - Change Status from `in-progress` to `elaborated`
    - **Do NOT touch checkboxes** — leave all `[x]` and `[ ]` as-is
-   - Do NOT change any other metadata fields (Branch, Created, Type, etc.)
+   - Do NOT change any other metadata fields (Branch, Base, Created, Type, etc.) — the `**Base:**` field must be carried through unchanged (per the `### The `**Base:**` task-header field` contract in `CLAUDE.md`, plan-pause is a header-preserving skill).
 
    **Review flow:**
    - If current status is `in-review`: change Status to `review` (pausing an active review returns the task to the awaiting-review queue)
@@ -84,6 +84,12 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - Update "Last updated" date
 
 6. **Commit changes and switch branch**
+
+   > **Base-branch note (see the `### Resolve target branch` and `### The `**Base:**` task-header field` contracts in `CLAUDE.md`):** Even when the task carries a `**Base:**` field, pause deliberately switches back to the **default** branch, NOT the base. All `git checkout [default-branch]` steps below stay as written — do NOT substitute the base. Rationale:
+   > 1. Pause parks the checkout at a clean resting point, and the **default** branch is the canonical clean checkout; a base like `feature/x` is itself in-flight work.
+   > 2. The base may not exist locally as a resting branch — bases are created lazily/locally by `plan-execute` and never pushed — so switching to it would couple pause to execute's create-if-missing logic for no benefit.
+   > 3. Smallest, safest, least-surprising diff: pause performs **none** of the base's three operations (branch-from / rebase-onto / merge-into); it only parks the checkout.
+   > 4. Consistency with `/plan-backlog`, which auto-pauses and lands on the same clean default.
 
    - **Kept-worktree review task** (the task has a live `**Worktree:**` field — i.e. it was executed with `keep` — and its status is `in-review`): the work lives in a separate checkout, and main was never moved onto the task branch (the branch lives in the worktree), so there is nothing to switch main off of. Commit any stray changes **inside the worktree** and leave the worktree in place — mirror `/plan-backlog`'s "don't remove the worktree" path:
      - `cd [worktree] && git status --porcelain`; if dirty, `cd [worktree] && git add -A && git commit -m "plan: pause #NNN - [title]"`.
