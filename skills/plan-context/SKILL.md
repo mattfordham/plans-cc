@@ -126,23 +126,15 @@ Update the project's CONTEXT.md with relevant information about the codebase.
    - **Gate: file present → do nothing.** If `.plans/SKILL_NOTES.md` already exists, skip this step entirely: no prompt, no read-back, no overwrite, and nothing printed about skill notes in the summary. An existing file is never re-offered or touched.
    - **File absent** → follow `skills/plan-init/SKILL.md` step 9 (b)–(e) exactly: detect the four signals (package manager from lockfile, `scripts.dev`, port convention in `AGENTS.md`/`CLAUDE.md`, `design-system/` presence), skip silently when none is found, build the pre-filled `## all` + per-skill proposal, and offer **Skip (recommended)** / **Accept** / **Edit** via `AskUserQuestion`. Do not re-derive the recipe here. That step is the single source of truth.
    - **Skip** (or an Edit that empties the proposal) writes **nothing**. The decline is not recorded anywhere (no `config.json` key), so a later `/plan-context` run offers again while the file is still absent. This is intended: the absence of the file is the complete record.
-   - Remember the outcome (created with N notes / skipped / no signals) for step 10. An accepted file is picked up by step 9's `git add .plans/`.
+   - Remember the outcome (created with N notes / skipped / no signals) for step 10. An accepted file is picked up by step 9's `.plans/` commit.
 
 9. **Commit .plans/ changes**
-   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
-   - If not a git repo: skip silently
-   - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
-   - If exit code 0 (ignored): skip silently
-   - Read `.plans/config.json` for `git_commits` setting
-   - If `git_commits` is not `true`: skip silently
-   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-   - If no changes: skip silently
-   - Commit:
+   - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
      ```bash
-     git add .plans/
-     git commit -m "plan: update project context"
+     node ~/.claude/plans-cc/plans-git.js commit "plan: update project context"
      ```
-   - If commit fails (e.g. hooks): warn but do not fail the skill
+   - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+   - Surface any `Warning:` lines it prints, but never fail the skill.
 
 10. **Display summary**
    Show what was detected and written:

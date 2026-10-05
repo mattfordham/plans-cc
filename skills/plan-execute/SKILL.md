@@ -516,20 +516,12 @@ These rules bind every invocation. They are not subject to your judgment about t
       - Update Stats section counts
 
    h. **Commit .plans/ changes**
-      - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
-      - If not a git repo: skip silently
-      - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
-      - If exit code 0 (ignored): skip silently
-      - Read `.plans/config.json` for `git_commits` setting
-      - If `git_commits` is not `true`: skip silently
-      - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-      - If no changes: skip silently
-      - Commit:
+      - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
         ```bash
-        git add .plans/
-        git commit -m "plan: start #NNN - [title]"
+        node ~/.claude/plans-cc/plans-git.js commit "plan: start #NNN - [title]"
         ```
-      - If commit fails (e.g. hooks): warn but do not fail the skill
+      - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+      - Surface any `Warning:` lines it prints, but never fail the skill.
 
 8. **Detect test suite**
    Check for an existing test suite by looking for:
@@ -1294,20 +1286,12 @@ These rules bind every invocation. They are not subject to your judgment about t
     - **In single-task mode (or final task):** "Great! Run `/plan-complete NNN` to finalize."
 
 15. **Commit .plans/ changes** (after execution completes or pauses)
-    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
-    - If not a git repo: skip silently
-    - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
-    - If exit code 0 (ignored): skip silently
-    - Read `.plans/config.json` for `git_commits` setting
-    - If `git_commits` is not `true`: skip silently
-    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-    - If no changes: skip silently
-    - Commit:
+    - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
       ```bash
-      git add .plans/
-      git commit -m "plan: update tracking for #NNN - [title]"
+      node ~/.claude/plans-cc/plans-git.js commit "plan: update tracking for #NNN - [title]"
       ```
-    - If commit fails (e.g. hooks): warn but do not fail the skill
+    - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+    - Surface any `Warning:` lines it prints, but never fail the skill.
 
 16. **Periodic status** (when pausing mid-execution)
 

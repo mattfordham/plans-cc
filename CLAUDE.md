@@ -4,18 +4,32 @@ Lightweight task management for Claude Code, implemented as a set of skills.
 
 ## What This Is
 
-plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. There is no runtime code — skills are purely declarative SKILL.md files that instruct Claude how to manage tasks.
+plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks. A small zero-dependency Node runtime ships alongside them to `~/.claude/plans-cc/` — the desktop dashboard, the project-registry touch (`plan-touch.js`), and the `.plans/` commit/sync helper (`plans-git.js`) — which skills invoke by path.
 
 ## Project Structure
 
 ```
 plans-cc/
-  package.json          # npm package config
+  package.json          # npm package config (`npm test` runs node:test)
   bin/
-    install.js          # Installer (copies skills to ~/.claude/skills/)
-    dev.js              # Development helper
+    install.js          # Installer (copies skills + runtime to ~/.claude/)
+    dev.js              # Development helper (symlinks instead of copying)
+    dashboard.js        # Desktop dashboard server
+    plan-touch.js       # CLI: register a project in the machine-wide registry
+    plans-git.js        # CLI: commit/sync .plans/ per storage mode
+  lib/
+    find-root.js        # Project-root discovery walk
+    registry.js         # Machine-wide project registry
+    plans-git.js        # Storage-mode detection, .plans/ commit + sync
+    parse-tasks.js      # Task-file parser (dashboard)
+    render-dashboard.js # Dashboard HTML renderer
+  test/
+    *.test.js           # node:test unit tests for lib/
   skills/
-    plan-*/SKILL.md     # Skill definitions (31 total)
+    plan-*/SKILL.md     # plan-* skill definitions
+    des-*/SKILL.md      # des-* design-system skills (40 skills total)
+  agents/
+    plan-executor.md    # Sub-agent used by plan-execute / plan-spawn / plan-review
   .claude/
     settings.local.json # Local Claude settings
 ```
@@ -156,7 +170,7 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
   CONTEXT.md      # Project knowledge
   PROGRESS.md     # Current work status
   HISTORY.md      # Completed work archive
-  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments, models)
+  config.json     # Settings (git_commits, next_id, idea_next_id, plan_comments, models, sync)
   pending/        # Active task files
   backlog/        # Deferred task files
   completed/      # Archived task files
@@ -286,6 +300,42 @@ ensemble/            # parent — holds .plans/, not itself a git repo
 ```
 
 This is not a new project model — it **is** the existing multi-repo shape that `plan-execute` already detects (cwd is not a git repo, so it scans immediate children for `.git`), that `plan-review` arbitrates by disjoint repo sets, and that `plan-complete` tears down per-repo. What discovery adds is *invocation from anywhere inside the tree*: run any `plan-*` skill from a sub-repo (e.g. inside `ensemble_website/`) and it ascends to the centralized `.plans/` at the parent. Plans stay centralized; only the invocation site got flexible.
+
+### Plans storage mode & `plans-git` (cross-skill contract)
+
+Every skill that commits `.plans/` does it through ONE shared helper — `node ~/.claude/plans-cc/plans-git.js commit "<msg>"` — never through its own inline `git add .plans/` block. The helper (`lib/plans-git.js`, CLI `bin/plans-git.js`) first resolves the project's **storage mode**, then does exactly what that mode calls for:
+
+| Mode | Detection (first match wins) | Commit behavior |
+|------|------------------------------|-----------------|
+| `none` | project root is not a git repo | nothing |
+| `branch` | `git -C .plans rev-parse --show-toplevel` is the realpath of `.plans` itself, AND that differs from the root's toplevel — `.plans` is the top of its **own** worktree (an orphan plans branch) | commit inside the `.plans` worktree, push best-effort |
+| `local` | `git check-ignore -q .plans` succeeds — `.plans` is gitignored | nothing, silently |
+| `inline` | otherwise — `.plans` is tracked in the code repo | `git add .plans/` + `git commit -m <msg>` |
+
+`node ~/.claude/plans-cc/plans-git.js mode` prints the resolved mode. A root that is not a git repo is `none` even when `.plans` is a repo of its own — multi-repo parent roots are unsupported for branch mode in v1.
+
+**Local and inline mode are byte-for-byte today's behavior.** They reproduce the old copied skill block step for step: skip unless `git_commits` is `true`, skip when `.plans/` has no changes, then `git add .plans/` and a bare `git commit -m` (which, as before, also sweeps in anything already staged). A failed commit (e.g. a rejecting hook) becomes a warning, never a failure. Branch mode is the only new behavior.
+
+**Branch mode.** Plan state lives on an orphan branch (default `plans`, no shared history with code) checked out as a permanent git worktree at `<root>/.plans`. Commits happen inside that worktree: under a `mkdir .plans/.git-lock` lock (short retries; a lock older than 60s is treated as abandoned and broken; a lock that can't be taken skips the commit with a warning — the next commit's `add -A` picks the changes up), `git -C .plans add -A`, then `commit --no-verify` with `commit.gpgsign=false`. Pushing runs detached in the background by default; `commit --sync-push` waits for it (used by ID-minting callers). A push failure, an unreachable remote, or a missing upstream is never fatal — the commit stays local. In branch mode commits ARE the sync mechanism, so `git_commits` not `true` warns **once** per clone (and skips) — the helper never flips the value. `plans-git.js sync` (branch mode only; otherwise a no-op) sets the `merge.ours.driver` config, then `pull --rebase --autostash` under the lock — a quiet no-op with no upstream, and a failed rebase is reported, never auto-aborted.
+
+**The optional `sync` key** in `.plans/config.json` configures branch mode:
+
+```json
+"sync": { "remote": "origin", "branch": "plans", "auto_push": true }
+```
+
+Read defensively, per field — absent, malformed, or partial values fall back to those defaults. **Absent ⇒ the defaults**, and outside branch mode it is never consulted at all. It is **NOT seeded by `/plan-init`** — same absence discipline as `models` / `worktree_links`.
+
+**Invariants:**
+- **`.plans` stays ignored, slashless, on code branches** — in branch mode exactly as in local mode. The code repo's `.gitignore` uses `.plans`, never `.plans/`: the slashed form doesn't match a symlink, so a worktree's `.plans` symlink once got committed and then destroyed the task directory on checkout. Branch mode depends on the ignore — it is what keeps `git worktree add` from ever populating `.plans` and keeps code history free of plan churn.
+- **The plans branch is never a merge target, a `**Base:**`, or an execution branch.** It never appears in the **Resolve target branch** contract, and no skill checks it out in the code repo.
+- **The worktree `.plans` symlinks are unchanged.** `plan-execute` (7e.5 / multi-repo 4) and `plan-spawn` still symlink `<root>/.plans` into each execution worktree; `.plans` is still one physical directory independent of the code checkout, so status writes from a worktree land in `<root>/.plans` and commit on the plans branch.
+- **Branch-mode commits bypass the code repo's hooks and signing** (`--no-verify`, `commit.gpgsign=false`) — plan-state commits are bookkeeping, and a code-repo pre-commit hook or a signing prompt must never block or hang a skill.
+- **Never fatal.** The helper never throws and always exits 0; every problem is printed as a `Warning: …` line, which the skill surfaces and then continues.
+
+**Helper missing ⇒ loud warning, never a legacy fallback.** If `~/.claude/plans-cc/plans-git.js` does not exist, the skill prints `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continues without committing. It must NOT fall back to the old inline `git add .plans/` block — that block silently no-ops in branch mode (`.plans` is ignored there), which is exactly the failure this helper exists to fix.
+
+**Call sites:** the `.plans/` commit step of 24 skills — `plan-backlog`, `plan-brainstorm`, `plan-capture`, `plan-clarify`, `plan-cleanup`, `plan-combine`, `plan-complete`, `plan-context`, `plan-delete`, `plan-depends`, `plan-discuss`, `plan-elaborate`, `plan-execute` (7h and 15), `plan-import`, `plan-issue`, `plan-merge-reviews`, `plan-mine`, `plan-pause` (no-branch path), `plan-pick`, `plan-reopen`, `plan-restore`, `plan-review`, `plan-spawn` (8d), `plan-unpack`. Code-commit paths that `git add -A` the code checkout (`plan-complete` 13, `plan-review` 4, the `plan-pause`/`plan-backlog` branch paths, `plan-execute`/`plan-spawn` worktree finishes) are deliberately **not** call sites — inline mode depends on them sweeping `.plans`. `/plan-init` step 11 still carries its own initial-commit block; moving it to the helper (plus offering branch mode at init) is pending task #041, and remote bootstrap/cleanup is #042. Installed by `bin/install.js` (copy) and `bin/dev.js` (symlink) next to `plan-touch.js`.
 
 ### Worktree links (`worktree_links`) — cross-skill contract
 
@@ -510,7 +560,7 @@ Inferred from description keywords:
 
 ## Testing
 
-Skills are declarative, not executable code. No automated tests — test manually:
+The Node runtime under `lib/` has unit tests: `npm test` runs `node:test` over `test/*.test.js` (find-root, registry, plans-git — the plans-git tests drive real git in temp repos). Skills themselves are declarative, not executable code, and have no automated tests — test them manually:
 
 1. Run `npx plans-cc` to install skills
 2. In a test directory, run `/plan-init`

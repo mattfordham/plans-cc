@@ -274,20 +274,12 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - If everything is clean, report: "System scan: clean."
 
 9. **Commit .plans/ changes** *(all modes, if anything changed)*
-   - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
-   - If not a git repo: skip silently
-   - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
-   - If exit code 0 (ignored): skip silently
-   - Read `.plans/config.json` for `git_commits` setting
-   - If `git_commits` is not `true`: skip silently
-   - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-   - If no changes: skip silently
-   - Commit:
+   - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
      ```bash
-     git add .plans/
-     git commit -m "plan: cleanup tracking files"
+     node ~/.claude/plans-cc/plans-git.js commit "plan: cleanup tracking files"
      ```
-   - If commit fails (e.g. hooks): warn but do not fail the skill
+   - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+   - Surface any `Warning:` lines it prints, but never fail the skill.
 
 10. **Display summary**
 

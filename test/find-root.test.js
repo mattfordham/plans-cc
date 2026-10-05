@@ -3,6 +3,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const { findProjectRoot } = require("../lib/find-root");
 
@@ -84,4 +85,34 @@ test("a .plans/ without config.json is not treated as a root", () => {
 test("returns null (never throws) on a nonexistent startDir", () => {
   const ghost = path.join(tmpRoot, "does", "not", "exist");
   assert.strictEqual(findProjectRoot(ghost), null);
+});
+
+test("resolves through a .plans that is a git worktree (branch mode)", () => {
+  // Real git, isolated from user config, every call pinned to an absolute cwd
+  // inside tmpRoot so nothing can leak into an enclosing repo.
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CEILING_DIRECTORIES: path.dirname(tmpRoot),
+    GIT_AUTHOR_NAME: "Test",
+    GIT_AUTHOR_EMAIL: "test@example.com",
+    GIT_COMMITTER_NAME: "Test",
+    GIT_COMMITTER_EMAIL: "test@example.com",
+  };
+  const git = (...args) => {
+    const r = spawnSync("git", args, { cwd: tmpRoot, env, encoding: "utf8" });
+    assert.strictEqual(r.status, 0, `git ${args.join(" ")} failed: ${r.stderr}`);
+  };
+  git("init", "-q", "-b", "main");
+  fs.writeFileSync(path.join(tmpRoot, ".gitignore"), ".plans\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "init");
+  git("worktree", "add", "-q", "--orphan", "-b", "plans", path.join(tmpRoot, ".plans"));
+  makeConfig(tmpRoot);
+
+  assert.ok(fs.statSync(path.join(tmpRoot, ".plans", ".git")).isFile(), ".plans should be a worktree");
+  assert.strictEqual(findProjectRoot(tmpRoot), tmpRoot);
+  // From inside the .plans worktree itself, the walk still lands on the root.
+  assert.strictEqual(findProjectRoot(path.join(tmpRoot, ".plans")), tmpRoot);
 });

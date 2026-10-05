@@ -13,6 +13,7 @@ const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
 const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
 const DASHBOARD_SOURCE = path.join(__dirname, "dashboard.js");
 const PLAN_TOUCH_SOURCE = path.join(__dirname, "plan-touch.js");
+const PLANS_GIT_SOURCE = path.join(__dirname, "plans-git.js");
 const LIB_SOURCE = path.join(__dirname, "..", "lib");
 const RUNTIME_TARGET = path.join(HOME, ".claude", "plans-cc");
 const LAUNCHER_DIR = path.join(HOME, ".claude", "bin");
@@ -72,6 +73,11 @@ function installDashboardRuntime() {
   // Copy the project-registration helper and make it executable.
   fs.cpSync(PLAN_TOUCH_SOURCE, path.join(RUNTIME_TARGET, "plan-touch.js"));
   fs.chmodSync(path.join(RUNTIME_TARGET, "plan-touch.js"), 0o755);
+
+  // Copy the shared .plans/ commit/sync helper (skills call it in place of
+  // their old inline commit block) and make it executable.
+  fs.cpSync(PLANS_GIT_SOURCE, path.join(RUNTIME_TARGET, "plans-git.js"));
+  fs.chmodSync(path.join(RUNTIME_TARGET, "plans-git.js"), 0o755);
 
   // Walk runtime deps starting from blessed, copy each into node_modules/.
   const nodeModulesTarget = path.join(RUNTIME_TARGET, "node_modules");

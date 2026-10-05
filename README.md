@@ -4,7 +4,7 @@ Lightweight task management for Claude Code, implemented as a set of skills.
 
 ## Overview
 
-plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. There is no runtime code — skills are purely declarative SKILL.md files that instruct Claude how to manage tasks.
+plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks; a small zero-dependency Node runtime (dashboard, project registry, and the `.plans/` commit/sync helper) is installed alongside them in `~/.claude/plans-cc/`.
 
 Tasks are stored as markdown files in a `.plans/` directory within your project, making them easy to read, edit, and version control alongside your code.
 

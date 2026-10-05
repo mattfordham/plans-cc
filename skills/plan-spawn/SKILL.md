@@ -311,15 +311,13 @@ These rules bind every invocation; they are not subject to your judgment about h
    **c. Update PROGRESS.md — once, at the end.** Move every task that landed at Status `review` into a "Ready for Review" group (create the heading if it doesn't exist); leave blocked / non-`review` tasks where they are. Update the "Last updated" date. This is a single write to a shared file, done once, after all per-task work — never mid-loop.
 
    **d. Commit `.plans/` changes — once, gated on `git_commits`.**
-   - Check inside a git repo: `git rev-parse --git-dir 2>/dev/null`. If not, skip.
-   - Check `.plans/` is not gitignored: `git check-ignore -q .plans 2>/dev/null`. If ignored, skip.
-   - If `git_commits` (read once in step 2) is not `true`, skip.
-   - If `git status --porcelain .plans/` shows changes:
+   - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
      ```bash
-     git add .plans/
-     git commit -m "plan: spawn batch — N tasks (IDs: NNN, NNN, ...)"
+     node ~/.claude/plans-cc/plans-git.js commit "plan: spawn batch — N tasks (IDs: NNN, NNN, ...)"
      ```
-   - If the commit fails (e.g. hooks), warn but do not fail the skill.
+   - The helper reads `git_commits` from `config.json` itself. That does not violate step 2's read-once rule: the rule forbids re-reading config *mid-loop*, and this single read happens after the loop has finished.
+   - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+   - Surface any `Warning:` lines it prints, but never fail the skill.
 
 9. **Display summary table**
 

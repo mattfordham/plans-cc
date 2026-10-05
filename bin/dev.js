@@ -13,6 +13,8 @@ const AGENTS_SOURCE = path.join(__dirname, "..", "agents");
 const AGENTS_TARGET = path.join(HOME, ".claude", "agents");
 const REPO_ROOT = path.join(__dirname, "..");
 const DASHBOARD_SOURCE = path.join(__dirname, "dashboard.js");
+const PLAN_TOUCH_SOURCE = path.join(__dirname, "plan-touch.js");
+const PLANS_GIT_SOURCE = path.join(__dirname, "plans-git.js");
 const LIB_SOURCE = path.join(REPO_ROOT, "lib");
 const NODE_MODULES_SOURCE = path.join(REPO_ROOT, "node_modules");
 const RUNTIME_TARGET = path.join(HOME, ".claude", "plans-cc");
@@ -55,6 +57,13 @@ function linkDashboardRuntime() {
   fs.symlinkSync(DASHBOARD_SOURCE, path.join(RUNTIME_TARGET, "dashboard.js"), "file");
   fs.symlinkSync(LIB_SOURCE, path.join(RUNTIME_TARGET, "lib"), "dir");
   fs.symlinkSync(NODE_MODULES_SOURCE, path.join(RUNTIME_TARGET, "node_modules"), "dir");
+
+  // Symlink the CLI helpers skills invoke by path. Node resolves a symlinked
+  // entry script to its real location, so their `require("../lib/...")`
+  // resolves against the repo. plan-touch.js was previously never linked here,
+  // so dev installs silently skipped project registration.
+  fs.symlinkSync(PLAN_TOUCH_SOURCE, path.join(RUNTIME_TARGET, "plan-touch.js"), "file");
+  fs.symlinkSync(PLANS_GIT_SOURCE, path.join(RUNTIME_TARGET, "plans-git.js"), "file");
 
   // Launcher shim.
   if (!fs.existsSync(LAUNCHER_DIR)) {
@@ -161,6 +170,8 @@ function main() {
     console.log(`  Symlinked dashboard runtime:`);
     console.log(`    ${RUNTIME_TARGET}/dashboard.js -> ${DASHBOARD_SOURCE}`);
     console.log(`    ${RUNTIME_TARGET}/lib -> ${LIB_SOURCE}`);
+    console.log(`    ${RUNTIME_TARGET}/plan-touch.js -> ${PLAN_TOUCH_SOURCE}`);
+    console.log(`    ${RUNTIME_TARGET}/plans-git.js -> ${PLANS_GIT_SOURCE}`);
     console.log(`    ${RUNTIME_TARGET}/node_modules -> ${NODE_MODULES_SOURCE}`);
     console.log(`  Launcher: ${LAUNCHER_PATH}\n`);
     if (!launcherDirOnPath()) {

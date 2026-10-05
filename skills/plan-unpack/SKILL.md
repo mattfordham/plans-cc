@@ -185,20 +185,12 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
     - Add activity note: "Expanded idea #NNN into N tasks"
 
 12. **Commit .plans/ changes**
-    - Check if inside a git repo: `git rev-parse --git-dir 2>/dev/null`
-    - If not a git repo: skip silently
-    - Check if `.plans/` is gitignored: `git check-ignore -q .plans 2>/dev/null`
-    - If exit code 0 (ignored): skip silently
-    - Read `.plans/config.json` for `git_commits` setting
-    - If `git_commits` is not `true`: skip silently
-    - Check for uncommitted changes in .plans/: `git status --porcelain .plans/`
-    - If no changes: skip silently
-    - Commit:
+    - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
       ```bash
-      git add .plans/
-      git commit -m "plan: expand idea #NNN into [N] tasks"
+      node ~/.claude/plans-cc/plans-git.js commit "plan: expand idea #NNN into [N] tasks"
       ```
-    - If commit fails (e.g. hooks): warn but do not fail the skill
+    - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+    - Surface any `Warning:` lines it prints, but never fail the skill.
 
 13. **Display summary**
     ```

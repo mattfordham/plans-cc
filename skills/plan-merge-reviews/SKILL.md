@@ -124,17 +124,12 @@ It is deliberately **safe-by-construction**: it proves all branches are cleanly 
        ```
        Use today's date (`YYYY-MM-DD`). On a reuse-reset re-run, append a fresh line rather than rewriting the old one — the history of merges is informative.
    - **Do NOT** touch `**Status:**`, do NOT move the file to `completed/`, do NOT edit `PROGRESS.md`/`HISTORY.md`, and do NOT merge `integration/review-...` to the default branch.
-   - **Run the standard `.plans/` commit block** (exactly as `/plan-combine` does):
-     - Check inside a git repo: `git rev-parse --git-dir 2>/dev/null` — if not, skip silently.
-     - Check `.plans/` is not gitignored: `git check-ignore -q .plans 2>/dev/null` — if exit code 0 (ignored), skip silently.
-     - Read `git_commits` from `.plans/config.json` — if not `true`, skip silently.
-     - Check for uncommitted `.plans/` changes: `git status --porcelain .plans/` — if none, skip silently.
-     - Otherwise commit (use the sorted member IDs in the message):
-       ```bash
-       git add .plans/
-       git commit -m "plan: merge-reviews #004 #009 → integration/review-004-009"
-       ```
-     - If the commit fails (e.g. a hook rejects it), warn but do not fail the skill.
+   - **Commit `.plans/` changes via the shared helper** (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed). Use the sorted member IDs in the message:
+     ```bash
+     node ~/.claude/plans-cc/plans-git.js commit "plan: merge-reviews #004 #009 → integration/review-004-009"
+     ```
+     - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
+     - Surface any `Warning:` lines it prints, but never fail the skill.
 
 5. **Display summary + register telemetry**
 
