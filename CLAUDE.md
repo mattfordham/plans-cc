@@ -327,6 +327,8 @@ Every skill that commits `.plans/` does it through ONE shared helper — `node ~
 
 **Remote bootstrap & helpers.** `bootstrap [--branch <b>] [--remote <r>]` is the idempotent entry point for a fresh or ephemeral clone (a claude.ai/code session's SessionStart hook — see README "Remote sessions"); unlike the setup subcommands it runs from anywhere inside the clone (discovery, falling back to the git toplevel). It runs `git worktree prune`, then: branch mode → `sync`; `.plans` missing or empty → `join`; a plain local/inline `.plans/` → refuses. It prints **nothing on stdout** (SessionStart stdout is injected into Claude's context) — every line goes to stderr, ending with ONE final line: ``OK: .plans is attached to <r>/<b>[; added `.plans` to .gitignore (commit it)]``, `OK: .plans synced with <r>/<b>`, `Skipped: <reason>` (not a git repo, no remote, no plans branch on the remote, remote unreachable — so offline degrades quietly; an already-attached `.plans` offline instead gets a sync `Warning:` before its `OK` line), or `Error: local .plans/ exists, run /plan-init branch to convert`. Exit 0. `is-plans-branch <name>` prints `yes`/`no` — whether `<name>` (bare, `refs/heads/`, or `<r>/`-prefixed) is the configured `sync.branch` (default `plans`) or the branch actually checked out at `.plans`; the **Base:** guards use it.
 
+**Dashboard read.** `syncStatus(root)` (`lib/plans-git.js`) is the read-only consumer behind the terminal dashboard's `plans:` header line — no fetch, no `.git-lock`, no writes, never throws; `ahead`/`behind` are against the local tracking ref, so `behind` is as of the last fetch.
+
 **Allocate ID (branch mode).** Every skill that mints a task or idea ID — `plan-capture`, `plan-brainstorm`, `plan-import`, `plan-mine`, `plan-pick`, `plan-unpack` — brackets the allocation so two machines cannot hand out the same ID, citing this rule rather than copying it:
 1. Resolve the mode once with `node ~/.claude/plans-cc/plans-git.js mode`. **Anything but `branch` ⇒ skip this whole rule** — the skill's ordinary commit step stays exactly where it was, so `local`/`inline`/`none` projects are byte-identical to before (no extra commit, no push).
 2. **Before** reading `next_id` / `idea_next_id`: `node ~/.claude/plans-cc/plans-git.js sync`. Print every `Renumbered #A → #B` line verbatim (a local task collided with another machine's and got a new ID — the user needs to know its new number), surface `Warning:` lines, and continue — a failed sync is never fatal.
@@ -582,7 +584,7 @@ Inferred from description keywords:
 
 ## Testing
 
-The Node runtime under `lib/` has unit tests: `npm test` runs `node:test` over `test/*.test.js` (find-root, registry, plans-git, render-progress — the plans-git tests drive real git in temp repos, including init-branch/migrate/join and a two-clone ID collision). Skills themselves are declarative, not executable code, and have no automated tests — test them manually:
+The Node runtime under `lib/` has unit tests: `npm test` runs `node:test` over `test/*.test.js` (find-root, registry, plans-git, render-progress, render-dashboard — the plans-git tests drive real git in temp repos, including init-branch/migrate/join and a two-clone ID collision). Skills themselves are declarative, not executable code, and have no automated tests — test them manually:
 
 1. Run `npx plans-cc` to install skills
 2. In a test directory, run `/plan-init`

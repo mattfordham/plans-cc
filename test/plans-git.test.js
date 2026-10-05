@@ -890,3 +890,117 @@ test("isPlansBranch: the branch checked out at .plans counts even if config disa
   assert.strictEqual(plansGit.isPlansBranch("notes", root), true);
   assert.strictEqual(plansGit.isPlansBranch("main", root), false);
 });
+
+// --- syncStatus (read-only, for the dashboard header) ---
+
+// A branch-mode project whose .plans tracks origin/plans in a bare remote.
+function makeTrackedBranchProject() {
+  const root = makeBranchModeProject();
+  const plansDir = path.join(root, ".plans");
+  const bare = path.join(tmpRoot, "remote.git");
+  gitOk(tmpRoot, "init", "-q", "--bare", bare);
+  gitOk(plansDir, "remote", "add", "origin", bare);
+  gitOk(plansDir, "add", "-A");
+  gitOk(plansDir, "commit", "-q", "-m", "seed");
+  gitOk(plansDir, "push", "-q", "-u", "origin", "plans");
+  return { root, plansDir, bare };
+}
+
+// A raw local plan commit (no push), bypassing commit()'s background push.
+function localPlanCommit(plansDir, name) {
+  fs.writeFileSync(path.join(plansDir, name), `${name}\n`);
+  gitOk(plansDir, "add", "-A");
+  gitOk(plansDir, "commit", "-q", "-m", name);
+}
+
+test("syncStatus: non-branch modes return only the mode", () => {
+  const none = path.join(tmpRoot, "none");
+  writeConfig(path.join(none, ".plans"), { git_commits: true });
+  assert.deepStrictEqual(plansGit.syncStatus(none), { mode: "none" });
+
+  const local = makeRepo(path.join(tmpRoot, "local"), { ignorePlans: true });
+  writeConfig(path.join(local, ".plans"), { git_commits: true });
+  assert.deepStrictEqual(plansGit.syncStatus(local), { mode: "local" });
+
+  const inline = makeRepo(path.join(tmpRoot, "inline"));
+  writeConfig(path.join(inline, ".plans"), { git_commits: true });
+  assert.deepStrictEqual(plansGit.syncStatus(inline), { mode: "inline" });
+});
+
+test("syncStatus: never throws on a nonexistent root", () => {
+  assert.deepStrictEqual(plansGit.syncStatus(path.join(tmpRoot, "ghost")), { mode: "none" });
+  assert.deepStrictEqual(plansGit.syncStatus(undefined), { mode: "none" });
+});
+
+test("syncStatus: branch mode with no upstream reports upstream:false and zero counts", () => {
+  const root = makeBranchModeProject();
+  localPlanCommit(path.join(root, ".plans"), "a.md");
+  assert.deepStrictEqual(plansGit.syncStatus(root), {
+    mode: "branch",
+    branch: "plans",
+    remote: "origin",
+    upstream: false,
+    ahead: 0,
+    behind: 0,
+    rebaseStuck: false,
+  });
+});
+
+test("syncStatus: ahead counts unpushed plan commits and drops to 0 after pushing", () => {
+  const { root, plansDir } = makeTrackedBranchProject();
+  assert.deepStrictEqual(plansGit.syncStatus(root), {
+    mode: "branch",
+    branch: "plans",
+    remote: "origin",
+    upstream: true,
+    ahead: 0,
+    behind: 0,
+    rebaseStuck: false,
+  });
+
+  localPlanCommit(plansDir, "a.md");
+  localPlanCommit(plansDir, "b.md");
+  const status = plansGit.syncStatus(root);
+  assert.strictEqual(status.ahead, 2);
+  assert.strictEqual(status.behind, 0);
+  // Read-only: no lock taken, nothing written.
+  assert.ok(!fs.existsSync(path.join(plansDir, ".git-lock")));
+  assert.strictEqual(gitOk(plansDir, "status", "--porcelain"), "");
+
+  gitOk(plansDir, "push", "-q");
+  assert.strictEqual(plansGit.syncStatus(root).ahead, 0);
+});
+
+test("syncStatus: behind comes from the local tracking ref and never fetches", () => {
+  const { root, plansDir, bare } = makeTrackedBranchProject();
+  const other = path.join(tmpRoot, "other");
+  gitOk(tmpRoot, "clone", "-q", "-b", "plans", bare, other);
+  localPlanCommit(other, "remote-1.md");
+  gitOk(other, "push", "-q", "origin", "plans");
+
+  // Not fetched yet: the tracking ref has not moved, so nothing is behind.
+  assert.strictEqual(plansGit.syncStatus(root).behind, 0);
+
+  gitOk(plansDir, "fetch", "-q");
+  assert.strictEqual(plansGit.syncStatus(root).behind, 1);
+
+  // A push after the last fetch is invisible: syncStatus must not fetch.
+  localPlanCommit(other, "remote-2.md");
+  gitOk(other, "push", "-q", "origin", "plans");
+  const trackingBefore = gitOk(plansDir, "rev-parse", "origin/plans");
+  const status = plansGit.syncStatus(root);
+  assert.strictEqual(status.behind, 1);
+  assert.strictEqual(status.ahead, 0);
+  assert.strictEqual(gitOk(plansDir, "rev-parse", "origin/plans"), trackingBefore);
+});
+
+test("syncStatus: rebaseStuck when rebase-merge or rebase-apply exists", () => {
+  const { root, plansDir } = makeTrackedBranchProject();
+  for (const name of ["rebase-merge", "rebase-apply"]) {
+    const dir = path.resolve(plansDir, gitOk(plansDir, "rev-parse", "--git-path", name));
+    fs.mkdirSync(dir, { recursive: true });
+    assert.strictEqual(plansGit.syncStatus(root).rebaseStuck, true, name);
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.strictEqual(plansGit.syncStatus(root).rebaseStuck, false, name);
+  }
+});

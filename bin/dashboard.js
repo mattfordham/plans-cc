@@ -8,6 +8,7 @@ const { parseTasks } = require("../lib/parse-tasks");
 const { buildLayout, updateLayout } = require("../lib/render-dashboard");
 const { registerProject } = require("../lib/registry");
 const { findProjectRoot } = require("../lib/find-root");
+const { syncStatus } = require("../lib/plans-git");
 
 // Discover the project root by the shared walk (CLAUDE.md "Project-root
 // discovery"): ascend from cwd to the nearest ancestor holding
@@ -21,6 +22,7 @@ const CONTEXT_FILE = PLANS_DIR ? path.join(PLANS_DIR, "CONTEXT.md") : null;
 const DEBOUNCE_MS = 100;
 const BRANCH_CACHE_TTL_MS = 5000;
 const PROJECT_CACHE_TTL_MS = 5000;
+const SYNC_CACHE_TTL_MS = 5000;
 const GIT_POLL_INTERVAL_MS = 2000;
 
 function main() {
@@ -116,6 +118,25 @@ function main() {
     return cachedBranches;
   }
 
+  // Storage mode + branch-mode sync state for the header's `plans:` line.
+  // syncStatus is read-only (no fetch, no lock) and never throws; the guard is
+  // belt-and-braces so a git hiccup can never break the dashboard.
+  let cachedSync = null;
+  let cachedSyncAt = 0;
+  function getSyncStatus() {
+    const now = Date.now();
+    if (cachedSyncAt && now - cachedSyncAt < SYNC_CACHE_TTL_MS) {
+      return cachedSync;
+    }
+    cachedSyncAt = now;
+    try {
+      cachedSync = syncStatus(PROJECT_ROOT);
+    } catch (_) {
+      cachedSync = null;
+    }
+    return cachedSync;
+  }
+
   let cachedProject = null;
   let cachedProjectAt = 0;
   function getProject() {
@@ -147,6 +168,7 @@ function main() {
         summary,
         branches: getBranches(),
         project: getProject(),
+        sync: getSyncStatus(),
       });
       screen.render();
     } catch (err) {
@@ -184,6 +206,7 @@ function main() {
   // the existing debounced render path so getBranches() re-reads fresh git state.
   const gitPollTimer = setInterval(() => {
     cachedBranchesAt = 0;
+    cachedSyncAt = 0;
     scheduleRender();
   }, GIT_POLL_INTERVAL_MS);
 
