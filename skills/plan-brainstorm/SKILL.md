@@ -133,6 +133,7 @@ Recognize these phrases as signals to capture:
 ## On Capture
 
 1. **Read config.json**
+   - **Branch mode only** — per the **Allocate ID (branch mode)** rule in CLAUDE.md: if `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` before reading `idea_next_id`. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Any other mode: skip this bullet.
    - Get `idea_next_id` value (default to 1 if not present)
    - Format as 3-digit zero-padded string (e.g., 1 → "001")
 
@@ -180,6 +181,7 @@ Recognize these phrases as signals to capture:
      ```bash
      node ~/.claude/plans-cc/plans-git.js commit "plan: brainstorm - [topic]"
      ```
+   - In branch mode, add `--sync-push` (`commit --sync-push "plan: brainstorm - [topic]"`) so the idea ID is claimed on the remote right away — per the **Allocate ID (branch mode)** rule in CLAUDE.md.
    - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
    - Surface any `Warning:` lines it prints, but never fail the skill.
 

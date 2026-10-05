@@ -89,6 +89,8 @@ Import a brainstorming or planning markdown document and split it into multiple 
    - Reject: "no", "n", "cancel", "abort"
 
 7. **Create approved tasks**
+   **Branch mode only — before the loop** (per the **Allocate ID (branch mode)** rule in CLAUDE.md): if `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` ONCE so `next_id` reflects every other machine's captures. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Any other mode: skip this.
+
    For each approved task:
    - Read current `next_id` from `.plans/config.json`
    - Generate slug from title (lowercase, hyphens, max 40 chars)
@@ -131,6 +133,7 @@ Import a brainstorming or planning markdown document and split it into multiple 
      ```bash
      node ~/.claude/plans-cc/plans-git.js commit "plan: import [N] tasks from [filename]"
      ```
+   - In branch mode, add `--sync-push` (`commit --sync-push "plan: import [N] tasks from [filename]"`) — the ONE synchronous push for the whole batch, claiming every new ID on the remote per the **Allocate ID (branch mode)** rule in CLAUDE.md.
    - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
    - Surface any `Warning:` lines it prints, but never fail the skill.
 
@@ -166,5 +169,6 @@ Import a brainstorming or planning markdown document and split it into multiple 
 - **Very long sections**: Truncate preview in proposal table, keep full content in task file
 - **Duplicate titles**: If a proposed task title matches an existing task, note it: "[title] (note: similar to existing #NNN)"
 - **Not initialized**: Error: "Not initialized. Run `/plan-init` first."
+- **config.json missing or corrupt `next_id`**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
 - **User cancels**: Confirm: "Import cancelled. No tasks created."
 - **Partial selection with invalid numbers**: Ignore invalid numbers, create valid ones, note which were skipped

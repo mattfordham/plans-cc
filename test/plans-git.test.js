@@ -392,3 +392,381 @@ test("sync: pulls remote commits into the .plans worktree", () => {
   assert.ok(fs.existsSync(path.join(plansDir, "remote-task.md")));
   assert.ok(!fs.existsSync(path.join(plansDir, ".git-lock")));
 });
+
+// --- init-branch / migrate / join / renumber (two clones of one origin) ---
+
+// A bare `origin` with one `main` commit, plus a clone of it at `name`.
+function makeOrigin() {
+  const bare = path.join(tmpRoot, "origin.git");
+  gitOk(tmpRoot, "init", "-q", "--bare", "-b", "main", bare);
+  const seed = makeRepo(path.join(tmpRoot, "seed"));
+  gitOk(seed, "remote", "add", "origin", bare);
+  gitOk(seed, "push", "-q", "origin", "main");
+  return bare;
+}
+
+function cloneOf(bare, name) {
+  const dir = path.join(tmpRoot, name);
+  gitOk(tmpRoot, "clone", "-q", bare, dir);
+  return dir;
+}
+
+function write(file, content) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+}
+
+function read(file) {
+  return fs.readFileSync(file, "utf8");
+}
+
+function taskFile(id, title, extra = "") {
+  return `# ${title}\n\n**ID:** ${id}\n**Created:** 2026-10-01T10:00\n**Type:** feature\n**Status:** pending\n${extra}\n## What\n${title}\n\n## Notes\n- captured\n`;
+}
+
+// An existing local-mode .plans/ (what /plan-init writes) in `root`.
+function seedLocalPlans(root, config = { git_commits: true, next_id: 43, idea_next_id: 2 }) {
+  const plansDir = path.join(root, ".plans");
+  writeConfig(plansDir, config);
+  write(path.join(plansDir, "PROGRESS.md"), "# Current Progress\n");
+  write(path.join(plansDir, "HISTORY.md"), "# Task History\n");
+  write(path.join(plansDir, "pending", "042-existing.md"), taskFile("042", "Existing"));
+  write(path.join(plansDir, "completed", "001-first.md"), taskFile("001", "First"));
+  write(path.join(plansDir, "ideas", "001-big-idea.md"), "# Idea #001: Big idea\n\n## Summary\nbig\n");
+  write(path.join(plansDir, "artifacts", "nested", "deep.md"), "deep\n");
+  return plansDir;
+}
+
+function excludeFile(root) {
+  return read(path.join(root, ".git", "info", "exclude"));
+}
+
+function idsIn(plansDir) {
+  const ids = [];
+  for (const dir of ["pending", "completed", "backlog"]) {
+    const full = path.join(plansDir, dir);
+    if (!fs.existsSync(full)) continue;
+    for (const f of fs.readdirSync(full)) if (/^\d{3}-/.test(f)) ids.push(f.slice(0, 3));
+  }
+  return ids.sort();
+}
+
+test("initBranch: creates an orphan plans worktree with the scaffold and pushes it", () => {
+  const bare = makeOrigin();
+  const root = cloneOf(bare, "a");
+  const res = plansGit.initBranch(root);
+  const plansDir = path.join(root, ".plans");
+
+  assert.strictEqual(res.ok, true, res.error);
+  assert.deepStrictEqual(res.warnings, []);
+  assert.strictEqual(plansGit.detectMode(root), "branch");
+  assert.strictEqual(gitOk(plansDir, "branch", "--show-current"), "plans");
+  assert.match(read(path.join(plansDir, ".gitattributes")), /^HISTORY\.md merge=union$/m);
+  assert.match(read(path.join(plansDir, ".gitattributes")), /^PROGRESS\.md merge=ours$/m);
+  assert.match(read(path.join(plansDir, ".gitattributes")), /^config\.json merge=ours$/m);
+  assert.match(read(path.join(plansDir, ".gitignore")), /^\.DS_Store$/m);
+  assert.match(read(path.join(plansDir, ".gitignore")), /^\.git-lock$/m);
+  const config = JSON.parse(read(path.join(plansDir, "config.json")));
+  assert.strictEqual(config.git_commits, true);
+  assert.deepStrictEqual(config.sync, { remote: "origin", branch: "plans", auto_push: true });
+  assert.strictEqual(gitOk(plansDir, "config", "merge.ours.driver"), "true");
+  // Orphan: no shared history with main.
+  assert.notStrictEqual(run(root, "merge-base", "main", "plans").status, 0);
+  assert.strictEqual(gitOk(plansDir, "status", "--porcelain"), "");
+  // The outer repo stays clean and ignores .plans via info/exclude.
+  assert.strictEqual(gitOk(root, "status", "--porcelain"), "");
+  assert.match(excludeFile(root), /^\.plans$/m);
+  // Pushed with upstream.
+  assert.strictEqual(res.pushed, true);
+  assert.ok(gitOk(bare, "rev-parse", "plans"));
+  assert.strictEqual(gitOk(plansDir, "rev-parse", "--abbrev-ref", "@{u}"), "origin/plans");
+});
+
+test("initBranch: the commit-tree fallback produces the same orphan setup", () => {
+  const bare = makeOrigin();
+  const root = cloneOf(bare, "a");
+  const res = plansGit.initBranch(root, { forceFallback: true });
+  const plansDir = path.join(root, ".plans");
+
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(res.fallback, true);
+  assert.strictEqual(plansGit.detectMode(root), "branch");
+  assert.strictEqual(gitOk(plansDir, "branch", "--show-current"), "plans");
+  assert.notStrictEqual(run(root, "merge-base", "main", "plans").status, 0);
+  assert.ok(fs.existsSync(path.join(plansDir, ".gitattributes")));
+  assert.strictEqual(gitOk(plansDir, "status", "--porcelain"), "");
+  assert.strictEqual(gitOk(root, "status", "--porcelain"), "");
+});
+
+test("initBranch: no remote is fine — committed locally, nothing pushed", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  const res = plansGit.initBranch(root);
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(res.pushed, false);
+  assert.deepStrictEqual(res.warnings, []);
+  assert.strictEqual(commitCount(path.join(root, ".plans")), 1);
+});
+
+test("initBranch: an unreachable remote is a warning, not a failure", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  gitOk(root, "remote", "add", "origin", path.join(tmpRoot, "nowhere.git"));
+  const res = plansGit.initBranch(root);
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(res.pushed, false);
+  assert.strictEqual(res.warnings.length, 1);
+  assert.match(res.warnings[0], /push/i);
+});
+
+test("initBranch: refuses a root that is not a git repo", () => {
+  const root = path.join(tmpRoot, "parent");
+  fs.mkdirSync(root);
+  const res = plansGit.initBranch(root);
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /not a git repo/);
+  assert.ok(!fs.existsSync(path.join(root, ".plans")));
+});
+
+test("initBranch: refuses when .plans already has content (use migrate)", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  seedLocalPlans(root);
+  const res = plansGit.initBranch(root);
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /migrate/);
+});
+
+test("migrate: moves an existing local .plans onto the plans branch, keeping every file", () => {
+  const bare = makeOrigin();
+  const root = cloneOf(bare, "a");
+  const plansDir = seedLocalPlans(root, { git_commits: false, next_id: 43 });
+  write(path.join(plansDir, ".DS_Store"), "junk");
+  fs.mkdirSync(path.join(plansDir, "backlog"));
+  const before = {};
+  for (const rel of ["PROGRESS.md", "HISTORY.md", "pending/042-existing.md", "completed/001-first.md", "ideas/001-big-idea.md", "artifacts/nested/deep.md"]) {
+    before[rel] = read(path.join(plansDir, rel));
+  }
+
+  const res = plansGit.migrate(root);
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(plansGit.detectMode(root), "branch");
+  for (const [rel, content] of Object.entries(before)) {
+    assert.strictEqual(read(path.join(plansDir, rel)), content, rel);
+  }
+  const config = JSON.parse(read(path.join(plansDir, "config.json")));
+  assert.strictEqual(config.next_id, 43);
+  assert.strictEqual(config.git_commits, true);
+  // The flip from false is announced, never silent.
+  assert.ok(res.messages.some((m) => /git_commits/.test(m)));
+  // Everything is committed on the plans branch; .DS_Store is not carried over.
+  assert.strictEqual(gitOk(plansDir, "status", "--porcelain"), "");
+  assert.ok(!fs.existsSync(path.join(plansDir, ".DS_Store")));
+  assert.match(gitOk(plansDir, "ls-files"), /artifacts\/nested\/deep\.md/);
+  // Empty directories survive (git can't track them bare).
+  assert.match(gitOk(plansDir, "ls-files"), /^backlog\/\.gitkeep$/m);
+  // The backup is gone and the outer repo is clean.
+  assert.deepStrictEqual(fs.readdirSync(root).filter((f) => f.startsWith(".plans.bak-")), []);
+  assert.strictEqual(gitOk(root, "status", "--porcelain"), "");
+  assert.match(excludeFile(root), /^\.plans$/m);
+  assert.ok(gitOk(bare, "rev-parse", "plans"));
+});
+
+test("migrate: keeps the backup when the copied files don't verify", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  seedLocalPlans(root);
+  const res = plansGit.migrate(root, {
+    _afterCopy: (plansDir) => fs.rmSync(path.join(plansDir, "artifacts", "nested", "deep.md")),
+  });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /backup/i);
+  const backups = fs.readdirSync(root).filter((f) => f.startsWith(".plans.bak-"));
+  assert.strictEqual(backups.length, 1);
+  assert.strictEqual(read(path.join(root, backups[0], "artifacts", "nested", "deep.md")), "deep\n");
+  assert.ok(res.error.includes(backups[0]));
+});
+
+test("migrate: keeps the backup when a checksum differs", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  seedLocalPlans(root);
+  const res = plansGit.migrate(root, {
+    _afterCopy: (plansDir) => fs.writeFileSync(path.join(plansDir, "HISTORY.md"), "tampered\n"),
+  });
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /HISTORY\.md/);
+  assert.strictEqual(fs.readdirSync(root).filter((f) => f.startsWith(".plans.bak-")).length, 1);
+});
+
+test("migrate: refuses inline mode (.plans tracked in the code repo)", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  seedLocalPlans(root);
+  gitOk(root, "add", ".plans");
+  gitOk(root, "commit", "-q", "-m", "track plans");
+  const res = plansGit.migrate(root);
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /tracked/);
+  assert.strictEqual(plansGit.detectMode(root), "inline");
+});
+
+test("join: a second clone attaches to origin/plans and sets the merge driver", () => {
+  const bare = makeOrigin();
+  const a = cloneOf(bare, "a");
+  seedLocalPlans(a);
+  fs.mkdirSync(path.join(a, ".plans", "backlog"));
+  assert.strictEqual(plansGit.migrate(a).ok, true);
+
+  const b = cloneOf(bare, "b");
+  const res = plansGit.join(b);
+  const plansDir = path.join(b, ".plans");
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(plansGit.detectMode(b), "branch");
+  assert.strictEqual(gitOk(plansDir, "branch", "--show-current"), "plans");
+  assert.ok(fs.existsSync(path.join(plansDir, "pending", "042-existing.md")));
+  assert.ok(fs.statSync(path.join(plansDir, "backlog")).isDirectory());
+  assert.strictEqual(gitOk(plansDir, "config", "merge.ours.driver"), "true");
+  assert.strictEqual(gitOk(plansDir, "rev-parse", "--abbrev-ref", "@{u}"), "origin/plans");
+  assert.match(read(path.join(b, ".gitignore")), /^\.plans$/m);
+  assert.strictEqual(res.gitignoreChanged, true);
+  assert.match(excludeFile(b), /^\.plans$/m);
+});
+
+test("join: rewrites a slashed .plans/ ignore line to the slashless form", () => {
+  const bare = makeOrigin();
+  const a = cloneOf(bare, "a");
+  assert.strictEqual(plansGit.initBranch(a).ok, true);
+  const b = cloneOf(bare, "b");
+  fs.writeFileSync(path.join(b, ".gitignore"), "node_modules\n.plans/\n");
+  assert.strictEqual(plansGit.join(b).ok, true);
+  assert.strictEqual(read(path.join(b, ".gitignore")), "node_modules\n.plans\n");
+});
+
+test("join: fails cleanly when the remote has no plans branch", () => {
+  const bare = makeOrigin();
+  const b = cloneOf(bare, "b");
+  const res = plansGit.join(b);
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /plans/);
+  assert.ok(!fs.existsSync(path.join(b, ".plans")));
+});
+
+// Two machines share origin/plans; both capture #043 while offline.
+function twoClones() {
+  const bare = makeOrigin();
+  const a = cloneOf(bare, "a");
+  seedLocalPlans(a);
+  assert.strictEqual(plansGit.migrate(a).ok, true);
+  const b = cloneOf(bare, "b");
+  assert.strictEqual(plansGit.join(b).ok, true);
+  return { bare, a, b, pa: path.join(a, ".plans"), pb: path.join(b, ".plans") };
+}
+
+function bumpConfig(plansDir, nextId) {
+  const config = JSON.parse(read(path.join(plansDir, "config.json")));
+  config.next_id = nextId;
+  writeConfig(plansDir, config);
+}
+
+test("sync: a two-clone ID collision renumbers the later clone's task", () => {
+  const { a, b, pa, pb } = twoClones();
+
+  // Clone A captures #043 offline.
+  write(path.join(pa, "pending", "043-alpha.md"), taskFile("043", "Alpha"));
+  bumpConfig(pa, 44);
+  write(path.join(pa, "PROGRESS.md"), "# Current Progress\n\nA's version\n");
+  gitOk(pa, "add", "-A");
+  gitOk(pa, "commit", "-q", "-m", "plan: capture #043 - Alpha");
+
+  // Clone B captures its own #043 offline, references it, and starts it.
+  write(path.join(pb, "pending", "043-beta.md"), taskFile("043", "Beta"));
+  const existing = path.join(pb, "pending", "042-existing.md");
+  fs.writeFileSync(existing, read(existing).replace("**Status:** pending\n", "**Status:** pending\n**Blocked by:** #043\n"));
+  const idea = path.join(pb, "ideas", "001-big-idea.md");
+  fs.appendFileSync(idea, "\n## Expanded Into\n- Task #043: Beta\n");
+  write(path.join(pb, "state", "043-state.md"), "# Execution State: Task #043\n\n**Started:** 2026-10-05T10:00\n");
+  bumpConfig(pb, 44);
+  write(path.join(pb, "PROGRESS.md"), "# Current Progress\n\nB's version\n");
+  gitOk(pb, "add", "-A");
+  gitOk(pb, "commit", "-q", "-m", "plan: capture #043 - Beta");
+  gitOk(b, "branch", "feature/043-beta");
+
+  // A reaches the remote first.
+  const syncA = plansGit.sync(a);
+  assert.deepStrictEqual(syncA.warnings, []);
+  assert.deepStrictEqual(syncA.renumbered, []);
+  gitOk(pa, "push", "-q");
+
+  // B syncs: rebases onto A, finds the duplicate, and moves its own copy.
+  const syncB = plansGit.sync(b);
+  assert.strictEqual(syncB.synced, true);
+  assert.deepStrictEqual(syncB.renumbered, [{ from: "043", to: "044" }]);
+  assert.strictEqual(syncB.warnings.length, 1, syncB.warnings.join("\n"));
+  assert.match(syncB.warnings[0], /feature\/043-beta/);
+
+  assert.deepStrictEqual(idsIn(pb), ["001", "042", "043", "044"]);
+  assert.ok(fs.existsSync(path.join(pb, "pending", "043-alpha.md")));
+  const moved = read(path.join(pb, "pending", "044-beta.md"));
+  assert.match(moved, /^\*\*ID:\*\* 044$/m);
+  assert.match(moved, /Renumbered from #043 after sync collision/);
+  assert.match(read(existing), /^\*\*Blocked by:\*\* #044$/m);
+  assert.match(read(idea), /^- Task #044: Beta$/m);
+  assert.ok(fs.existsSync(path.join(pb, "state", "044-state.md")));
+  assert.ok(!fs.existsSync(path.join(pb, "state", "043-state.md")));
+  assert.match(read(path.join(pb, "state", "044-state.md")), /Task #044/);
+  // A's task is untouched.
+  assert.match(read(path.join(pb, "pending", "043-alpha.md")), /^\*\*ID:\*\* 043$/m);
+  // Counters rebuilt from the files, PROGRESS.md rebuilt, everything committed.
+  assert.strictEqual(JSON.parse(read(path.join(pb, "config.json"))).next_id, 45);
+  assert.match(read(path.join(pb, "PROGRESS.md")), /^- Pending: 3$/m);
+  assert.strictEqual(gitOk(pb, "status", "--porcelain"), "");
+  // The renumber was pushed, so A picks it up on its next sync without renumbering.
+  const again = plansGit.sync(a);
+  assert.deepStrictEqual(again.renumbered, []);
+  assert.deepStrictEqual(idsIn(pa), ["001", "042", "043", "044"]);
+  assert.strictEqual(JSON.parse(read(path.join(pa, "config.json"))).next_id, 45);
+  // The code branches were never touched.
+  assert.strictEqual(gitOk(a, "status", "--porcelain"), "");
+  // (join's slashless .gitignore line is left for the caller to commit.)
+  assert.strictEqual(gitOk(b, "status", "--porcelain"), "?? .gitignore");
+});
+
+test("sync: an add/add conflict at the same path aborts the rebase with a warning", () => {
+  const { a, b, pa, pb } = twoClones();
+  write(path.join(pa, "pending", "043-same.md"), taskFile("043", "From A"));
+  gitOk(pa, "add", "-A");
+  gitOk(pa, "commit", "-q", "-m", "a");
+  gitOk(pa, "push", "-q");
+  write(path.join(pb, "pending", "043-same.md"), taskFile("043", "From B"));
+  gitOk(pb, "add", "-A");
+  gitOk(pb, "commit", "-q", "-m", "b");
+  const localHead = gitOk(pb, "rev-parse", "HEAD");
+
+  const res = plansGit.sync(b);
+  assert.strictEqual(res.synced, false);
+  assert.strictEqual(res.warnings.length, 1);
+  assert.match(res.warnings[0], /abort/i);
+  // No rebase left in progress; the local commit is intact.
+  assert.strictEqual(gitOk(pb, "rev-parse", "HEAD"), localHead);
+  assert.strictEqual(gitOk(pb, "status", "--porcelain"), "");
+  assert.match(read(path.join(pb, "pending", "043-same.md")), /From B/);
+  assert.ok(!fs.existsSync(path.join(pb, ".git-lock")));
+  void a;
+});
+
+test("sync: rebuilds next_id from the files even without a collision", () => {
+  const { a, b, pa } = twoClones();
+  write(path.join(pa, "backlog", "050-shelved.md"), taskFile("050", "Shelved"));
+  gitOk(pa, "add", "-A");
+  gitOk(pa, "commit", "-q", "-m", "shelve");
+  gitOk(pa, "push", "-q");
+  const res = plansGit.sync(b);
+  assert.strictEqual(res.synced, true);
+  assert.deepStrictEqual(res.renumbered, []);
+  assert.strictEqual(JSON.parse(read(path.join(b, ".plans", "config.json"))).next_id, 51);
+  assert.strictEqual(gitOk(path.join(b, ".plans"), "status", "--porcelain"), "");
+  void a;
+});
+
+test("renumber: no upstream means nothing to compare against — a no-op", () => {
+  const root = makeBranchModeProject();
+  write(path.join(root, ".plans", "pending", "001-x.md"), taskFile("001", "X"));
+  write(path.join(root, ".plans", "backlog", "001-y.md"), taskFile("001", "Y"));
+  const res = plansGit.renumber(root);
+  assert.deepStrictEqual(res.renumbered, []);
+});

@@ -114,6 +114,7 @@ Analyze an idea, surface the highest-value components, and let the user select w
    - If "Cancel": stop with "No tasks created."
 
 7. **Create tasks**
+   **Branch mode only — before the loop** (per the **Allocate ID (branch mode)** rule in CLAUDE.md): if `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` ONCE so `next_id` reflects every other machine's captures. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Any other mode: skip this.
 
    For each selected component:
    - Read current `next_id` from `.plans/config.json`
@@ -196,6 +197,7 @@ Analyze an idea, surface the highest-value components, and let the user select w
       ```bash
       node ~/.claude/plans-cc/plans-git.js commit "plan: pick from idea #NNN"
       ```
+    - In branch mode, add `--sync-push` (`commit --sync-push "plan: pick from idea #NNN"`) — the ONE synchronous push for the whole batch, claiming every new ID on the remote per the **Allocate ID (branch mode)** rule in CLAUDE.md.
     - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
     - Surface any `Warning:` lines it prints, but never fail the skill.
 
@@ -236,4 +238,4 @@ Analyze an idea, surface the highest-value components, and let the user select w
 - **Single component in idea**: Still show the selection prompt (consistent UX), but note there's only one component
 - **User selects nothing**: Treat as cancel — "No tasks created."
 - **ideas/ directory doesn't exist**: Error: "No ideas directory found. Run `/plan-brainstorm` to create ideas first."
-- **config.json missing next_id**: Reconstruct by finding highest ID in pending/ and completed/ directories, then add 1
+- **config.json missing next_id**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1

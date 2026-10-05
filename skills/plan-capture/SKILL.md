@@ -70,6 +70,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    - **`discuss` implies elaborate**: a trailing `discuss` always sets `auto_elaborate=true` (the conversation is a front-loaded gate that then chains into elaboration), exactly as `execute`/`go` imply elaborate. Because the `discuss …` rows are listed first, they take priority over the plain `execute`/`go`/`elaborate` rows — e.g. "Add dark mode discuss and go" matches the `discuss (and\|then\|&) (execute\|go)` row, not the bare `(and\|then\|&) (execute\|go)` row.
 
 3. **Read config and generate ID**
+   - **Branch mode only** — per the **Allocate ID (branch mode)** rule in CLAUDE.md: run `node ~/.claude/plans-cc/plans-git.js mode`; if it prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` first so `next_id` reflects every other machine's captures. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Remember `branch_mode_plans` (true/false) for step 7.5. Any other mode: skip this bullet entirely.
    - Read `.plans/config.json`
    - Get `next_id` value
    - Format as 3-digit zero-padded string (e.g., 1 → "001")
@@ -152,6 +153,15 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    - Increment `next_id`
    - Write updated config
 
+7.5. **Claim the ID (branch mode only)**
+   - Only when `branch_mode_plans` is true (step 3). In every other mode, skip — step 10 commits exactly as before.
+   - Per the **Allocate ID (branch mode)** rule in CLAUDE.md, commit and push synchronously right away, so the ID is claimed on the remote before another machine can mint it:
+     ```bash
+     node ~/.claude/plans-cc/plans-git.js commit --sync-push "plan: capture #NNN - [title]"
+     ```
+   - This sits inside steps 1–8 on purpose: `/plan-execute` and `/plan-elaborate` auto-capture run only those steps, and must still claim the ID.
+   - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue. Surface any `Warning:` lines; never fail the skill.
+
 8. **Update PROGRESS.md stats**
    - Count pending tasks in `.plans/pending/`
    - Update the Stats section
@@ -163,6 +173,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
 10. **Commit .plans/ changes**
    - If `auto_elaborate` or `auto_execute` is true: skip this step (the chained skill will commit)
+   - In branch mode the task was already committed and pushed at step 7.5; this commit only picks up the step-8 PROGRESS.md change (or skips silently when there is none).
    - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
      ```bash
      node ~/.claude/plans-cc/plans-git.js commit "plan: capture #NNN - [title]"
@@ -307,8 +318,9 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 ## Edge Cases
 
 - **No description provided**: Ask the user for one
-- **Corrupt config.json**: Reconstruct `next_id` by finding highest ID in pending/ and completed/ directories, then add 1
-- **ID collision** (file already exists): Scan directories for actual max ID and use that + 1
+- **Corrupt config.json**: Reconstruct `next_id` by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **ID collision** (file already exists): Scan pending/, completed/, and backlog/ for actual max ID and use that + 1
+- **Collision with another machine (branch mode)**: two clones that capture the same ID offline both keep their task — the next `sync` renumbers the local copy and prints `Renumbered #A → #B`; pass that line on to the user
 - **Very long description**: Truncate slug at word boundary, keep full description in the file
 - **`execute` implies `elaborate`**: Auto-execute always runs auto-elaborate first
 - **`discuss` implies `elaborate`**: A trailing `discuss` always runs the clarifying gate and then auto-elaborate — the conversation front-loads the chain, it is never a standalone destination

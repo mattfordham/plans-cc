@@ -138,6 +138,8 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
      ```
 
 9. **Create tasks**
+   **Branch mode only — before the loop** (per the **Allocate ID (branch mode)** rule in CLAUDE.md): if `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` ONCE so `next_id` reflects every other machine's captures. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Any other mode: skip this.
+
    For each approved task:
    - Read current `next_id` from `.plans/config.json`
    - Generate slug from title (lowercase, hyphens, remove special chars, max 40 chars at word boundary)
@@ -189,6 +191,7 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
       ```bash
       node ~/.claude/plans-cc/plans-git.js commit "plan: expand idea #NNN into [N] tasks"
       ```
+    - In branch mode, add `--sync-push` (`commit --sync-push "plan: expand idea #NNN into [N] tasks"`) — the ONE synchronous push for the whole batch, claiming every new ID on the remote per the **Allocate ID (branch mode)** rule in CLAUDE.md.
     - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
     - Surface any `Warning:` lines it prints, but never fail the skill.
 
@@ -222,5 +225,5 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
 - **Many tasks proposed (8+)**: Warn the user: "This is a lot of tasks. Consider whether some could be combined or deferred." Let them decide.
 - **Already expanded — "Add more"**: Read existing Expanded Into section, note which tasks already exist, propose only new/additional tasks. Append new entries to the Expanded Into section.
 - **Already expanded — "Start fresh"**: Warn that existing tasks won't be deleted, but the Expanded Into section will be replaced. Proceed with fresh analysis.
-- **config.json missing next_id**: Reconstruct by finding highest ID in pending/ and completed/ directories, then add 1
+- **config.json missing next_id**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
 - **ideas/ directory doesn't exist**: Error: "No ideas directory found. Run `/plan-brainstorm` to create ideas first."

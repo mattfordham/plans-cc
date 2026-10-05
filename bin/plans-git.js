@@ -4,11 +4,21 @@
 // .plans/. Usage (run from anywhere inside a project):
 //
 //   node plans-git.js commit [--sync-push] "<msg>"   commit pending .plans/ changes
-//   node plans-git.js sync                           pull the plans branch (branch mode)
+//   node plans-git.js sync                           pull the plans branch (branch mode),
+//                                                    renumber collisions, rebuild counters
+//   node plans-git.js renumber                       renumber colliding local ids (branch mode)
 //   node plans-git.js mode                           print none|local|inline|branch
 //
+// Setup (run from the project root — the current directory is the root):
+//
+//   node plans-git.js init-branch [--branch <b>] [--remote <r>] [--no-push] [--force-fallback]
+//   node plans-git.js migrate     [--branch <b>] [--remote <r>] [--no-push] [--force-fallback]
+//   node plans-git.js join        [--branch <b>] [--remote <r>]
+//
 // Any problem is printed to stdout as a `Warning: …` line for the model to
-// surface. The exit code is ALWAYS 0: a skill must never fail because of this.
+// surface; sync/renumber print one `Renumbered #A → #B` line per moved task.
+// Setup commands end with exactly one `OK: …` or `Error: …` line. The exit
+// code is ALWAYS 0: a skill must never fail because of this.
 //
 // The lib/ directory is a sibling of this script in BOTH layouts:
 //   repo:      bin/plans-git.js      + lib/plans-git.js          → ../lib/plans-git
@@ -48,10 +58,39 @@ try {
     } else if (root) {
       printWarnings(plansGit.commit(root, msg, { syncPush }).warnings);
     }
-  } else if (subcommand === "sync") {
-    if (root) printWarnings(plansGit.sync(root).warnings);
+  } else if (subcommand === "sync" || subcommand === "renumber") {
+    if (root) {
+      const res = subcommand === "sync" ? plansGit.sync(root) : plansGit.renumber(root);
+      for (const m of res.renumbered || []) console.log(`Renumbered #${m.from} → #${m.to}`);
+      printWarnings(res.warnings);
+    }
+  } else if (subcommand === "init-branch" || subcommand === "migrate" || subcommand === "join") {
+    const opts = {};
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--branch" || args[i] === "--remote") opts[args[i].slice(2)] = args[++i];
+      else if (args[i].startsWith("--branch=")) opts.branch = args[i].slice("--branch=".length);
+      else if (args[i].startsWith("--remote=")) opts.remote = args[i].slice("--remote=".length);
+      else if (args[i] === "--no-push") opts.push = false;
+      else if (args[i] === "--force-fallback") opts.forceFallback = true;
+    }
+    const fn = { "init-branch": plansGit.initBranch, migrate: plansGit.migrate, join: plansGit.join }[subcommand];
+    const res = fn(process.cwd(), opts);
+    for (const m of res.messages || []) console.log(m);
+    printWarnings(res.warnings);
+    if (res.ok) {
+      const pushed = res.pushed ? `pushed to ${res.remote}/${res.branch}` : "not pushed";
+      const detail =
+        subcommand === "join"
+          ? `.plans is attached to ${res.remote}/${res.branch}${res.gitignoreChanged ? "; added `.plans` to .gitignore (commit it)" : ""}`
+          : `.plans is on branch ${res.branch} (${pushed})`;
+      console.log(`OK: ${detail}`);
+    } else {
+      console.log(`Error: ${res.error}`);
+    }
   } else {
-    console.log(`Warning: unknown plans-git subcommand "${subcommand || ""}" (expected commit, sync, or mode)`);
+    console.log(
+      `Warning: unknown plans-git subcommand "${subcommand || ""}" (expected commit, sync, renumber, mode, init-branch, migrate, or join)`
+    );
   }
 } catch (err) {
   console.log(`Warning: plans-git failed unexpectedly: ${err && err.message}`);
