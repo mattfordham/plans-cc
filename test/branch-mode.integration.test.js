@@ -88,15 +88,18 @@ function taskFile(id, title, status = "pending") {
 }
 
 // Bare origin with one `main` commit (plus .gitignore with the slashless
-// `.plans` line, as plan-init writes), and a clone of it at `name`.
-function makeOrigin() {
+// `.plans` line, as plan-init writes), and a clone of it at `name`. Pass
+// { plansIgnored: false } to seed a .gitignore that OMITS the `.plans` line,
+// reproducing a clone whose shared .gitignore predates branch mode.
+function makeOrigin(originOpts) {
+  const plansIgnored = !originOpts || originOpts.plansIgnored !== false;
   const bare = path.join(tmpRoot, "origin.git");
   gitOk(tmpRoot, "init", "-q", "--bare", "-b", "main", bare);
   const seed = path.join(tmpRoot, "seed");
   fs.mkdirSync(seed);
   gitOk(seed, "init", "-q", "-b", "main");
   write(path.join(seed, "README.md"), "code\n");
-  write(path.join(seed, ".gitignore"), ".plans\n.worktrees\n");
+  write(path.join(seed, ".gitignore"), plansIgnored ? ".plans\n.worktrees\n" : ".worktrees\n");
   gitOk(seed, "add", "-A");
   gitOk(seed, "commit", "-q", "-m", "init");
   gitOk(seed, "remote", "add", "origin", bare);
@@ -232,6 +235,25 @@ test("bootstrap attaches a fresh clone, then just syncs, printing nothing on std
   assert.match(lastLine(second.stderr), /^OK: \.plans synced with origin\/plans/, second.stderr);
   assert.ok(fs.existsSync(path.join(pb, "pending", "002-later.md")));
   assert.strictEqual(gitOk(b, "worktree", "list", "--porcelain").match(/^worktree /gm).length, 2);
+});
+
+test("bootstrap leaves the checkout clean when the shared .gitignore omits .plans", () => {
+  const bare = makeOrigin({ plansIgnored: false });
+  const a = cloneOf(bare, "a");
+  const pa = initBranch(a);
+  capture(a, pa, "001", "From A");
+
+  const b = cloneOf(bare, "b");
+  const r = cli(b, "bootstrap");
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout, "", "bootstrap must print nothing on stdout");
+  assert.match(lastLine(r.stderr), /^OK: \.plans is attached to origin\/plans/, r.stderr);
+
+  // The clone attaches without dirtying the working tree...
+  assert.strictEqual(plansGit.detectMode(b), "branch");
+  assert.strictEqual(gitOk(b, "status", "--porcelain"), "", "bootstrap must not leave an uncommitted .gitignore edit");
+  // ...and .plans is still ignored, via .git/info/exclude rather than the edit.
+  assert.strictEqual(gitOk(b, "check-ignore", ".plans"), ".plans");
 });
 
 test("bootstrap refuses a plain local .plans/ and exits 0", () => {

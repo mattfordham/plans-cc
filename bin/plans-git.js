@@ -99,10 +99,10 @@ try {
     for (const m of res.renumbered || []) err(`Renumbered #${m.from} → #${m.to}`);
     for (const w of res.warnings || []) err(`Warning: ${w}`);
     if (!res.ok) err(`Error: ${res.error}`);
-    else if (res.action === "joined")
-      err(
-        `OK: .plans is attached to ${res.remote}/${res.branch}${res.gitignoreChanged ? "; added `.plans` to .gitignore (commit it)" : ""}`
-      );
+    // bootstrap joins with skipGitignore: true, so it never edits the checkout's
+    // .gitignore — no "(commit it)" suffix here. A missing slashless `.plans` line
+    // is surfaced as a res.messages hint instead (printed above).
+    else if (res.action === "joined") err(`OK: .plans is attached to ${res.remote}/${res.branch}`);
     else if (res.action === "synced") err(`OK: .plans synced with ${res.remote}/${res.branch}`);
     else err(`Skipped: ${res.reason || "nothing to bootstrap"}`);
   } else if (subcommand === "init-branch" || subcommand === "migrate" || subcommand === "join") {
