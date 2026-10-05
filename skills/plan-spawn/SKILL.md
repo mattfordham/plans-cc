@@ -149,6 +149,12 @@ These rules bind every invocation; they are not subject to your judgment about h
 
    For each task, in sequence:
 
+   **a0. Resolve the target branch** (the branch to branch FROM) — follow plan-execute step 7c exactly. Resolve this per task, inside the loop, because each spawned task carries its own `**Base:**`.
+   - Read the task's `**Base:**` header field (if present) and set `target` per the **Resolve target branch** contract in CLAUDE.md — `target` is the `**Base:**` value when that field is present and non-empty, OTHERWISE the repo's default branch, resolved via `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main` then `master`. `target` is used at the branch-creation site in step 6b below.
+   - When `**Base:**` is absent, `target` IS the default branch and the worktree command in step 6b is byte-for-byte unchanged from today.
+   - **Plans-branch guard** (only when `**Base:**` is present and non-empty). Run this before any branch creation, create-if-missing, or worktree creation. When `node ~/.claude/plans-cc/plans-git.js mode` prints `branch` and `node ~/.claude/plans-cc/plans-git.js is-plans-branch <target>` prints `yes`, abort THIS task — create no branch or worktree, leave its status unchanged, and record it in the final summary table (step 9) with `🔴 BLOCKED · Task #NNN — **Base:** is the plans branch`. Continue to the next task. The reason is the *plans branch is never a merge target, a `**Base:**`, or an execution branch* invariant in CLAUDE.md → **Plans storage mode**: branching code from the orphan plans branch would corrupt both. In any other mode, or when the helper is missing, skip the guard; no plans branch exists, so a branch that happens to be named `plans` is ordinary code. When `**Base:**` is absent, nothing here runs.
+   - **Create-if-missing rule.** If `target` does not exist locally in the repo, create it from the repo's default branch first (`git branch <target> <default-branch>`), print a one-line notice `Base branch <target> not found — created locally from <default-branch> (not pushed).`, and NEVER push it. When `**Base:**` is absent (`target` IS the default branch, which always exists), nothing here runs.
+
    **a. Create the branch** — follow plan-execute step 7c exactly.
    - Determine branch type from task type via the type-map: `bug → fix`, `feature → feature`, `refactor → refactor`, `chore → chore`.
    - Branch name: `[type]/NNN-[slug]` where `NNN-slug` is the task filename stem.
@@ -156,10 +162,11 @@ These rules bind every invocation; they are not subject to your judgment about h
 
    **b. Create the worktree** — follow plan-execute step 7e's single-repo command sequence exactly:
    1. Get project root: `git rev-parse --show-toplevel`.
-   2. Create the worktree (this also creates the branch):
+   2. Create the worktree branched from target (this also creates the branch):
       ```bash
-      git worktree add .worktrees/NNN-slug -b [branch-name]
+      git worktree add .worktrees/NNN-slug -b [branch-name] [target]
       ```
+      `target` is resolved per task in the `a0` sub-step above (per the **Resolve target branch** contract; create it first if missing, per the create-if-missing rule in `a0`). When `**Base:**` is absent, `target` IS the default branch and this command is byte-for-byte unchanged from branching the default branch.
    3. Ensure `.worktrees/` is in `.gitignore` — read `.gitignore` (create if missing); append `.worktrees/` if not already present.
    4. Symlink the shared `.plans/` into the worktree:
       ```bash

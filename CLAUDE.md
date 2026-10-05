@@ -415,12 +415,13 @@ Every git-lifecycle skill picks the branch it branches FROM, rebases ONTO, and m
   - **`plan-execute`** — branches/switches FROM the target (single- and multi-repo, branch and worktree modes). If the target branch does not exist locally in a repo, it is created from that repo's default branch, with a one-line notice; the base is NEVER pushed.
   - **`plan-review`** — rebases ONTO the target; shows the diff as `<target>...<task-branch>`.
   - **`plan-complete`** — merges INTO the target across the full A/B/C/D checkout dispatch (see the Task Lifecycle paragraph). If the base no longer exists at completion, it **hard-errors and stops** — it NEVER silently falls back to `main`.
+  - **`plan-spawn`** — branches each spawned worktree FROM the target (single-repo, worktree mode, per task); create-if-missing and the plans-branch guard apply per task.
   - **`plan-pause` / `plan-backlog`** — deliberately switch the checkout back to the **default** branch, NOT the base, when parking a task. See the `### The `**Base:**` task-header field` section for the reasoning.
 
 - **Multi-repo semantics.** A task carries ONE `**Base:**` value, and it applies to every repo in the task's repo set. Each repo resolves that value against **its own** default branch and creates the base locally, per repo, as needed. There is no per-repo base override.
 
 - **Scope boundaries.** The base is **never pushed** (creation is local-only), and it is **never inferred** — it is set only by an explicit `--base <branch>` flag at capture, by hand, or via `/plan-discuss`. See the `**Base:**` header-field section.
-- **Never the plans branch.** In branch mode a target that `plans-git.js is-plans-branch` names is rejected — `plan-execute` and `plan-complete` stop with `🔴 BLOCKED` rather than branch from or merge into the orphan plans branch (see **Plans storage mode** invariants).
+- **Never the plans branch.** In branch mode a target that `plans-git.js is-plans-branch` names is rejected — `plan-execute`, `plan-complete`, and `plan-spawn` stop with `🔴 BLOCKED` rather than branch from or merge into the orphan plans branch (see **Plans storage mode** invariants).
 
 ### Model selection (cross-skill contract)
 
