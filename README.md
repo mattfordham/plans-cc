@@ -327,7 +327,7 @@ A fresh clone, such as a [Claude Code on the web](https://claude.ai/code) sessio
 - **Keep stdout silent.** Claude Code adds a SessionStart hook's stdout to Claude's context. `bootstrap` writes only to stderr, and the command above discards the installer's output. Its last line is `OK: …`, `Skipped: <reason>`, or `Error: …`.
 - **It never blocks a session.** The hook needs network access, and it always exits 0:
   - Before `.plans` is attached, an unreachable remote, a missing plans branch, or no remote at all gives a `Skipped:` line.
-  - Once `.plans` is attached, an offline sync prints a `Warning:` and keeps your local plan state.
+  - Once `.plans` is attached, an offline sync prints a `Warning:` and then ends in `Skipped: <remote> unreachable` — it keeps your local plan state and never falsely reports `OK: … synced`.
   - `|| true` covers anything else.
 - If a plain local `.plans/` already exists, `bootstrap` refuses (`Error: local .plans/ exists, run /plan-init branch to convert`) and changes nothing.
 - To run it only in remote sessions, start the command with `[ "$CLAUDE_CODE_REMOTE" = true ] || exit 0;`. That variable is `true` in claude.ai/code sessions.
