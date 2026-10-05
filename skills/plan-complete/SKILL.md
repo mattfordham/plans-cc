@@ -281,7 +281,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
         **Detect where `[target-branch]` is checked out, if anywhere:**
         ```bash
-        git worktree list --porcelain | grep -B2 "^branch refs/heads/[target-branch]$" | head -1 | cut -d' ' -f2
+        git worktree list --porcelain | grep -B2 "^branch refs/heads/[target-branch]$" | head -1 | sed 's/^worktree //'
         ```
         Call this `[target-checkout-path]` (empty = checked out nowhere).
 

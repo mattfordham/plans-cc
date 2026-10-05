@@ -212,7 +212,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 6. **Reconcile worktrees (registry vs. disk)** *(full mode only)*
    - This step is a **reconciler, not a reaper**: it cross-checks git's worktree registry against the `.worktrees/` directory and reports **both** desync directions. `git worktree prune` only cleans one of them, so a bare `rm -rf` was leaving stale on-disk corpses git never listed.
    - **Gather both sides:**
-     - **Registry:** `git worktree list --porcelain` (skip this step's git parts silently if not in a git repo). It emits a `worktree <abs-path>` line per registered worktree — parse those absolute paths and keep the ones under `.worktrees/`.
+     - **Registry:** `git worktree list --porcelain` (skip this step's git parts silently if not in a git repo). It emits a `worktree <abs-path>` line per registered worktree. Parse each by stripping the literal `worktree ` prefix (the first 9 characters, i.e. `sed 's/^worktree //'`) and keeping the **entire** remainder as the absolute path — the path may contain spaces, so never split on whitespace or take a single field (`cut -d' ' -f2` truncates a path like `/Users/me/My Work/repo` at the first space). Keep the ones under `.worktrees/`.
      - **Disk:** the immediate subdirectories of `.worktrees/` (may be absent).
    - Do **not** early-exit just because `.worktrees/` is missing — git may still list worktrees under a since-deleted `.worktrees/` (the *registered but missing* case below). Only skip the entire step when the repo is not git AND `.worktrees/` does not exist.
    - **Classify each entry into one of two desync kinds:**
