@@ -249,12 +249,18 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
       ```bash
       git add -A && git commit -m "plan: changes for task #NNN - [title]"
       ```
+    - Branch mode: this root `git status`/`add -A` behaves as in local mode, because it relies on the code repo ignoring `.plans` (the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**). The `.plans` worktree never shows as dirty here and is never swept into the code commit. Plan state is committed separately by the helper.
 
 14. **Ask about branch merge** (if task has a branch)
     - Check if task file has `**Branch:**` field
     - If no branch field, skip to step 16
     - Get the branch name from the task file
     - **Resolve the target branch ONCE here, per the **Resolve target branch** contract in `CLAUDE.md`.** Read the task's `**Base:**` header field: if it is present and non-empty, `[target-branch]` is that base branch; OTHERWISE `[target-branch]` is the repo default, resolved by the existing idiom `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main`, then `master`. This single `[target-branch]` value feeds EVERY downstream site in this step and step 16 — cases A/B/C/D, the find-checkout query, the fast-forward `git merge-base --is-ancestor` check, the throwaway merge worktree (`git worktree add ... [target-branch]`), the case-C refusal text, and the confirmation. Because they all derive from this one value, they pick up the base automatically. **When `**Base:**` is absent, OR when its value equals the resolved default, `[target-branch]` IS the default and every emitted git command and prompt/confirmation string below is byte-for-byte identical to today.**
+    - **Plans-branch guard (fires ONLY when `**Base:**` is present and non-empty).** Run it immediately after resolving `[target-branch]` and before the base-missing check. When `node ~/.claude/plans-cc/plans-git.js mode` prints `branch` and `node ~/.claude/plans-cc/plans-git.js is-plans-branch [target-branch]` prints `yes`, STOP with:
+      ```
+      🔴 BLOCKED · Task #NNN — '[target-branch]' is the plans branch — the plans branch can never be a base or merge target.
+      ```
+      Leave status unchanged and run no merge steps. This enforces the *plans branch is never a merge target, a `**Base:**`, or an execution branch* invariant in CLAUDE.md → **Plans storage mode**. Merging code into the orphan plans branch would pollute plan history, and the branch is already checked out at `.plans`, which case C's lookup would otherwise surface as a foreign checkout. In any other mode, or when the helper is missing, skip the guard; a branch that happens to be named `plans` is ordinary code there. When the task has NO `**Base:**` field the guard does not run, so the default-branch path is unchanged.
     - **Base-missing hard error (fires ONLY when `**Base:**` is present).** Immediately after resolving `[target-branch]`, if the task HAS a `**Base:**` field AND that base branch does NOT exist locally (`git rev-parse --verify --quiet [target-branch]` exits non-zero) AND `[target-branch]` is not the resolved default branch, STOP with:
       ```
       🔴 BLOCKED · Task #NNN — base branch '[target-branch]' no longer exists. Cannot merge. (Never falls back to the default branch.)

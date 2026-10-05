@@ -4,7 +4,7 @@ Lightweight task management for Claude Code, implemented as a set of skills.
 
 ## Overview
 
-plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks; a small zero-dependency Node runtime (dashboard, project registry, and the `.plans/` commit/sync helper) is installed alongside them in `~/.claude/plans-cc/`.
+plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks; a small Node runtime (dashboard, project registry, and the `.plans/` commit/sync helper `plans-git.js`) is installed alongside them in `~/.claude/plans-cc/`.
 
 Tasks are stored as markdown files in a `.plans/` directory within your project, making them easy to read, edit, and version control alongside your code.
 
@@ -14,7 +14,7 @@ Tasks are stored as markdown files in a `.plans/` directory within your project,
 npx plans-cc
 ```
 
-This copies 28 skill files to `~/.claude/skills/`. No dependencies are installed in your project.
+This copies 40 skills (36 `plan-*` task-management skills and 4 `des-*` design-system skills) to `~/.claude/skills/`, the `plan-executor` agent to `~/.claude/agents/`, and the runtime to `~/.claude/plans-cc/`. It is non-interactive. No dependencies are installed in your project.
 
 plans-cc also ships a second binary, `plans-cc-dashboard`, a live-updating TUI for watching task status in real time. `npx plans-cc` deploys the dashboard runtime (including the `blessed` runtime dependency) to `~/.claude/plans-cc/` and drops a launcher at `~/.claude/bin/plans-cc-dashboard` so it keeps working after the `npx` cache is cleaned up. Add `~/.claude/bin` to your PATH to run it from any project:
 
@@ -298,6 +298,42 @@ Task files are plain markdown with metadata at the top and sections for What, Wh
 
 `config.json` includes a `plan_comments` setting (asked during `/plan-init`): set it to `false` to forbid executors from writing plan/task-referencing code comments (e.g. `// Task #012 Step 3`) — useful for projects that don't keep `.plans/` in the repo. A missing key means such comments are allowed.
 
+## Remote sessions (branch mode)
+
+By default `.plans/` lives only on your machine (gitignored) or is committed alongside your code. **Branch storage mode** (`/plan-init branch`, not to be confused with `/plan-execute … branch`) instead keeps plan state on an orphan `plans` branch, checked out as a git worktree at `.plans`, and pushes it after every plan change. Any clone can then pick it up.
+
+A fresh clone, such as a [Claude Code on the web](https://claude.ai/code) session, has no `.plans` and no plans-cc install. A `SessionStart` hook in the project's committed `.claude/settings.json` sets both up when a session starts:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y plans-cc >/dev/null 2>&1; node ~/.claude/plans-cc/plans-git.js bootstrap >&2 || true",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- `npx -y plans-cc` installs the skills and runtime non-interactively. `plans-git.js bootstrap` then attaches `origin/plans` as the `.plans` worktree, or syncs it if it is already attached. It is idempotent, so running it on every `resume` is safe.
+- **Keep stdout silent.** Claude Code adds a SessionStart hook's stdout to Claude's context. `bootstrap` writes only to stderr, and the command above discards the installer's output. Its last line is `OK: …`, `Skipped: <reason>`, or `Error: …`.
+- **It never blocks a session.** The hook needs network access, and it always exits 0:
+  - Before `.plans` is attached, an unreachable remote, a missing plans branch, or no remote at all gives a `Skipped:` line.
+  - Once `.plans` is attached, an offline sync prints a `Warning:` and keeps your local plan state.
+  - `|| true` covers anything else.
+- If a plain local `.plans/` already exists, `bootstrap` refuses (`Error: local .plans/ exists, run /plan-init branch to convert`) and changes nothing.
+- To run it only in remote sessions, start the command with `[ "$CLAUDE_CODE_REMOTE" = true ] || exit 0;`. That variable is `true` in claude.ai/code sessions.
+- Other `matcher` values are `clear`, `compact`, and `fork`.
+- `/plan-cleanup` health-checks the `.plans` worktree (attached, on the plans branch, no stuck sync, upstream set, ignored by the code repo) and never deletes it. Never run `git clean -ffdx` in a branch-mode checkout: `.plans` is ignored, so it deletes the worktree and any uncommitted plan edits. (A single `-f` skips it as a nested repository. Don't rely on that.)
+
 ## Filtering
 
 `/plan-list` accepts filters to narrow results:
@@ -321,12 +357,18 @@ Task files are plain markdown with metadata at the top and sections for What, Wh
 
 ```
 plans-cc/
-  package.json          # npm package config
+  package.json          # npm package config (`npm test` runs node:test)
   bin/
-    install.js          # Installer (copies skills to ~/.claude/skills/)
+    install.js          # Installer (copies skills, agent, and runtime to ~/.claude/)
     dev.js              # Development helper (symlinks instead of copies)
+    dashboard.js        # Dashboard
+    plan-touch.js       # Project-registry touch
+    plans-git.js        # .plans/ commit/sync helper, branch-mode setup and bootstrap
+  lib/                  # Runtime modules used by bin/
+  test/                 # node:test unit and integration tests
   skills/
-    plan-*/SKILL.md     # Skill definitions (21 total)
+    plan-*/SKILL.md     # Task-management skills (36)
+    des-*/SKILL.md      # Design-system skills (4)
   agents/
     plan-executor.md    # Sub-agent for task execution
 ```
@@ -345,7 +387,7 @@ This creates symlinks from `~/.claude/skills/plan-*` to your local `skills/` dir
 
 ### How Skills Work
 
-Skills are pure markdown files with YAML frontmatter. They contain no executable code — they're instructions that Claude follows when a user invokes the command. Each skill defines:
+Skills are pure markdown files with YAML frontmatter. They contain no executable code (the Node runtime under `bin/` and `lib/` is separate, and skills call it by path). They're instructions that Claude follows when a user invokes the command. Each skill defines:
 
 - **Frontmatter** — name, description, allowed tools, argument hints
 - **Steps** — detailed instructions Claude follows in order
@@ -371,7 +413,15 @@ Instructions for Claude on how to execute this skill.
 
 ### Testing
 
-Skills are declarative, not executable code. Test manually:
+The Node runtime has automated tests:
+
+```bash
+npm test
+```
+
+This runs `node:test` over `test/*.test.js`. That covers the unit tests for `lib/` and `test/branch-mode.integration.test.js`, which drives real git in temp repos (a bare origin plus clones) through branch-mode capture, execution worktrees, code checkouts, `bootstrap`, and the plans-branch `**Base:**` guard. Two-clone ID collisions are covered in `test/plans-git.test.js`.
+
+Skills are declarative, not executable code. Test them manually:
 
 1. Run `node bin/dev.js` to symlink skills
 2. In a test directory, run `/plan-init`

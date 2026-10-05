@@ -8,12 +8,24 @@
 //                                                    renumber collisions, rebuild counters
 //   node plans-git.js renumber                       renumber colliding local ids (branch mode)
 //   node plans-git.js mode                           print none|local|inline|branch
+//   node plans-git.js is-plans-branch <name>         print yes|no — is <name> the plans
+//                                                    branch? (it must never be a **Base:**)
 //
 // Setup (run from the project root — the current directory is the root):
 //
 //   node plans-git.js init-branch [--branch <b>] [--remote <r>] [--no-push] [--force-fallback]
 //   node plans-git.js migrate     [--branch <b>] [--remote <r>] [--no-push] [--force-fallback]
 //   node plans-git.js join        [--branch <b>] [--remote <r>]
+//
+// Remote sessions (a SessionStart hook; run from anywhere inside the clone):
+//
+//   node plans-git.js bootstrap   [--branch <b>] [--remote <r>]
+//
+//   Idempotent: attaches <remote>/<branch> as the .plans worktree when .plans
+//   is missing (join), syncs when it is already in branch mode, refuses a plain
+//   local .plans/, and is a quiet no-op when there is no plans branch. It
+//   prints NOTHING on stdout — every line (including its final `OK: …`,
+//   `Skipped: …`, or `Error: …` line) goes to stderr.
 //
 // Any problem is printed to stdout as a `Warning: …` line for the model to
 // surface; sync/renumber print one `Renumbered #A → #B` line per moved task.
@@ -44,6 +56,18 @@ try {
   // No root up the tree means this isn't a plans-cc project: do nothing.
   const root = findProjectRoot(process.cwd());
 
+  function parseSetupOpts(argv) {
+    const opts = {};
+    for (let i = 0; i < argv.length; i++) {
+      if (argv[i] === "--branch" || argv[i] === "--remote") opts[argv[i].slice(2)] = argv[++i];
+      else if (argv[i].startsWith("--branch=")) opts.branch = argv[i].slice("--branch=".length);
+      else if (argv[i].startsWith("--remote=")) opts.remote = argv[i].slice("--remote=".length);
+      else if (argv[i] === "--no-push") opts.push = false;
+      else if (argv[i] === "--force-fallback") opts.forceFallback = true;
+    }
+    return opts;
+  }
+
   const printWarnings = (warnings) => {
     for (const w of warnings || []) console.log(`Warning: ${w}`);
   };
@@ -64,15 +88,25 @@ try {
       for (const m of res.renumbered || []) console.log(`Renumbered #${m.from} → #${m.to}`);
       printWarnings(res.warnings);
     }
+  } else if (subcommand === "is-plans-branch") {
+    console.log(plansGit.isPlansBranch(args[0] || "", root) ? "yes" : "no");
+  } else if (subcommand === "bootstrap") {
+    // stdout must stay empty (SessionStart hook output is injected as context).
+    const opts = parseSetupOpts(args);
+    const res = plansGit.bootstrap(process.cwd(), opts);
+    const err = (line) => console.error(line);
+    for (const m of res.messages || []) err(m);
+    for (const m of res.renumbered || []) err(`Renumbered #${m.from} → #${m.to}`);
+    for (const w of res.warnings || []) err(`Warning: ${w}`);
+    if (!res.ok) err(`Error: ${res.error}`);
+    else if (res.action === "joined")
+      err(
+        `OK: .plans is attached to ${res.remote}/${res.branch}${res.gitignoreChanged ? "; added `.plans` to .gitignore (commit it)" : ""}`
+      );
+    else if (res.action === "synced") err(`OK: .plans synced with ${res.remote}/${res.branch}`);
+    else err(`Skipped: ${res.reason || "nothing to bootstrap"}`);
   } else if (subcommand === "init-branch" || subcommand === "migrate" || subcommand === "join") {
-    const opts = {};
-    for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--branch" || args[i] === "--remote") opts[args[i].slice(2)] = args[++i];
-      else if (args[i].startsWith("--branch=")) opts.branch = args[i].slice("--branch=".length);
-      else if (args[i].startsWith("--remote=")) opts.remote = args[i].slice("--remote=".length);
-      else if (args[i] === "--no-push") opts.push = false;
-      else if (args[i] === "--force-fallback") opts.forceFallback = true;
-    }
+    const opts = parseSetupOpts(args);
     const fn = { "init-branch": plansGit.initBranch, migrate: plansGit.migrate, join: plansGit.join }[subcommand];
     const res = fn(process.cwd(), opts);
     for (const m of res.messages || []) console.log(m);
@@ -89,11 +123,13 @@ try {
     }
   } else {
     console.log(
-      `Warning: unknown plans-git subcommand "${subcommand || ""}" (expected commit, sync, renumber, mode, init-branch, migrate, or join)`
+      `Warning: unknown plans-git subcommand "${subcommand || ""}" (expected commit, sync, renumber, mode, is-plans-branch, init-branch, migrate, join, or bootstrap)`
     );
   }
 } catch (err) {
-  console.log(`Warning: plans-git failed unexpectedly: ${err && err.message}`);
+  // bootstrap's stdout must stay empty even when something goes wrong.
+  const out = process.argv[2] === "bootstrap" ? console.error : console.log;
+  out(`Warning: plans-git failed unexpectedly: ${err && err.message}`);
 }
 
 process.exit(0);

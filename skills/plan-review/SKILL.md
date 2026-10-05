@@ -110,6 +110,7 @@ Review a task that has completed execution (typically via worktree workflow). **
        - If "Stash changes": run `git stash`
        - If "Commit changes": run `git add -A && git commit -m "wip: save changes before review"`
        - If "Abort": stop and exit
+   - Branch mode: this root `git status`/`stash`/`add -A` behaves as in local mode, because it relies on the code repo ignoring `.plans` (the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**). The `.plans` worktree never reads as uncommitted work here and is never stashed or swept into the wip commit.
 
 5. **Checkout branch**
    - **If `review_in_worktree` is true (from step 3.5): SKIP the `git checkout [branch]`.** The kept worktree already has the task branch checked out — there is nothing to switch to. Run every git command in the rest of this step (and all later steps) **from the worktree cwd** rather than the main project directory. Still run the `.plans`-protection safety guard below (do not weaken it). Then proceed to step 6. The `multi_repo_review` / `review_repos` determination below still applies (a kept multi-repo worktree carries `**Repos:**`), but each repo's commands run from inside the worktree's per-repo subdirectory rather than the main parent root.

@@ -87,6 +87,7 @@ It is deliberately **safe-by-construction**: it proves all branches are cleanly 
 
 3. **Create the integration branch (only if the dry-run passed)**
    - **Pre-merge guard against uncommitted changes** (as `/plan-complete` does): run `git status --porcelain`. If it reports any uncommitted changes in the working tree, STOP and tell the user to commit or stash first: "You have uncommitted changes in the working tree. Commit or stash them before merging — plan-merge-reviews won't touch your in-flight work." Do not auto-stash.
+   - Branch mode: the root `git status`/`checkout`/`reset --hard`/`merge` here and in step 2b behave as in local mode, because they rely on the code repo ignoring `.plans` (the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**). `reset --hard` never touches ignored paths, so the `.plans` worktree is never reset or swept in. The plans branch is never a member or integration branch.
    - **Branch name:** `integration/review-` followed by the member IDs **sorted ascending** and joined by `-`, with no timestamp — e.g. two tasks #004 and #009 → `integration/review-004-009`; three tasks → `integration/review-004-009-013`. The deterministic name (no timestamp) makes a re-run on the same set detectable.
    - **If that branch already exists** (`git branch --list integration/review-...` is non-empty): use `AskUserQuestion`:
      - Header: "Integration branch exists"

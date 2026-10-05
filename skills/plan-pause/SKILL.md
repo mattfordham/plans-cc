@@ -117,6 +117,8 @@ Pause an in-progress or in-review task so you can switch to another task. Progre
    - Determine the default branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'` or fall back to main/master
    - If not already on the default branch: `git checkout [default-branch]`
 
+   **Branch mode** (per the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**): the root `git status`/`add -A`/`checkout` above behave as in local mode, because the code repo ignores `.plans`. They never see, sweep, or disturb the `.plans` worktree. That same ignore means the branch paths above (kept-worktree, multi-repo, and single-repo) never commit the paused status. So when `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, also run the helper commit from the no-branch path below once those paths finish. Otherwise the pause never reaches the plans branch or other machines. In local and inline mode, skip this paragraph; behavior is unchanged.
+
    **If the task has no branch:**
    - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
      ```bash

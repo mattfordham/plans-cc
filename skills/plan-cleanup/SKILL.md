@@ -29,7 +29,7 @@ Validate task files and clean up orphaned state files, branches, worktrees, and 
 ## Modes
 
 - **Full mode** (no arguments): Run all steps below, including interactive prompts to clean up orphans, and the flag-only HISTORY.md cap check (step 3.5).
-- **Focused mode** (ID provided): Run steps 1, 2 (focused validation only), and 7 (silent system scan — report-only, no prompts). Skip the prompting cleanup steps and step 3.5.
+- **Focused mode** (ID provided): Run steps 1, 2 (focused validation only), 7, and 7.6 (silent system scan — report-only, no prompts; summarized by step 8). Skip the prompting cleanup steps and step 3.5.
 - **History mode** (`history`): Run step 1 (root discovery) and step 3.6 (the HISTORY.md backfill) **ONLY** — then close out through the two mode-agnostic steps every mode ends with, step 9 (commit) and step 10 (summary). It does NOT validate task files, rebuild PROGRESS.md, reap orphaned state files, touch branches or worktrees, or scan for unexpected directories. It is a narrow, opt-in data-hygiene pass over `.plans/HISTORY.md` and nothing else.
 
 ## Valid Statuses
@@ -218,6 +218,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - **Classify each entry into one of two desync kinds:**
      - **On disk but unregistered** — a directory under `.worktrees/` that `git worktree list` does NOT contain. These are the corpses: `git worktree prune` will NOT clean them (git has no record to prune), so they need explicit removal.
      - **Registered but missing** — git lists a worktree whose path no longer exists on disk. `git worktree prune` DOES clean these (it removes the stale administrative record).
+   - **Never touch the `.plans` worktree (branch mode).** Drop any registry entry whose path is the realpath of `<root>/.plans`, or whose `branch refs/heads/<b>` line names the configured plans branch (`node ~/.claude/plans-cc/plans-git.js is-plans-branch <b>` prints `yes`). The `.worktrees/` filter above already excludes it, so this is defense in depth: the `.plans` worktree holds the project's plan state and must never be classified, offered for reaping, or removed. The unconditional `git worktree prune` below is still safe, because a present `.plans` worktree is never stale. Its health is step 7.6's job.
    - **Active-task exemption** (applies to *on disk but unregistered* candidates): extract the task ID from the directory name (first 3 digits) and check for a matching task in `.plans/pending/NNN-*.md` with status `in-progress`, `review`, or `in-review`. Such a task owns its worktree — do NOT reap it. (An `in-review` task with a live kept worktree is actively being reviewed *inside* it — it is NOT orphaned and must not be reaped.) A *registered* worktree with a live parent task is likewise left alone; only truly stale records are candidates.
    - **If any desync (of either kind, after the exemption) is found, use `AskUserQuestion` tool:**
      - Header: "Worktrees"
@@ -243,6 +244,9 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 7. **Scan for unexpected directories**
    - List immediate subdirectories of `.plans/` using Glob: `.plans/*/`
    - Any directory not in the expected set (`pending`, `completed`, `backlog`, `ideas`, `state`, `archive`) is unexpected.
+   - **Branch mode allowances** (only when `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, or `.plans/.git` is a file, which is the broken-worktree case step 7.6 explains): `.git-lock/` is the helper's commit lock and is expected. So is the `.plans/.git` *file*, which is the worktree's pointer back to the code repo. Never list either as unexpected, and never offer to delete them.
+     - **Stale lock (flag only):** if `.plans/.git-lock` is older than 60s (`find .plans/.git-lock -maxdepth 0 -mmin +1` prints it), report `Stale commit lock: .plans/.git-lock is older than 60s — the next plans-git commit breaks it automatically` (60s matches the helper's own lock-breaking timeout). Never delete it here, because a slow commit may still hold it.
+     - Outside branch mode, `.git-lock` gets no special treatment and is flagged like any other unexpected directory, so local/inline output is unchanged.
    - **Full mode**: If any found, use `AskUserQuestion`:
      - Header: "Unexpected dirs"
      - Question: "Found unexpected directories under .plans/:\n[list]\n\nThese aren't part of the plans system. What would you like to do?"
@@ -261,10 +265,40 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - **Detect the vulnerable ignore form:** check `.gitignore` for a line that is exactly `.plans/` (with trailing slash).
      - If found, warn: "Your `.gitignore` uses `.plans/` (trailing slash), which only matches a directory and lets a stray `.plans` symlink slip through. Recommend changing it to `.plans` (no slash)." Offer to fix it by replacing the `.plans/` line with `.plans`.
      - If `.plans` is not ignored at all (`git check-ignore -q .plans` returns non-zero) and the user is using local task state, suggest adding `.plans` (no slash) to `.gitignore`.
+   - **Branch mode does not false-flag here.** In branch mode `.plans` is a nested git worktree on the plans branch, and the outer `git ls-files` never lists a nested worktree's files, so the tracked-entry check above returns nothing for a healthy setup. Keep the trailing-slash warning in every mode.
+   - **Branch mode: an unignored `.plans` is an error, not a suggestion** (per the *`.plans` stays ignored, slashless, on code branches* invariant in `CLAUDE.md` → **Plans storage mode**). The ignore is what keeps `git add -A` in the code checkout from sweeping the worktree in. When `plans-git.js mode` prints `branch` and `git check-ignore -q .plans` fails, report `ERROR: .plans is not ignored by the code repo` and, with `AskUserQuestion`, offer:
+     1. "Add to .git/info/exclude (recommended)": append a `.plans` line to the file `git rev-parse --git-path info/exclude` names. This is local to this clone and works on every code branch, including old ones whose `.gitignore` lacks the line.
+     2. "Leave it": do nothing.
+     Step 7.6 runs the same `check-ignore` test. When the fix was offered here, step 7.6 does not ask a second time.
    - Report what was found/fixed, or "Git tracking integrity: OK" if clean.
 
+7.6. **Branch-mode health check** *(full and focused mode; branch mode only)*
+   - Run `node ~/.claude/plans-cc/plans-git.js mode`. The step runs when it prints `branch`, **or** when `.plans/.git` is a *file* (`test -f .plans/.git`). That second case is a broken branch-mode worktree. Once git's admin record for `.plans` is gone, `git -C .plans rev-parse` fails and mode detection falls through to `local`/`inline`, so gating on the mode alone would hide the exact problem check (a) exists to find. In that case run only check (a). Otherwise skip this step **silently**: no output and no summary line, so local/inline/none output stays byte-identical (a local or inline `.plans/` never has a `.git` file). If the helper is missing, skip silently here too (step 9 already prints the missing-helper warning).
+   - Read the plans branch and remote from `.plans/config.json` `sync` (`branch`, default `plans`; `remote`, default `origin`; read each field defensively). Below, `<b>` is the branch and `<r>` the remote.
+   - Run each check and collect the problems. **All of them are flag-only:** report the problem and a pointer to the fix, and change nothing. The two exceptions are the one-line prompted fixes marked below. **Never** run `git rebase --abort`, `git stash pop`/`drop`, `git worktree remove`, or `prune` against `.plans` from this step. Each of those can lose plan state that hasn't been pushed, so resolving them is the user's call.
+
+     | # | Check | Command | Problem → fix pointer |
+     |---|-------|---------|-----------------------|
+     | a | Worktree registered and present | `git worktree list --porcelain` has a `worktree <realpath of .plans>` line, and `.plans/.git` exists | **Unregistered:** `.plans/.git` is a file but no registry entry matches. `bootstrap` can NOT fix this: mode reads `local`/`inline` here, so it refuses. First try `git worktree repair .plans` (fixes a moved repo, where the admin dir still exists). If that errors (the admin dir under `.git/worktrees/` was deleted or pruned), re-attach by hand, keeping uncommitted plan edits: `mv .plans .plans.bak && rm .plans.bak/.git && git worktree add .plans <b> && cp -R .plans.bak/. .plans/`, check `git -C .plans status`, then delete `.plans.bak` (if the local `<b>` branch is gone, use `git worktree add --track -b <b> .plans <r>/<b>`). **Missing:** registered but `.plans` gone → `node ~/.claude/plans-cc/plans-git.js bootstrap` (prunes the stale record, then joins `<r>/<b>`). With no `.plans/config.json`, root discovery fails before cleanup runs, so in practice this case is handled by the bootstrap hook, not here |
+     | b | On the plans branch | `git -C .plans symbolic-ref -q HEAD` prints `refs/heads/<b>` | Fails → **detached HEAD**. Prints another branch → **wrong branch**. Either way: `git -C .plans switch <b>` once any rebase in progress is settled (check c) |
+     | c | No stuck rebase | `d=$(git -C .plans rev-parse --git-dir)`, then test `$d/rebase-merge` and `$d/rebase-apply` | Either exists → **stuck rebase** from an aborted `sync`: resolve it inside `.plans` (`git -C .plans status`, then `rebase --continue` or `rebase --abort`) |
+     | d | No leftover autostash | `$d/rebase-merge/autostash` (a stuck rebase still holding the autostash), or a `git -C .plans stash list --format='%gd %gs'` entry whose subject is `autostash` and whose base commit is on the plans branch (`git -C .plans merge-base --is-ancestor <entry>^1 refs/heads/<b>`) | Uncommitted plan edits are parked in a stash: `git -C .plans stash list`, then `stash pop` it by hand. The ancestry test matters because `.plans` is a worktree of the code repo and shares its `refs/stash`, so a code-side `autostash` entry must not be flagged. `sync` uses `pull --rebase --autostash`, and when re-applying the stash conflicts, git saves it with exactly that reflog subject |
+     | e | Upstream set | `git -C .plans rev-parse -q --verify '<b>@{u}'` (name the branch: a bare `@{u}` fails on a detached HEAD and would double-report check b) | Unset → **no upstream** (commits stay local and are never pushed): `git -C .plans branch -u <r>/<b>` once `<r>/<b>` exists, else `git -C .plans push -u <r> <b>` |
+     | f | Merge driver set | `git config --get merge.ours.driver` prints `true` (repo-wide config, shared by the `.plans` worktree) | Missing → `PROGRESS.md`/`config.json` conflicts aren't auto-resolved on sync. **Prompted fix**: `AskUserQuestion` "Set `merge.ours.driver`?" → run `git config merge.ours.driver true` / "Leave it" |
+     | g | `.plans` ignored by the code repo | `git check-ignore -q .plans` at the root | Not ignored → **Prompted fix** (same as step 7.5; skip it if 7.5 already asked): append `.plans` to `$(git rev-parse --git-path info/exclude)` / "Leave it" |
+     | h | `git_commits: true` | `.plans/config.json` | Anything else → plan changes are never committed, so they never sync: set `"git_commits": true` in `.plans/config.json` (flag only; the helper never flips it either) |
+
+   - **Focused mode** runs every check but never prompts. The prompted fixes become pointers (`run /plan-cleanup to fix`).
+   - **Report:** when nothing was found, print one line, `Branch mode: healthy (<b> ↔ <r>/<b>)`. Otherwise print `Branch mode: N problem(s)`, then one bullet per problem with its fix pointer, and say which prompted fixes were applied.
+
 8. **Silent system scan summary** *(focused mode only)*
-   - Briefly count (without prompting) orphaned state files, stale branches, orphaned worktrees, unexpected directories. Also run the step-7.5 detection (tracked `.plans` entry, or trailing-slash `.plans/` ignore form) without prompting.
+   - Briefly count (without prompting) orphaned state files, stale branches, orphaned worktrees, unexpected directories. Also run the step-7.5 detection (tracked `.plans` entry, or trailing-slash `.plans/` ignore form) and the step-7.6 branch-mode checks without prompting.
+   - In branch mode, always surface the step-7.6 problems that block syncing, since each can strand plan changes on this machine:
+     - "⚠️ `.plans` is mid-rebase (stuck sync). Resolve it in `.plans` before the next plan command."
+     - "⚠️ `.plans` is on a detached HEAD. Run `git -C .plans switch <b>`."
+     - "⚠️ The `.plans` worktree isn't registered with git. Run `/plan-cleanup` for the re-attach steps (`git worktree repair .plans` first)."
+     - "⚠️ `.plans` is not ignored by the code repo. Run `/plan-cleanup` to fix."
+   - Report any other step-7.6 problems (no upstream, leftover autostash, missing merge driver, `git_commits` not `true`, stale lock) as one line, `Branch mode: N problem(s): run /plan-cleanup for details`. Print nothing about branch mode when step 7.6 was skipped or found nothing.
    - Report counts at the end:
      ```
      System scan: 2 orphaned state files, 1 stale branch, 0 orphaned worktrees, 1 unexpected directory.
@@ -294,8 +328,11 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
     - Worktrees: N orphaned deleted / M kept
     - Unexpected directories: N deleted / M kept
     - HISTORY.md: N row(s) over cap — run `/plan-cleanup history`
+    - Branch mode: healthy (plans ↔ origin/plans)
     ```
     Omit lines for categories that had nothing to report. The HISTORY.md line follows that same discipline — it appears **only** when step 3.5 actually detected drift, and is absent when HISTORY.md is missing, has no data rows, or is fully conformant. It is a pointer, not a result: full mode never rewrote anything.
+
+    The Branch mode line appears **only** when step 7.6 ran, so it is absent in local, inline, and none mode. It names the configured branch and remote (`<b> ↔ <r>/<b>`). When problems were found it becomes `Branch mode: N problem(s)`, followed by one indented bullet per problem with its fix pointer (e.g. `  - detached HEAD — git -C .plans switch plans`) and a note of any prompted fix that was applied. Each applied prompted fix counts toward `N issues resolved`. Flagged-only problems don't.
 
     **History mode:**
     ```
@@ -348,4 +385,9 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 - **Malformed HISTORY.md row** (history mode): A line that matches the ID pattern but doesn't split into 5 columns is left untouched and reported; do not attempt to repair its shape.
 - **User declines the 3-row preview** (history mode): Abort with **zero writes** — not even the previewed 3 rows. Report "Backfill cancelled — no rows changed."
 - **Backfill pass interrupted** (history mode): No cleanup needed and no checkpoint to reconcile — re-run `/plan-cleanup history` and it resumes, because already-rewritten rows are conformant and get skipped.
+- **Branch mode, healthy**: Steps 6, 7, and 7.5 offer nothing for the `.plans` worktree (it isn't reaped, untracked, or listed as unexpected, and neither is `.git-lock`), and step 7.6 prints `Branch mode: healthy (<b> ↔ <r>/<b>)`.
+- **Branch mode, stuck rebase or leftover autostash**: Flag it with the manual fix. Never run `rebase --abort`, `stash pop`, or `stash drop` automatically, because the stash or the rebase may hold the only copy of unpushed plan edits.
+- **Branch mode, stale `.git-lock`** (older than 60s): Flag only. Never delete it, because a slow commit may still hold it, and the next `plans-git.js commit` breaks an abandoned lock anyway.
+- **`.plans/.git` file with no registered worktree**: Mode detection reports `local`/`inline` here, not `branch`, so step 7.6 keys on the file instead. Point at `git worktree repair .plans`, then the manual re-attach in check (a). Do NOT point at `bootstrap`, which refuses a non-empty non-branch `.plans`. Never delete `.plans/.git` and never `git worktree prune` with the aim of repairing it.
+- **Local / inline / none mode**: Step 7.6 is skipped silently and no Branch mode line appears. Output is identical to before branch mode existed.
 - **`/plan-cleanup history 007`**: History mode does not compose with a task ID in v1. Explain that the backfill is a repo-wide pass and run `/plan-cleanup history` instead — do not silently ignore the ID and do not fall through to focused mode on `007`.

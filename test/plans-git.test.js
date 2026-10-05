@@ -770,3 +770,123 @@ test("renumber: no upstream means nothing to compare against — a no-op", () =>
   const res = plansGit.renumber(root);
   assert.deepStrictEqual(res.renumbered, []);
 });
+
+// --- bootstrap (remote sessions) ---
+
+test("bootstrap: outside any git repo is a quiet skip", () => {
+  const dir = path.join(tmpRoot, "plain");
+  fs.mkdirSync(dir);
+  const res = plansGit.bootstrap(dir);
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.action, "skipped");
+  assert.match(res.reason, /not inside a git repo/);
+  assert.deepStrictEqual(res.warnings, []);
+});
+
+test("bootstrap: a repo with no remote is a quiet skip", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"), { ignorePlans: true });
+  const res = plansGit.bootstrap(root);
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.action, "skipped");
+  assert.match(res.reason, /no "origin" remote/);
+  assert.ok(!fs.existsSync(path.join(root, ".plans")));
+});
+
+test("bootstrap: an unreachable remote is a warning and a skip, never an error", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"), { ignorePlans: true });
+  gitOk(root, "remote", "add", "origin", path.join(tmpRoot, "nowhere.git"));
+  const res = plansGit.bootstrap(root);
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.action, "skipped");
+  assert.strictEqual(res.error, null);
+  assert.ok(res.warnings.some((w) => /could not reach origin/.test(w)));
+});
+
+test("bootstrap: run from a subdirectory of a fresh clone resolves the git toplevel", () => {
+  const bare = makeOrigin();
+  assert.strictEqual(plansGit.initBranch(cloneOf(bare, "a")).ok, true);
+  const b = cloneOf(bare, "b");
+  const sub = path.join(b, "src", "deep");
+  fs.mkdirSync(sub, { recursive: true });
+  const res = plansGit.bootstrap(sub);
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(res.action, "joined");
+  assert.strictEqual(res.root, b);
+  assert.strictEqual(plansGit.detectMode(b), "branch");
+});
+
+test("bootstrap: an empty .plans directory is treated as missing and joined", () => {
+  const bare = makeOrigin();
+  assert.strictEqual(plansGit.initBranch(cloneOf(bare, "a")).ok, true);
+  const b = cloneOf(bare, "b");
+  fs.mkdirSync(path.join(b, ".plans"));
+  const res = plansGit.bootstrap(b);
+  assert.strictEqual(res.action, "joined", res.error);
+  assert.strictEqual(plansGit.detectMode(b), "branch");
+});
+
+test("bootstrap: --branch attaches a non-default plans branch", () => {
+  const bare = makeOrigin();
+  assert.strictEqual(plansGit.initBranch(cloneOf(bare, "a"), { branch: "notes" }).ok, true);
+  const b = cloneOf(bare, "b");
+  assert.strictEqual(plansGit.bootstrap(b).action, "skipped");
+  const res = plansGit.bootstrap(b, { branch: "notes" });
+  assert.strictEqual(res.action, "joined", res.error);
+  assert.strictEqual(gitOk(path.join(b, ".plans"), "branch", "--show-current"), "notes");
+  // Second run reads sync.branch from the joined config — no flag needed.
+  const again = plansGit.bootstrap(b);
+  assert.strictEqual(again.action, "synced");
+  assert.strictEqual(again.branch, "notes");
+});
+
+test("bootstrap: prunes a stale .plans worktree record and re-attaches", () => {
+  const bare = makeOrigin();
+  assert.strictEqual(plansGit.initBranch(cloneOf(bare, "a")).ok, true);
+  const b = cloneOf(bare, "b");
+  assert.strictEqual(plansGit.bootstrap(b).action, "joined");
+  // The .plans directory vanishes (an ephemeral session wiped it) but git
+  // still has the worktree registered — without a prune, `worktree add` fails.
+  fs.rmSync(path.join(b, ".plans"), { recursive: true, force: true });
+  const res = plansGit.bootstrap(b);
+  assert.strictEqual(res.action, "joined", res.error);
+  assert.strictEqual(plansGit.detectMode(b), "branch");
+});
+
+test("bootstrap: refuses inline .plans (tracked in the code repo)", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"));
+  writeConfig(path.join(root, ".plans"), { git_commits: true });
+  gitOk(root, "add", ".plans");
+  gitOk(root, "commit", "-q", "-m", "track plans");
+  const res = plansGit.bootstrap(root);
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.action, "refused");
+  assert.match(res.error, /run \/plan-init branch to convert/);
+  assert.strictEqual(plansGit.detectMode(root), "inline");
+});
+
+// --- isPlansBranch ---
+
+test("isPlansBranch: defaults to `plans`, with ref and remote prefixes", () => {
+  assert.strictEqual(plansGit.isPlansBranch("plans", null), true);
+  assert.strictEqual(plansGit.isPlansBranch("refs/heads/plans", null), true);
+  assert.strictEqual(plansGit.isPlansBranch("origin/plans", null), true);
+  assert.strictEqual(plansGit.isPlansBranch(" plans ", null), true);
+  assert.strictEqual(plansGit.isPlansBranch("main", null), false);
+  assert.strictEqual(plansGit.isPlansBranch("plans/feature", null), false);
+  assert.strictEqual(plansGit.isPlansBranch("", null), false);
+  assert.strictEqual(plansGit.isPlansBranch(undefined, null), false);
+});
+
+test("isPlansBranch: honors sync.branch outside branch mode", () => {
+  const root = makeRepo(path.join(tmpRoot, "proj"), { ignorePlans: true });
+  writeConfig(path.join(root, ".plans"), { sync: { branch: "notes" } });
+  assert.strictEqual(plansGit.isPlansBranch("notes", root), true);
+  assert.strictEqual(plansGit.isPlansBranch("plans", root), false);
+});
+
+test("isPlansBranch: the branch checked out at .plans counts even if config disagrees", () => {
+  const root = makeBranchModeProject({ git_commits: true, sync: { branch: "notes" } });
+  assert.strictEqual(plansGit.isPlansBranch("plans", root), true);
+  assert.strictEqual(plansGit.isPlansBranch("notes", root), true);
+  assert.strictEqual(plansGit.isPlansBranch("main", root), false);
+});

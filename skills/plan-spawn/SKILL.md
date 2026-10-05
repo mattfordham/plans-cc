@@ -165,6 +165,7 @@ These rules bind every invocation; they are not subject to your judgment about h
       ```bash
       ln -s [project-root]/.plans [worktree-path]/.plans
       ```
+      Branch mode: unchanged. The symlink resolves to the `.plans` worktree on the plans branch, so the rounds' status and state writes land in `<root>/.plans`, and step 8d's helper commit puts them on the plans branch. The code repo's ignored, slashless `.plans` keeps the symlink out of step 8a's `git add -A` (see the *worktree `.plans` symlinks are unchanged* invariant in CLAUDE.md → **Plans storage mode**).
    5. Symlink the configured `worktree_links` directories — follow plan-execute step 7e.5b exactly. Read `worktree_links` from `.plans/config.json`; absent key ⇒ do nothing. For each entry that exists at the project root, `ln -s [project-root]/[entry] [worktree-path]/[entry]`. This matters more here than anywhere else: spawned tasks run autonomously, so a worktree missing a gitignored input (e.g. `design-system/`) fails without anyone watching.
 
    **c. Add metadata to the task file** — below the Status line, add:
