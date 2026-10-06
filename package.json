@@ -12,7 +12,8 @@
   "files": [
     "bin",
     "lib",
-    "skills"
+    "skills",
+    "agents"
   ],
   "engines": {
     "node": ">=16.7.0"
@@ -26,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mattboldt/plans-cc"
+    "url": "https://github.com/mattfordham/plans-cc"
   },
   "dependencies": {
     "blessed": "^0.1.81"

@@ -313,7 +313,7 @@ A fresh clone, such as a [Claude Code on the web](https://claude.ai/code) sessio
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y plans-cc >/dev/null 2>&1; node ~/.claude/plans-cc/plans-git.js bootstrap >&2 || true",
+            "command": "npx -y github:mattfordham/plans-cc >/dev/null 2>&1; node ~/.claude/plans-cc/plans-git.js bootstrap >&2 || true",
             "timeout": 120
           }
         ]
@@ -323,7 +323,7 @@ A fresh clone, such as a [Claude Code on the web](https://claude.ai/code) sessio
 }
 ```
 
-- `npx -y plans-cc` installs the skills and runtime non-interactively. `plans-git.js bootstrap` then attaches `origin/plans` as the `.plans` worktree, or syncs it if it is already attached. It is idempotent, so running it on every `resume` is safe.
+- `npx -y github:mattfordham/plans-cc` installs the skills, agent, and runtime non-interactively, straight from GitHub (plans-cc is not published to npm). `plans-git.js bootstrap` then attaches `origin/plans` as the `.plans` worktree, or syncs it if it is already attached. It is idempotent, so running it on every `resume` is safe.
 - **Keep stdout silent.** Claude Code adds a SessionStart hook's stdout to Claude's context. `bootstrap` writes only to stderr, and the command above discards the installer's output. Its last line is `OK: …`, `Skipped: <reason>`, or `Error: …`.
 - **It never blocks a session.** The hook needs network access, and it always exits 0:
   - Before `.plans` is attached, an unreachable remote, a missing plans branch, or no remote at all gives a `Skipped:` line.
