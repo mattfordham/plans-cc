@@ -802,6 +802,28 @@ test("bootstrap: an unreachable remote is a warning and a skip, never an error",
   assert.ok(res.warnings.some((w) => /could not reach origin/.test(w)));
 });
 
+test("bootstrap: an attached .plans with an unreachable remote is a warning and a skip, never a false 'synced'", () => {
+  const bare = makeOrigin();
+  const b = cloneOf(bare, "b");
+  assert.strictEqual(plansGit.initBranch(b).ok, true);
+  // First run: remote is reachable, so it syncs cleanly.
+  assert.strictEqual(plansGit.bootstrap(b).action, "synced");
+  // Break the remote so the next pull inside the .plans worktree fails.
+  gitOk(
+    path.join(b, ".plans"),
+    "remote",
+    "set-url",
+    "origin",
+    path.join(tmpRoot, "nonexistent-remote-048.git")
+  );
+  const res = plansGit.bootstrap(b);
+  assert.strictEqual(res.action, "skipped", JSON.stringify(res));
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.error, null);
+  assert.match(res.reason, /unreachable/);
+  assert.ok(res.warnings.some((w) => /plans sync failed/.test(w)), JSON.stringify(res.warnings));
+});
+
 test("bootstrap: run from a subdirectory of a fresh clone resolves the git toplevel", () => {
   const bare = makeOrigin();
   assert.strictEqual(plansGit.initBranch(cloneOf(bare, "a")).ok, true);
