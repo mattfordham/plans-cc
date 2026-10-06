@@ -201,7 +201,7 @@ Initialize the `.plans/` directory structure for lightweight task management.
 
    a. **Read first.** If `.plans/SKILL_NOTES.md` already exists (e.g. this is the partial-initialization repair path from step 1), do **not** prompt and do **not** touch it. Note `Skill notes: .plans/SKILL_NOTES.md already present — left as-is` for step 10 and move on.
 
-   b. **Detect project signals** (read-only, from the project root). This mirrors the dev-server detection in `skills/plan-execute/SKILL.md` step 11c.5 so the seeded note is exactly what that step reads back:
+   b. **Detect project signals** (read-only, from the project root). This mirrors the dev-server detection in `skills/plan-execute/SKILL.md` step 11.5a so the seeded note is exactly what that step reads back:
       - **Package manager** — from the lockfile: `pnpm-lock.yaml` → `pnpm`, `yarn.lock` → `yarn`, `bun.lockb` → `bun`, `package-lock.json` → `npm`. With a `package.json` but no lockfile, assume `npm`. With no `package.json` at all, there is no package-manager signal.
       - **Dev script** — `package.json` `scripts.dev` exists (just its presence; do not copy its body).
       - **Port convention** — grep `AGENTS.md` and `CLAUDE.md` at the project root for a `PORT=<base + task number>` pattern (e.g. `PORT=<4000 + task number> yarn dev`) and take its numeric base.

@@ -34,7 +34,7 @@ These rules bind every invocation. They are not subject to your judgment about t
 
 1. **Follow the pipeline as written.** Never skip a step because the task seems trivial, small, or obvious — your sense of proportion is not an input. If `auto_capture` is set, you MUST run capture + elaborate (Step 3) before any implementation, even for a one-line change.
 2. **All implementation goes through the plan-executor sub-agent** (Step 10/11). Never write code, edit files, or make changes directly from this skill. No exceptions for "quick" edits.
-3. **`yolo` = run the full autonomous pipeline without the user.** It is NOT permission to take shortcuts. `yolo` implies `worktree_mode` + `branch_mode`: you MUST create the worktree (Step 11e). Doing *less* defeats the entire point.
+3. **`yolo` = run the full autonomous pipeline without the user.** It is NOT permission to take shortcuts. `yolo` implies `worktree_mode` + `branch_mode`: you MUST create the worktree (Step 7e). Doing *less* defeats the entire point.
 4. **`yolo discuss` is intentionally NOT fully unattended.** When `discuss_mode` is set alongside `yolo`, the upfront clarifying gate (Step 3) runs FIRST as an open-ended, turn-by-turn conversation and pauses for the user until they say "go" (or "done" / "proceed"). Only after the gate exits does the autonomous pipeline run unattended. This is the one sanctioned pause before autonomy begins — it does not grant any other shortcuts.
 5. **Finishing a worktree/`yolo` run sets status to `review`, not `completed`.** Leave the task file in `.plans/pending/`. Only `/plan-complete` sets `completed` and moves the file to `.plans/completed/`.
 6. When in doubt, trust this skill over your own instinct about what "should" be necessary.
@@ -266,8 +266,8 @@ These rules bind every invocation. They are not subject to your judgment about t
    spec above. When the user exits (says "go" / "done" / "proceed"), continue to
    auto-elaborate below. **For `yolo discuss`:** the gate is the one sanctioned pause
    — it runs open-ended until the user exits, and ONLY then does yolo's autonomy
-   proceed unchanged (worktree creation at step 11e, deferred observations, ending in
-   `review`). See Execution Contract #4.
+   proceed unchanged (worktree creation at step 7e, deferred observations, ending in
+   `review` at Step 11.5). See Execution Contract #4.
 
    Then immediately auto-elaborate:
 
@@ -553,7 +553,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    - Read `.plans/CONTEXT.md` for project context
    - Note what's in the Changes section (work done so far)
    - Read `.plans/config.json` for the `plan_comments` setting. Set `plan_comments_off = true` ONLY when the key is present and explicitly `false`; a missing key or `true` means `plan_comments_off = false` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; it gates the `## Code Comment Policy` block in every code-writing prompt below (steps 11–14).
-   - In the same read, remember `executor_model` from `models.executor` (see **Model selection** in `CLAUDE.md`). Set it to that value ONLY when the `models` key is present AND defines an `executor` entry; a missing `models` key or a missing `executor` entry means `executor_model = "opus"` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; **every** `plan-executor` spawn below (steps 11c, 11c.6, 13, 14) uses this remembered value and never restates the default.
+   - In the same read, remember `executor_model` from `models.executor` (see **Model selection** in `CLAUDE.md`). Set it to that value ONLY when the `models` key is present AND defines an `executor` entry; a missing `models` key or a missing `executor` entry means `executor_model = "opus"` (backwards compatible — existing projects without the key keep today's behavior). Read this once per run; **every** `plan-executor` spawn below (Step 11's build-route review-page spawn, 11b's segment spawn and observation-fix spawn in item 6, 11.5a's fix spawn, 13, 14) uses this remembered value and never restates the default.
    - In the same read, also remember `research_model` from `models.research` (see **Model selection** in `CLAUDE.md`). Set it to that value ONLY when the `models` key is present AND defines a `research` entry. **When `models.research` is absent, there is no default value — pass no `model:` parameter at all** to the read-only research spawn (step 11's "Research alternatives" escalation), exactly as today, so the sub-agent inherits the session model. Do NOT fall back to `"opus"` or any other literal here; that would change existing behavior. Read this once per run and never restate the default at the spawn site.
 
    **Read the build route (if any):** Look for a `**Build:**` field in the task header (alongside `**Type:**` / `**Status:**`). It has the form `<skill> · <unit1>, <unit2>, ...` (e.g. `**Build:** des-build · CaseStudyCarousel, ContentModule`). If present and the skill is `des-build`, set `build_route = { skill: "des-build", units: [<unit1>, ...] }`; otherwise `build_route = null`. This field is read **only** from the header — never inferred from the task body. (Routing is applied in Steps 10–11.)
@@ -669,42 +669,13 @@ These rules bind every invocation. They are not subject to your judgment about t
 
 11. **Execute segments**
 
-   **Build-skill route (run this BEFORE the plan-executor path below — only when `build_route` is set):**
+   **a. Create or load state file** (runs FIRST — before the build-skill route AND before the plan-executor route)
 
-   When `build_route` is set (from Steps 9–10), the named build units are built by invoking the build skill directly from this orchestrator (which holds the Skill tool — a plan-executor sub-agent does not), NOT by spawning plan-executor. For `build_route.skill == "des-build"`:
-
-   - **ROUTE GUARD — a build route that cannot fire is a HARD FAILURE, never a fallback.** Before the first unit, confirm the **Skill tool is actually available in this session**. If it is not — or if any `Skill` invocation below returns tool-unavailable / tool-not-permitted — **ABORT the execution immediately.** Do NOT build the units yourself. Do NOT route them to `plan-executor`. Do NOT read `design-system/` and write the component from the main session. Leave the task's status unchanged, write nothing to `## Changes`, and emit:
-     ```
-     🔴 BLOCKED · Task #NNN — build route `<skill>` could not be invoked
-     Reason: the Skill tool is not available to /plan-execute in this session.
-     Units not built: <unit1>, <unit2>, ...
-     The build skill enforces input gates (des-build aborts on unreachable Figma or
-     unreadable design-system/). Building these units without it silently bypasses
-     those gates and produces a plausible-but-unsourced component.
-     Fix: ensure `Skill` is listed in plan-execute's allowed-tools and rerun.
-     ```
-     **Why this is an abort and not a degraded path:** the whole point of routing a unit to `des-build` is that des-build refuses to build from missing inputs. Falling back to generic execution reaches the same files with *none* of those gates, and — because the result still typechecks, lints, and renders — reports as a clean success. A silently-degraded build is strictly worse than no build. This mirrors des-build's own Step 1 preflight discipline: **never substitute a weaker source for a required one.**
-   - **Never describe work as done by the build skill unless a `Skill` invocation actually ran.** The `## Changes` entry for a unit must reflect the real path taken; writing "Built X via /des-build" when the Skill tool never fired makes the task record falsely claim the input gates were honored. This is the same prohibition as des-build's "never cite a file you did not observably read."
-   - **Iterate one des-build call per unit**, in listed order (des-build builds a single component/section at a time, and a later unit may need an earlier one to already exist). For each unit:
-     - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"`.
-     - **Do NOT append `verify` here (no page exists yet).** During the build-unit step the throwaway review page has not been created and no dev server is running in the worktree, so a `verify` at this point could only be des-build's *code-only* check — which is not a real verification and must never be reported as one. The real, measured verification happens later in the **visual-comparison stage** (Step 11c.5), once the review page exists and a dev server is up, by re-invoking des-build with the review-page URL (`verify <url>`). If a unit's How/Verification explicitly asks for a code-only checklist during build, that is fine — but it is a code-only check, not a verification, and the measured pass still runs at 11c.5.
-     - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
-     - **Autonomous deferral (mirror of the observation-step rule below):** when `worktree_mode` is true OR `yolo_mode` is true, the invocation prompt MUST instruct des-build to NOT pause with AskUserQuestion for non-linear desktop↔mobile reflow — it records the chosen interpretation as a noted assumption and continues, deferring the choice to review. When both are false, des-build may pause and ask normally.
-     - **Comment policy:** when `plan_comments_off` (from Step 9), the invocation prompt MUST instruct des-build to never write code comments referencing the plan, task number, task title, or step numbers — write only comments that explain the code itself.
-   - **After each unit completes:**
-     - Mark the corresponding How-step checkbox(es) for that unit complete (`- [x]`).
-     - Append to the task's `## Changes` section: the unit built, the files written, the tokens/global classes used, and any drift/styleguide flags des-build surfaced.
-     - Record a line in the state file `## Key Decisions` (e.g. `- Built <unit> via des-build skill; surfaced N flags`), and any deferred reflow interpretation in the state file `## Observations` section as `- <unit>: ⏳ reflow interpretation deferred to review`.
-   - **Mixed tasks:** any remaining unchecked How steps that are NOT part of building these units still run through the normal plan-executor segment loop below — resolve the step filter / segmentation over those remaining steps as usual. If every step is covered by build units, skip the plan-executor loop entirely.
-   - After the build route (and any remaining plan-executor segments) complete, fall through to the same finish handling (Step 11d non-worktree / Step 11e worktree) and state-setting rules — a des-build-routed task lands in `review` (worktree) or stays `in-progress` (non-worktree) exactly like any other execution.
-
-   **MANDATORY: Spawn plan-executor sub-agent for ALL implementation work (the build-skill route above is the sole exception).**
-
-   **a. Create or load state file**
+   Both routes write to the state file, so it must exist before either one starts. Do this unconditionally, even for a task with no plan-executor segments at all.
 
    State file location: `.plans/state/NNN-state.md`
 
-   If state file exists (resuming), load it to determine which segments are complete.
+   If state file exists (resuming), load it to determine which segments are complete and, when `build_route` is set, which build units are already built (skip those units in the build route below).
 
    If starting fresh, create state file:
    ```markdown
@@ -713,6 +684,10 @@ These rules bind every invocation. They are not subject to your judgment about t
    **Task:** [Title]
    **Branch:** [branch-name or "none"]
    **Started:** [ISO timestamp]
+
+   ## Build Units
+   - [unit 1]: pending
+   - [unit 2]: pending
 
    ## Segments
    - Segment 1 (steps 1-4): pending
@@ -734,6 +709,44 @@ These rules bind every invocation. They are not subject to your judgment about t
    ## Test Status
    _Not yet run_
    ```
+   - **`## Build Units`** — include it ONLY when `build_route` is set: one `- <unit name>: pending` line per unit, in the `**Build:**` field's listed order. Omit the section entirely otherwise (byte-identical to a task with no route).
+   - **`## Segments`** — list the plan-executor segments from Step 10. When every How step is covered by build units, write `- none (every How step is covered by build units)`.
+
+   **Build-skill route (run this BEFORE the plan-executor path below — only when `build_route` is set):**
+
+   When `build_route` is set (from Steps 9–10), the named build units are built by invoking the build skill directly from this orchestrator (which holds the Skill tool — a plan-executor sub-agent does not), NOT by spawning plan-executor. For `build_route.skill == "des-build"`:
+
+   - **ROUTE GUARD — a build route that cannot fire is a HARD FAILURE, never a fallback.** Before the first unit, confirm the **Skill tool is actually available in this session**. If it is not — or if any `Skill` invocation below returns tool-unavailable / tool-not-permitted — **ABORT the execution immediately.** Do NOT build the units yourself. Do NOT route them to `plan-executor`. Do NOT read `design-system/` and write the component from the main session. Leave the task's status unchanged, write nothing to `## Changes`, and emit:
+     ```
+     🔴 BLOCKED · Task #NNN — build route `<skill>` could not be invoked
+     Reason: the Skill tool is not available to /plan-execute in this session.
+     Units not built: <unit1>, <unit2>, ...
+     The build skill enforces input gates (des-build aborts on unreachable Figma or
+     unreadable design-system/). Building these units without it silently bypasses
+     those gates and produces a plausible-but-unsourced component.
+     Fix: ensure `Skill` is listed in plan-execute's allowed-tools and rerun.
+     ```
+     **Why this is an abort and not a degraded path:** the whole point of routing a unit to `des-build` is that des-build refuses to build from missing inputs. Falling back to generic execution reaches the same files with *none* of those gates, and — because the result still typechecks, lints, and renders — reports as a clean success. A silently-degraded build is strictly worse than no build. This mirrors des-build's own Step 1 preflight discipline: **never substitute a weaker source for a required one.**
+   - **Never describe work as done by the build skill unless a `Skill` invocation actually ran.** The `## Changes` entry for a unit must reflect the real path taken; writing "Built X via /des-build" when the Skill tool never fired makes the task record falsely claim the input gates were honored. This is the same prohibition as des-build's "never cite a file you did not observably read."
+   - **Iterate one des-build call per unit**, in listed order (des-build builds a single component/section at a time, and a later unit may need an earlier one to already exist). Skip any unit the state file's `## Build Units` already marks `built` (resume). For each unit:
+     - Invoke the des-build skill via the **Skill tool**: `skill: "des-build"`, `args: "<unit name>"`.
+     - **Do NOT append `verify` here (no page exists yet).** During the build-unit step the throwaway review page has not been created and no dev server is running in the worktree, so a `verify` at this point could only be des-build's *code-only* check — which is not a real verification and must never be reported as one. The real, measured verification happens later in the **visual-comparison stage** (Step 11.5a), once the review page exists and a dev server is up, by re-invoking des-build with the review-page URL (`verify <url>`). If a unit's How/Verification explicitly asks for a code-only checklist during build, that is fine — but it is a code-only check, not a verification, and the measured pass still runs at 11.5a.
+     - The orchestrator's working directory is already the worktree when `worktree_mode` is true (set in Step 7e), so des-build writes into the worktree automatically — no path threading needed.
+     - **Autonomous deferral (mirror of the observation-step rule below):** when `worktree_mode` is true OR `yolo_mode` is true, the invocation prompt MUST instruct des-build to NOT pause with AskUserQuestion for non-linear desktop↔mobile reflow — it records the chosen interpretation as a noted assumption and continues, deferring the choice to review. When both are false, des-build may pause and ask normally.
+     - **Comment policy:** when `plan_comments_off` (from Step 9), the invocation prompt MUST instruct des-build to never write code comments referencing the plan, task number, task title, or step numbers — write only comments that explain the code itself.
+     - **des-build's marker is NOT the task's terminal.** des-build prints its OWN end-of-action marker (`🟢 BUILT · <Component> → Next: …`, `🔵 VERIFIED · …`, or `🔵 CODE-ONLY CHECK · …`). That marker ends **des-build**, not this task — plan-execute still owns the commit, the status, the summary, and its own marker (Step 11.5). Never treat des-build returning, or its marker, as "task done." Keep going.
+   - **After each unit completes:**
+     - Mark the corresponding How-step checkbox(es) for that unit complete (`- [x]`).
+     - Append to the task's `## Changes` section: the unit built, the files written, the tokens/global classes used, and any drift/styleguide flags des-build surfaced.
+     - Mark the unit `built` in the state file `## Build Units`, record a line in the state file `## Key Decisions` (e.g. `- Built <unit> via des-build skill; surfaced N flags`), and any deferred reflow interpretation in the state file `## Observations` section as `- <unit>: ⏳ reflow interpretation deferred to review`.
+   - **Review page (after ALL units are built).** The visual-comparison stage (Step 11.5a) measures a throwaway review page, and that page is normally created by a plan-executor segment (the `## Review Page` section of the 11c template). A pure build route runs no segment, so without this bullet the page never exists and 11.5a can only ever record `review page returned 404`.
+     - **Review-page slug (the one definition — 11c's template and 11.5a use it too):** one page per task, at `/review/<slug>`, rendering every build unit. `<slug>` is the task filename stem minus its `NNN-` prefix (`007-hero-carousel.md` → `hero-carousel`), unless the project's existing review-page conventions dictate otherwise.
+     - **Spawn the one-off ONLY when no plan-executor segment will run** — every remaining How step is covered by build units, or no remaining segment will include the `## Review Page` section. Then spawn a plan-executor sub-agent (`model: [executor_model]` from Step 9) whose prompt contains ONLY the `## Task Context` block and the `## Review Page` section of the 11c template, verbatim (plus `## Code Comment Policy` when `plan_comments_off`). Record the page path in `## Changes`.
+     - **Skip it for a mixed task whose segments will run** — the 11c template includes the `## Review Page` section whenever `build_route` is set, so a segment creates the page. Spawning here too would create it twice. Skip it as well when the page already exists (resume).
+   - **Mixed tasks:** any remaining unchecked How steps that are NOT part of building these units still run through the normal plan-executor segment loop below. Resolve the step filter / segmentation over those remaining steps as usual, then continue to Step 11.5 when the last segment completes. If every step is covered by build units, skip the plan-executor loop entirely and **go straight to Step 11.5**.
+   - **Skipping the plan-executor loop does NOT mean skipping finish handling, so you MUST continue to Step 11.5 (Finish handling).** It runs the visual comparison, commits, sets the status, and prints this task's summary and marker. A des-build-routed task lands in `review` (worktree) or stays `in-progress` (non-worktree), exactly like any other execution.
+
+   **MANDATORY: Spawn plan-executor sub-agent for ALL implementation work (the build-skill route above is the sole exception).**
 
    **b. Execute each pending segment**
 
@@ -842,6 +855,8 @@ These rules bind every invocation. They are not subject to your judgment about t
       - If "I know what to do": accept user's approach, update How section, then retry the segment
       - If "Skip this segment": mark segment as skipped in state file, continue to next segment
 
+   9. **After the last segment completes, you MUST continue to Step 11.5 (Finish handling).** Do not print a summary or a marker here. The visual comparison, commit, status, summary, and marker all live in 11.5, and that is the same step the build-skill route converges on.
+
    **c. Segment execution prompt template**
 
    ```markdown
@@ -903,7 +918,10 @@ These rules bind every invocation. They are not subject to your judgment about t
    As part of normal execution, create the throwaway review page that renders the
    built component(s) with inline sample data, at the path this project uses for it
    (commonly `src/app/(frontend)/review/<slug>/page.tsx` — take the exact directory
-   from the project's existing conventions; do NOT invent a new layout). The page
+   from the project's existing conventions; do NOT invent a new layout). Use ONE page
+   for the whole task, served at `/review/[slug]` — [slug: the task filename stem
+   minus its `NNN-` prefix, unless the project's review-page conventions dictate
+   otherwise]. If that page already exists, update it rather than adding another. The page
    imports the built component(s) and passes representative inline sample data so the
    component renders in isolation. This page is what the later visual-comparison stage
    navigates to and measures against Figma — without it there is nothing to measure.
@@ -953,9 +971,24 @@ These rules bind every invocation. They are not subject to your judgment about t
    Write these BEFORE returning your structured response. The reviewer will see them at the top of `/plan-review NNN` output.
    ```
 
-   **c.5. Visual-comparison stage** (runs AFTER the last How step / all segments, and BEFORE the finish steps 11d/11e)
+11.5. **Finish handling (route-agnostic — BOTH routes converge here)**
 
-   **When this stage runs:** only when `build_route` is set (a des-build-routed task) OR the task otherwise names one or more Figma frames AND a throwaway review page was created (Step 11c review-page section). If neither holds, this stage is a **no-op** — skip it silently and proceed to 11d/11e exactly as before (fully backwards compatible).
+   **Reached from EITHER route.** The build-skill route arrives here after its last unit (and its review page). The plan-executor route arrives here after its last segment (Step 11b, item 9). A mixed task arrives once, after both. Do NOT skip this step because des-build returned, or because it printed its own `🟢 BUILT` / `🔵 VERIFIED` / `🔵 CODE-ONLY CHECK` marker. des-build builds a component. It does not commit the work, set the task status, or summarize the task. That is this step's job.
+
+   **Finish preflight (verify ALL of these before printing the marker):**
+   - [ ] Every in-scope How step is checked `- [x]` (build units are ticked per unit in Step 11; plan-executor steps in Step 11b item 5).
+   - [ ] `## Changes` is not the `_To be filled during execution_` placeholder. It names what was built or changed and the files touched.
+   - [ ] `## Assumptions > Discovered during execution` is filled, or holds an explicit `- none` bullet. It is never left as the placeholder.
+   - [ ] The state file `.plans/state/NNN-state.md` is updated: build units, segments, decisions, observations. Step 11a always creates it, so this check is unconditional.
+   - [ ] If `worktree_mode` OR `yolo_mode`: the worktree's changes are committed (11.5c). The branch has ≥1 commit beyond its base, OR the state file and `## Changes` explicitly record `no changes`.
+   - [ ] Status is set per the rules below: `review` on the worktree/yolo path, left `in-progress` on the non-worktree path.
+   - [ ] The summary block and the end-of-action marker are printed as the final lines.
+
+   If any box is unchecked, complete it before finishing. A build-route task that reaches here with unmarked checkboxes, a placeholder `## Changes`, an uncommitted branch, or status still `in-progress` is the exact failure this step exists to prevent.
+
+   **a. Visual-comparison stage** (runs AFTER the last How step — every build unit and every segment — and BEFORE the finish steps 11.5b/11.5c)
+
+   **When this stage runs:** only when `build_route` is set (a des-build-routed task) OR the task otherwise names one or more Figma frames AND a throwaway review page was created (the build route's review-page bullet in Step 11, or the `## Review Page` section of the 11c template). If neither holds, this stage is a **no-op** — skip it silently and proceed to 11.5b/11.5c exactly as before (fully backwards compatible).
 
    This is the *real, measured* verification — the point at which the rendered page is compared to Figma. It replaces the false confidence of a build-time code-only `verify` (which is why Step 11's build-unit route no longer appends `verify`). The measured comparison is performed by **re-invoking des-build with the review-page URL** (`/des-build <unit> verify <url>`) via the **Skill tool** — des-build owns the Figma MCP tools and the measured-comparison procedure (Step 8a); the orchestrator owns only Playwright and the Skill tool, and never calls the Figma MCP directly (see the **Figma MCP access belongs to des-build** contract in `CLAUDE.md`).
 
@@ -969,7 +1002,7 @@ These rules bind every invocation. They are not subject to your judgment about t
       3. **Default** — base `3000`, and the project's `dev` script run with the package manager its lockfile indicates (`yarn.lock` → `yarn dev`, `pnpm-lock.yaml` → `pnpm dev`, else `npm run dev`). Print one line saying the default was used, e.g. `Dev server: no port convention found — defaulting to PORT=3007 (base 3000 + task 7). Record the convention in .plans/SKILL_NOTES.md to override.`
       - If the project has no `dev` script and no documented start command, record `Visual comparison NOT run: no dev-server start command found` in the output AND in `## Changes`, and proceed to finish.
       - A note giving a **fixed** port (e.g. "runs on port 4000") is read as the base, not the literal port. The `+ task number` offset still applies.
-   2. **Start the dev server** in the worktree on that port, in the background, and record the SHA it was started at (`git rev-parse HEAD`) per the Dev-server rule. `browser_wait_for` / poll until `/review/<slug>` returns **200**.
+   2. **Start the dev server** in the worktree on that port, in the background, and record the SHA it was started at (`git rev-parse HEAD`) per the Dev-server rule. `browser_wait_for` / poll until `/review/<slug>` returns **200**. `<slug>` is the review-page slug defined in Step 11's build route: the task filename stem minus its `NNN-` prefix, unless the project's conventions dictate otherwise.
       - **If the dev server won't start or `/review/<slug>` does not return 200, that is a FAILED stage.** Record `Visual comparison NOT run: dev server did not start` or `... review page returned <code>, not 200` loudly in the output AND in `## Changes`. **Do NOT fall back to a code-only comparison.** Stop the server (if it started) and proceed to finish.
    3. **For each named Figma frame** the task references (desktop, mobile, and variant states such as grid/list or open/closed):
       - Re-invoke des-build via the Skill tool: `skill: "des-build"`, `args: "<unit> verify http://localhost:<port>/review/<slug>"`. des-build performs the measured comparison (Step 8a): it takes the Figma screenshot + `get_design_context`, resizes the Playwright viewport to the frame width, sets up the variant state, and measures the page with `getComputedStyle` / `getBoundingClientRect`. **It checks the `html` font-size against the design system first.** It judges the two screenshots for *structure* and does **not** compute an automatic pixel-diff score.
@@ -995,9 +1028,9 @@ These rules bind every invocation. They are not subject to your judgment about t
 
    **Observation provenance:** this stage takes a runtime observation (the measured page). Assert `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD` immediately before and after; if HEAD moved, the measurement is **VOID** — discard it and re-run rather than recording a stale result.
 
-   **d. After all segments complete**
+   **b. Non-worktree finish**
 
-   - **If `worktree_mode` is true OR `yolo_mode` is true:** proceed to worktree finish (step 11e) instead of showing the normal summary. (yolo implies worktree transitively; listed explicitly so the review-status path is self-documenting.)
+   - **If `worktree_mode` is true OR `yolo_mode` is true:** go to 11.5c (worktree finish) and skip the rest of this sub-step. (yolo implies worktree transitively; listed explicitly so the review-status path is self-documenting.)
    - **Otherwise:** show completion summary.
 
      Before printing, read the task file's `## Verification` section. If it contains real content (not just the `_To be filled during elaboration_` placeholder), render each non-empty line as a `-` bullet under `**How to verify:**`. Cap at 4 bullets — if Verification is longer, pick the most concrete user-observable checks (prefer behavioral/UI checks the user can run now over abstract criteria). If Verification is empty/placeholder, use the single fallback bullet: `- Manually exercise the changes in this checkout`.
@@ -1017,7 +1050,7 @@ These rules bind every invocation. They are not subject to your judgment about t
      (If execution paused mid-task awaiting user input rather than finishing, emit `⏸️ PAUSED · Task #NNN → Next: /plan-execute NNN to resume` instead.)
    - Keep state file for reference (don't delete)
 
-   **e. Worktree finish** (only if `worktree_mode` is true OR `yolo_mode` is true — runs after all segments complete)
+   **c. Worktree finish** (only if `worktree_mode` is true OR `yolo_mode` is true — runs after 11.5a, whichever route ran)
 
    **Single-repo path** (when `multi_repo_mode` is false):
 
@@ -1029,6 +1062,15 @@ These rules bind every invocation. They are not subject to your judgment about t
       ```bash
       cd [worktree-path] && git commit -m "plan: complete work on task #NNN - [title]"
       ```
+      If there are none, and the branch has no commits beyond its base, record `no changes` in the state file and in `## Changes` (the finish preflight accepts that instead of a commit).
+
+      **Stale `index.lock` recovery (applies to every worktree commit in this step).** An interrupted earlier run can leave a stale lock behind. If `git commit` fails because `index.lock` exists:
+      1. Check that no git process is running for this repo (e.g. `pgrep -x git`, or `pgrep -fl git` and confirm none targets this checkout). If one might be active, do NOT touch the lock — wait and retry, or report it.
+      2. Locate the lock through the repo's git dir, never by assuming `.git/index.lock`. Inside a worktree it lives under `.git/worktrees/<name>/`:
+         ```bash
+         rm -f "$(git -C [worktree-path] rev-parse --git-dir)/index.lock"
+         ```
+      3. Retry the commit ONCE. If it fails again, stop and report it. Never loop.
    2. Set task status to `review` (NOT `completed`, NOT `in-progress`). The task file STAYS in `.plans/pending/` — do NOT move it to `.plans/completed/`. Only `/plan-complete` sets `completed` and moves the file. (See Execution Contract.)
 
    **Teardown gate (depends on `keep_mode`):**
@@ -1079,6 +1121,7 @@ These rules bind every invocation. They are not subject to your judgment about t
    1. For each repo in `relevant_repos`:
       - Check for changes: `cd .worktrees/NNN-slug/[repo-name] && git status --porcelain`
       - If changes exist: `git add -A && git commit -m "plan: complete work on task #NNN - [title]"`
+        - If the commit fails on `index.lock`, apply the **Stale `index.lock` recovery** from the single-repo path above to this repo, locating the lock with `git -C .worktrees/NNN-slug/[repo-name] rev-parse --git-dir`. Never remove it while a git process may be active.
       - Track which repos had changes in `repos_with_changes` list
    2. Return to parent directory
 
@@ -1369,6 +1412,8 @@ These rules bind every invocation. They are not subject to your judgment about t
 - **Multiple IDs with some invalid**: Skip invalid tasks with warning, continue executing valid ones
 - **All IDs invalid**: Show error listing each invalid ID and reason
 - **Duplicate IDs**: Deduplicate silently (e.g., "1 1 3" becomes IDs `001`, `003`)
+- **Build-skill route is not self-terminating**: When a task has a `**Build:**` header and `/plan-execute` routes to des-build, des-build prints its OWN marker (`🟢 BUILT · …`, `🔵 VERIFIED · …`, or `🔵 CODE-ONLY CHECK · …`). That marker ends **des-build**, NOT the plan-execute task. plan-execute still owns the commit, the status (`review` on the worktree path), the summary, and its own `🟢 EXECUTED` marker (Step 11.5). Never adopt des-build's marker as the task's terminal. Always continue to Step 11.5.
+- **Stale `index.lock` on worktree commit**: If a worktree commit in Step 11.5c fails on `index.lock` and no git process is running for that repo, remove the stale lock found via `"$(git -C <dir> rev-parse --git-dir)/index.lock"` (inside a worktree that is under `.git/worktrees/<name>/`, not `.git/index.lock`) and retry the commit ONCE. Never remove it while a git process may be active. See 11.5c.
 - **Worktree mode**: Creates branch + worktree, executes in isolation, sets status to `review` on completion
 - **Worktree mode with multiple tasks**: Each task gets its own worktree; worktrees are cleaned up individually after each task completes
 - **Already in a worktree**: Warns and falls back to normal branch mode
@@ -1408,5 +1453,5 @@ These rules bind every invocation. They are not subject to your judgment about t
 - **`yolo` keyword with no external content**: `/plan-execute "Fix bug" yolo` is valid. Skips step 2.5 external-content normalization (no URL/dump detected) and runs the autonomous flow on user-authored text. No bail.
 - **`yolo` keyword with existing task ID**: `/plan-execute 5 yolo` is valid. Skips step 2.5 entirely (input is a task ID, not external content) and runs autonomous execution on the existing task. No bail.
 - **`discuss` only fires with auto-capture**: The clarifying gate (step 3) runs ONLY when `auto_capture` is true — i.e. a fresh description was given (v1 scope). `discuss` with an existing task id (`/plan-execute 5 discuss`) does NOT trigger the gate; the flag is effectively a no-op. Point the user to the standalone `/plan-discuss 5` to discuss an existing task.
-- **`yolo discuss`**: Valid and intentional. The clarifying gate runs FIRST (open-ended, turn-by-turn, until the user says "go"/"done"/"proceed"), THEN the full autonomous yolo pipeline proceeds unchanged (worktree at step 11e, deferred observations, ending in `review`). This is the one sanctioned pause before autonomy — `yolo discuss` is intentionally NOT fully unattended. See Execution Contract #4.
+- **`yolo discuss`**: Valid and intentional. The clarifying gate runs FIRST (open-ended, turn-by-turn, until the user says "go"/"done"/"proceed"), THEN the full autonomous yolo pipeline proceeds unchanged (worktree created at step 7e, deferred observations, ending in `review` at Step 11.5). This is the one sanctioned pause before autonomy — `yolo discuss` is intentionally NOT fully unattended. See Execution Contract #4.
 - **`discuss` composes with `branch` / `worktree`**: `/plan-execute Fix bug branch discuss` and `/plan-execute Fix bug worktree discuss` both run the gate after auto-capture, then carry the agreed direction into auto-elaborate, then execute with the requested branch/worktree mode. Keyword order does not matter.

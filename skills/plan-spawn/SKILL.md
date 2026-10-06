@@ -279,7 +279,7 @@ These rules bind every invocation; they are not subject to your judgment about h
 
    With every task's segments either complete or blocked, plan-spawn now finishes each worktree and reconciles the batch — all from the main project directory, **serialized per task** (git worktree operations mutate the shared `.git` and must not interleave).
 
-   **a. Worktree finish — per task, serialized.** For each task, in sequence, perform plan-execute step 11e's single-repo cleanup *itself* (plan-spawn does this — there is no sub-agent involved):
+   **a. Worktree finish — per task, serialized.** For each task, in sequence, perform plan-execute Step 11.5c's single-repo cleanup *itself* (plan-spawn does this — there is no sub-agent involved):
    1. `cd` into that task's worktree, stage and check for uncommitted changes:
       ```bash
       cd [worktree-path] && git add -A && git status --porcelain
@@ -288,6 +288,7 @@ These rules bind every invocation; they are not subject to your judgment about h
       ```bash
       cd [worktree-path] && git commit -m "plan: complete work on task #NNN - [title]"
       ```
+      If the commit fails on a stale `index.lock`, apply plan-execute Step 11.5c's recovery rule: only when no git process is running for that repo, remove `"$(git -C [worktree-path] rev-parse --git-dir)/index.lock"` (a worktree's lock lives under `.git/worktrees/<name>/`) and retry the commit ONCE. If it fails again, report it for that task and move on to the next.
    2. Set the task file Status:
       - If the task completed all segments: set Status to `review`. Leave the file in `.plans/pending/` — only `/plan-complete` moves it to `.plans/completed/`.
       - If the task was **blocked**: LEAVE Status at `in-progress` — a blocked task is not ready for review.

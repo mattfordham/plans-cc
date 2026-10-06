@@ -258,7 +258,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 
    **9.a.2. Collect the visual-comparison table (pre-render step)**
 
-   Mirroring 9.a, before assembling the summary output, scan the task file's `## Changes` section for a Figma-vs-rendered comparison table so it can be surfaced at the top of the summary next to the URL. This is written by `/plan-execute`'s visual-comparison stage (step 11c.5) for des-build-routed / Figma-frame tasks.
+   Mirroring 9.a, before assembling the summary output, scan the task file's `## Changes` section for a Figma-vs-rendered comparison table so it can be surfaced at the top of the summary next to the URL. This is written by `/plan-execute`'s visual-comparison stage (step 11.5a) for des-build-routed / Figma-frame tasks.
 
    - Read the task file once. Locate the `## Changes` section heading.
      - If the section is absent, empty, or still the `_To be filled during execution_` placeholder: treat as empty, skip the block entirely, and continue rendering the rest of the summary. No warning. **This is a no-op for every task without a comparison table — fully backwards compatible.**

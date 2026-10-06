@@ -153,6 +153,7 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
    - In build mode, final line: `🟢 BUILT · <Component> → Next: /des-build <Component> verify <url>`
    - In verify **WITH-URL** mode (measured browser comparison), final line: `🔵 VERIFIED · <Component>`
    - In verify **NO-URL** mode (code-only check), final line: `🔵 CODE-ONLY CHECK · <Component> → Next: /des-build <Component> verify <url>` — never `🔵 VERIFIED` (a code-only check is not a verification).
+   - **When an orchestrator invokes this skill** (e.g. `/plan-execute` routing a `**Build:**` task), the marker above — `🟢 BUILT`, `🔵 VERIFIED`, or `🔵 CODE-ONLY CHECK`, including its `→ Next:` tail — signals only that this component's build or verify finished. It is NOT a task terminal: the caller still owns the task-level commit, status, and summary, and must continue its own finish handling (`/plan-execute` Step 11.5). For a standalone `/des-build`, the marker is unchanged.
 
 ## Reference: human-side DevTools verify workflow
 
