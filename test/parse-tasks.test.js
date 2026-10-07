@@ -63,3 +63,26 @@ test("parseTasks: Blocked by tokens that are not 3-digit ids are ignored", () =>
 
   assert.deepStrictEqual(tasks[0].blockedBy, ["044"]);
 });
+
+test("parseTasks: ids >= 1000 are not truncated and do not collide", () => {
+  write("pending/1000-first.md", task("1000", "First", "pending"));
+  write("pending/1001-second.md", task("1001", "Second", "pending"));
+
+  const { tasks } = parseTasks(plansDir);
+  const ids = tasks.map((t) => t.id).sort();
+
+  // Must be the full ids, never truncated to "100".
+  assert.deepStrictEqual(ids, ["1000", "1001"]);
+  assert.strictEqual(new Set(tasks.map((t) => t.id)).size, 2);
+});
+
+test("parseTasks: a >= 1000 blocker that is completed does not block", () => {
+  write("pending/1001-blocked.md", task("1001", "Blocked", "pending", "**Blocked by:** #1000\n"));
+  write("completed/1000-done.md", task("1000", "Done", "completed"));
+
+  const { tasks } = parseTasks(plansDir);
+  const blocked = tasks.find((t) => t.id === "1001");
+
+  assert.deepStrictEqual(blocked.blockedBy, ["1000"]);
+  assert.strictEqual(blocked.isBlocked, false);
+});

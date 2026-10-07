@@ -98,6 +98,18 @@ test("renderProgress: active work, the last 5 completions newest-first, and stat
   );
 });
 
+test("renderProgress: a 4-digit completed id renders un-truncated and outranks 999 on a date tie", () => {
+  write("completed/999-nine.md", task("999", "Nine", "completed", "**Completed:** 2026-09-06T12:00\n"));
+  write("completed/1000-grand.md", task("1000", "Grand", "completed", "**Completed:** 2026-09-06T12:00\n"));
+
+  const out = renderProgress(plansDir, { date: "2026-10-05" });
+  // Un-truncated: #1000 (not #100), and the numeric tiebreak puts 1000 above 999.
+  assert.match(out, /^- \*\*#1000\*\* - Grand \(completed 2026-09-06\)$/m);
+  assert.match(out, /^- \*\*#999\*\* - Nine \(completed 2026-09-06\)$/m);
+  assert.doesNotMatch(out, /#100\b/);
+  assert.ok(out.indexOf("#1000") < out.indexOf("#999"), "1000 orders before 999 on a date tie");
+});
+
 test("renderProgress: an in-progress task with no state file omits the started date", () => {
   write("pending/020-solo.md", task("020", "Solo", "in-progress"));
   assert.match(renderProgress(plansDir, { date: "2026-10-05" }), /^- \*\*#020\*\* - Solo$/m);

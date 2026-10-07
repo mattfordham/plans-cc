@@ -726,6 +726,47 @@ test("sync: a two-clone ID collision renumbers the later clone's task", () => {
   assert.strictEqual(gitOk(b, "status", "--porcelain"), "?? .gitignore");
 });
 
+test("sync: a 4-digit (>=1000) ID collision renumbers and rewrites references un-truncated", () => {
+  const { a, b, pa, pb } = twoClones();
+
+  // Clone A captures #1000 offline.
+  write(path.join(pa, "pending", "1000-alpha.md"), taskFile("1000", "Alpha"));
+  bumpConfig(pa, 1001);
+  gitOk(pa, "add", "-A");
+  gitOk(pa, "commit", "-q", "-m", "plan: capture #1000 - Alpha");
+
+  // Clone B captures its own #1000 offline and references it from a blocked-by
+  // and an idea's Expanded Into.
+  write(path.join(pb, "pending", "1000-beta.md"), taskFile("1000", "Beta"));
+  const existing = path.join(pb, "pending", "042-existing.md");
+  fs.writeFileSync(existing, read(existing).replace("**Status:** pending\n", "**Status:** pending\n**Blocked by:** #1000\n"));
+  const idea = path.join(pb, "ideas", "001-big-idea.md");
+  fs.appendFileSync(idea, "\n## Expanded Into\n- Task #1000: Beta\n");
+  bumpConfig(pb, 1001);
+  gitOk(pb, "add", "-A");
+  gitOk(pb, "commit", "-q", "-m", "plan: capture #1000 - Beta");
+
+  // A reaches the remote first.
+  const syncA = plansGit.sync(a);
+  assert.deepStrictEqual(syncA.renumbered, []);
+  gitOk(pa, "push", "-q");
+
+  // B syncs: the later #1000 moves to #1001 (never truncated to #100 / #101).
+  const syncB = plansGit.sync(b);
+  assert.strictEqual(syncB.synced, true);
+  assert.deepStrictEqual(syncB.renumbered, [{ from: "1000", to: "1001" }]);
+
+  assert.ok(fs.existsSync(path.join(pb, "pending", "1000-alpha.md")));
+  const moved = read(path.join(pb, "pending", "1001-beta.md"));
+  assert.match(moved, /^\*\*ID:\*\* 1001$/m);
+  assert.match(moved, /Renumbered from #1000 after sync collision/);
+  // References were renumbered to the 4-digit id, not truncated.
+  assert.match(read(existing), /^\*\*Blocked by:\*\* #1001$/m);
+  assert.match(read(idea), /^- Task #1001: Beta$/m);
+  // A's task is untouched.
+  assert.match(read(path.join(pb, "pending", "1000-alpha.md")), /^\*\*ID:\*\* 1000$/m);
+});
+
 test("sync: an add/add conflict at the same path aborts the rebase with a warning", () => {
   const { a, b, pa, pb } = twoClones();
   write(path.join(pa, "pending", "043-same.md"), taskFile("043", "From A"));
