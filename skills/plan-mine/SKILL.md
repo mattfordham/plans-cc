@@ -174,6 +174,6 @@ Complements `/plan-import`: import handles structured documents; extract handles
 - **Duplicate of existing task**: Note it in the proposal: "[title] (note: similar to existing #NNN)" and raise it during the discussion round.
 - **Very long context**: Truncate preview in the proposal table; keep full context in the task file.
 - **Not initialized**: Error: "Not initialized. Run `/plan-init` first."
-- **config.json missing or corrupt `next_id`**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **config.json missing or corrupt `next_id`**: Reconstruct by finding the highest ID in pending/, completed/, and backlog/ directories (compare numerically — `1000` is higher than `999`), then add 1
 - **User cancels**: Confirm: "Extraction cancelled. No tasks created."
 - **Partial selection with invalid numbers**: Ignore invalid numbers, create valid ones, note which were skipped.

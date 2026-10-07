@@ -27,7 +27,7 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
 
 2. **Parse and find idea file**
    - If no `$ARGUMENTS` provided, ask: "Which idea do you want to expand? (provide the idea ID)"
-   - Normalize the ID to 3-digit zero-padded format (e.g., "1" → "001")
+   - Normalize the ID by zero-padding to at least 3 digits (e.g., "1" → "001", "1000" stays "1000")
    - Search `.plans/ideas/` for a file matching `NNN-*.md`
    - If not found, error: "Idea #NNN not found. Run `/plan-brainstorm` to create ideas, or check `.plans/ideas/` for available ideas."
 
@@ -225,5 +225,5 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
 - **Many tasks proposed (8+)**: Warn the user: "This is a lot of tasks. Consider whether some could be combined or deferred." Let them decide.
 - **Already expanded — "Add more"**: Read existing Expanded Into section, note which tasks already exist, propose only new/additional tasks. Append new entries to the Expanded Into section.
 - **Already expanded — "Start fresh"**: Warn that existing tasks won't be deleted, but the Expanded Into section will be replaced. Proceed with fresh analysis.
-- **config.json missing next_id**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **config.json missing next_id**: Reconstruct by finding the highest ID in pending/, completed/, and backlog/ directories (compare numerically — `1000` is higher than `999`), then add 1
 - **ideas/ directory doesn't exist**: Error: "No ideas directory found. Run `/plan-brainstorm` to create ideas first."

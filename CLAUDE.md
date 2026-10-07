@@ -160,7 +160,7 @@ Examples: `🟢 ELABORATED · Task #007 → Next: /plan-execute 007`, `✅ COMPL
 
 ### Task IDs
 
-- 3-digit zero-padded format: `001`, `002`, etc.
+- Zero-padded to a **minimum** of 3 digits: `001`, `002`, … `999`, then `1000`, `1001`. Padding never truncates — parse an ID as the full leading digit run (`^(\d+)-`), never a fixed 3-character slice, and compare IDs numerically, never as strings (`"1000"` sorts before `"999"` lexically).
 - Stored in `config.json` as `next_id` (integer)
 - Filenames: `NNN-slug.md` (e.g., `001-fix-login-bug.md`)
 

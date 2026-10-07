@@ -135,7 +135,7 @@ Recognize these phrases as signals to capture:
 1. **Read config.json**
    - **Branch mode only** — per the **Allocate ID (branch mode)** rule in CLAUDE.md: if `node ~/.claude/plans-cc/plans-git.js mode` prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` before reading `idea_next_id`. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Any other mode: skip this bullet.
    - Get `idea_next_id` value (default to 1 if not present)
-   - Format as 3-digit zero-padded string (e.g., 1 → "001")
+   - Format as a string zero-padded to at least 3 digits (e.g., 1 → "001", 1000 → "1000" — pad, never truncate)
 
 2. **Generate filename**
    - Slugify the topic:
@@ -199,7 +199,7 @@ Recognize these phrases as signals to capture:
 
 - **No topic provided**: Ask the user what they'd like to explore
 - **ideas/ directory doesn't exist**: Create it automatically
-- **idea_next_id missing from config**: Default to 1, then scan `.plans/ideas/` for highest existing ID and use max + 1
+- **idea_next_id missing from config**: Default to 1, then scan `.plans/ideas/` for the highest existing ID (compare numerically — `1000` is higher than `999`) and use max + 1
 - **User says "capture" immediately**: Politely note there's nothing to capture yet and continue exploring
 - **User changes topic mid-discussion**: Roll with it — the capture will reflect where the discussion actually went
 - **Very long discussion**: Focus the synthesis on the most valuable insights; be selective, not exhaustive

@@ -56,7 +56,7 @@ test("parseTasks: a #-prefixed blocker that is completed does not block", () => 
   assert.strictEqual(tasks[0].isBlocked, false);
 });
 
-test("parseTasks: Blocked by tokens that are not 3-digit ids are ignored", () => {
+test("parseTasks: Blocked by tokens that are not valid ids are ignored", () => {
   write("pending/045-blocked.md", task("045", "Blocked", "pending", "**Blocked by:** #43, ##043, #0430, abc, #044\n"));
 
   const { tasks } = parseTasks(plansDir);

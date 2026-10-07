@@ -27,7 +27,7 @@ Analyze an idea, surface the highest-value components, and let the user select w
 
 2. **Parse and find idea file**
    - If no `$ARGUMENTS` provided, ask: "Which idea do you want to pick from? (provide the idea ID)"
-   - Normalize the ID to 3-digit zero-padded format (e.g., "1" → "001")
+   - Normalize the ID by zero-padding to at least 3 digits (e.g., "1" → "001", "1000" stays "1000")
    - Search `.plans/ideas/` for a file matching `NNN-*.md`
    - If not found, error: "Idea #NNN not found. Run `/plan-ideas` to see available ideas."
 
@@ -238,4 +238,4 @@ Analyze an idea, surface the highest-value components, and let the user select w
 - **Single component in idea**: Still show the selection prompt (consistent UX), but note there's only one component
 - **User selects nothing**: Treat as cancel — "No tasks created."
 - **ideas/ directory doesn't exist**: Error: "No ideas directory found. Run `/plan-brainstorm` to create ideas first."
-- **config.json missing next_id**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **config.json missing next_id**: Reconstruct by finding the highest ID in pending/, completed/, and backlog/ directories (compare numerically — `1000` is higher than `999`), then add 1

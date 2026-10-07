@@ -446,9 +446,12 @@ function idsIn(plansDir) {
   for (const dir of ["pending", "completed", "backlog"]) {
     const full = path.join(plansDir, dir);
     if (!fs.existsSync(full)) continue;
-    for (const f of fs.readdirSync(full)) if (/^\d{3}-/.test(f)) ids.push(f.slice(0, 3));
+    for (const f of fs.readdirSync(full)) {
+      const m = f.match(/^(\d{3,})-/);
+      if (m) ids.push(m[1]);
+    }
   }
-  return ids.sort();
+  return ids.sort((x, y) => Number(x) - Number(y));
 }
 
 test("initBranch: creates an orphan plans worktree with the scaffold and pushes it", () => {
@@ -765,6 +768,33 @@ test("sync: a 4-digit (>=1000) ID collision renumbers and rewrites references un
   assert.match(read(idea), /^- Task #1001: Beta$/m);
   // A's task is untouched.
   assert.match(read(path.join(pb, "pending", "1000-alpha.md")), /^\*\*ID:\*\* 1000$/m);
+});
+
+test("sync: collisions spanning 999 and 1000 renumber in numeric id order", () => {
+  const { a, b, pa, pb } = twoClones();
+
+  for (const [pd, who] of [[pa, "A"], [pb, "B"]]) {
+    write(path.join(pd, "pending", `999-${who.toLowerCase()}-low.md`), taskFile("999", `${who} low`));
+    write(path.join(pd, "pending", `1000-${who.toLowerCase()}-high.md`), taskFile("1000", `${who} high`));
+    bumpConfig(pd, 1001);
+    gitOk(pd, "add", "-A");
+    gitOk(pd, "commit", "-q", "-m", `plan: capture #999 and #1000 on ${who}`);
+  }
+
+  const syncA = plansGit.sync(a);
+  assert.deepStrictEqual(syncA.renumbered, []);
+  gitOk(pa, "push", "-q");
+
+  // #999 is renumbered before #1000 — a lexical sort would put "1000" first.
+  const syncB = plansGit.sync(b);
+  assert.strictEqual(syncB.synced, true);
+  assert.deepStrictEqual(syncB.renumbered, [
+    { from: "999", to: "1001" },
+    { from: "1000", to: "1002" },
+  ]);
+  assert.ok(fs.existsSync(path.join(pb, "pending", "1001-b-low.md")));
+  assert.ok(fs.existsSync(path.join(pb, "pending", "1002-b-high.md")));
+  assert.deepStrictEqual(idsIn(pb), ["001", "042", "999", "1000", "1001", "1002"]);
 });
 
 test("sync: an add/add conflict at the same path aborts the rebase with a warning", () => {

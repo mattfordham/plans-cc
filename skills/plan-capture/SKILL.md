@@ -73,7 +73,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
    - **Branch mode only** — per the **Allocate ID (branch mode)** rule in CLAUDE.md: run `node ~/.claude/plans-cc/plans-git.js mode`; if it prints `branch`, run `node ~/.claude/plans-cc/plans-git.js sync` first so `next_id` reflects every other machine's captures. Print any `Renumbered #A → #B` lines verbatim and surface `Warning:` lines; never fail on them. Remember `branch_mode_plans` (true/false) for step 7.5. Any other mode: skip this bullet entirely.
    - Read `.plans/config.json`
    - Get `next_id` value
-   - Format as 3-digit zero-padded string (e.g., 1 → "001")
+   - Format as a string zero-padded to at least 3 digits (e.g., 1 → "001", 1000 → "1000" — pad, never truncate)
 
 4. **Generate filename**
    - Slugify the description:
@@ -318,7 +318,7 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 ## Edge Cases
 
 - **No description provided**: Ask the user for one
-- **Corrupt config.json**: Reconstruct `next_id` by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **Corrupt config.json**: Reconstruct `next_id` by finding the highest ID in pending/, completed/, and backlog/ directories (compare numerically — `1000` is higher than `999`), then add 1
 - **ID collision** (file already exists): Scan pending/, completed/, and backlog/ for actual max ID and use that + 1
 - **Collision with another machine (branch mode)**: two clones that capture the same ID offline both keep their task — the next `sync` renumbers the local copy and prints `Renumbered #A → #B`; pass that line on to the user
 - **Very long description**: Truncate slug at word boundary, keep full description in the file

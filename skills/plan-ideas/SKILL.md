@@ -56,7 +56,7 @@ Browse captured brainstorm ideas. Without arguments, lists all ideas with key me
 
    Per-idea format (one line each):
    - `✦ NNN Topic (N insights[, open questions]) [→ expanded]`
-   - Sort by ID descending (newest first)
+   - Sort by ID descending, numerically (newest first — `1000` before `999`)
 
 6. **Show idea detail** (detail mode, when ID provided)
    - Zero-pad the ID to 3 digits

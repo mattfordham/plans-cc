@@ -96,7 +96,7 @@ Display a filtered list of tasks in table format.
 
 6. **Sort results**
    - By status priority: in-progress > in-review > review > elaborated > pending > completed
-   - Within status: by ID ascending
+   - Within status: by ID ascending, numerically (`999` before `1000`)
 
 7. **Display as table**
    ```

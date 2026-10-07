@@ -90,9 +90,9 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 3.5. **Check HISTORY.md Summary cap (flag only — never rewrite)** *(full mode only)*
    - `.plans/HISTORY.md` is an **index**, not a second archive: each Summary cell is capped at exactly ONE sentence of the form `<verb-phrase> — <what changed>` followed by a ` → completed/NNN-slug.md` pointer, ≤250 chars for sentence and pointer together (the contract lives in `CLAUDE.md` under **HISTORY.md Summary cap** and is written by `plan-complete` step 11). Projects whose history predates the cap still carry fat rows.
    - If `.plans/HISTORY.md` does not exist, skip this step silently.
-   - **Parse data rows**: a data row is a line matching `^\| [0-9]{3} \|` — a 3-digit zero-padded ID in the first column. Skip the table header row, the `|---|` separator row, any `<!-- ... -->` HTML comment, and any blank or prose line. Split each data row on `|` into its 5 columns (`ID | Title | Type | Completed | Summary`) and measure the trimmed 5th column.
+   - **Parse data rows**: a data row is a line matching `^\| [0-9]{3,} \|` — a zero-padded ID of 3 or more digits (`001`, `1000`) in the first column. Skip the table header row, the `|---|` separator row, any `<!-- ... -->` HTML comment, and any blank or prose line. Split each data row on `|` into its 5 columns (`ID | Title | Type | Completed | Summary`) and measure the trimmed 5th column.
      ```bash
-     grep -cE '^\| [0-9]{3} \|' .plans/HISTORY.md
+     grep -cE '^\| [0-9]{3,} \|' .plans/HISTORY.md
      ```
    - **Count drift** — a row is over cap if *either* holds:
      - its Summary cell exceeds **250 chars**, or
@@ -111,7 +111,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - If `.plans/HISTORY.md` does not exist, report "No HISTORY.md — nothing to backfill." and stop.
 
    **(a) Parse rows, preserving everything but the Summary.**
-   - Parse data rows exactly as step 3.5 does (`^\| [0-9]{3} \|`; skip header, separator, HTML comments, blank lines).
+   - Parse data rows exactly as step 3.5 does (`^\| [0-9]{3,} \|`; skip header, separator, HTML comments, blank lines).
    - Split each into its 5 columns. The `ID`, `Title`, `Type`, and `Completed` columns are copied through **byte-for-byte** — only the 5th column is ever rewritten. Never reorder rows, never reformat the table.
 
    **(b) Select rows to rewrite (this is what makes the pass idempotent).**
@@ -136,7 +136,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
      ```
      Skipped 2 row(s) with no completed/ file: #005, #013
      ```
-   - **Malformed row.** The line matched `^\| [0-9]{3} \|` but does not split into exactly 5 columns (a pre-existing stray `|`, a truncated row, a hand-edited line). Do not attempt to repair the shape — rewriting a row whose columns cannot be identified risks moving data between columns. Leave it untouched and report it by ID:
+   - **Malformed row.** The line matched `^\| [0-9]{3,} \|` but does not split into exactly 5 columns (a pre-existing stray `|`, a truncated row, a hand-edited line). Do not attempt to repair the shape — rewriting a row whose columns cannot be identified risks moving data between columns. Leave it untouched and report it by ID:
      ```
      Skipped 1 malformed row (not 5 columns): #009
      ```

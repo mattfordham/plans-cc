@@ -169,6 +169,6 @@ Import a brainstorming or planning markdown document and split it into multiple 
 - **Very long sections**: Truncate preview in proposal table, keep full content in task file
 - **Duplicate titles**: If a proposed task title matches an existing task, note it: "[title] (note: similar to existing #NNN)"
 - **Not initialized**: Error: "Not initialized. Run `/plan-init` first."
-- **config.json missing or corrupt `next_id`**: Reconstruct by finding highest ID in pending/, completed/, and backlog/ directories, then add 1
+- **config.json missing or corrupt `next_id`**: Reconstruct by finding the highest ID in pending/, completed/, and backlog/ directories (compare numerically — `1000` is higher than `999`), then add 1
 - **User cancels**: Confirm: "Import cancelled. No tasks created."
 - **Partial selection with invalid numbers**: Ignore invalid numbers, create valid ones, note which were skipped
