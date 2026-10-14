@@ -1,7 +1,7 @@
 ---
 name: plan-review
 disable-model-invocation: true
-argument-hint: "<id>"
+argument-hint: "<id> [worktree]"
 allowed-tools:
   - Read
   - Write
@@ -18,9 +18,17 @@ description: Review a task's changes — checkout branch, walk through deferred 
 
 Review a task that has completed execution (typically via worktree workflow). **Where it runs depends on whether the execution worktree was kept.** For most tasks the execution worktree was already removed by `/plan-execute` and the task's commits live on a branch in this repository (worktrees share `.git` with the main repo, so the branch survives worktree removal); in that case this skill checks out that branch in the **main project directory** and displays a summary of changes. For a task executed with the `keep` keyword, the worktree survives and the task carries a live `**Worktree:**` field — in that case `/plan-review` `cd`s **into that worktree** and reviews in place (the branch is already checked out there), which is what lets multiple single-repo tasks be reviewed concurrently. Either way the user gets a summary of changes to inspect and test manually.
 
+**Optional `worktree` keyword (opt-in, at-review-time worktree isolation).** Passing the `worktree` keyword (`/plan-review NNN worktree`) requests that the review run inside its own worktree even when the task was *not* executed with `keep`. Its behavior:
+
+- **With no flag (the default): behavior is byte-for-byte as it is today.** A kept worktree is still reviewed in place via its live `**Worktree:**` field; a plain task is still checked out in the main project directory. Nothing changes unless the keyword is present.
+- **Flag passed, task already has a live `**Worktree:**` field: silent no-op.** The existing field already drives in-worktree review (step 3.5), so there is nothing to create — the flag simply has no additional effect.
+- **Flag passed, task has NO live worktree: a worktree is CREATED** (new step 3.4) so the task can be reviewed in isolation, concurrently with other in-progress or in-review work — without re-running execution and without occupying the shared main checkout. This is a second, at-review-time path to the same concurrent-review state that executing with `keep` produces.
+
 ## Arguments
 
-- `$ARGUMENTS`: Task ID (e.g., "1", "01", or "001")
+- `$ARGUMENTS`: Task ID (e.g., "1", "01", or "001"), optionally followed by the `worktree` keyword.
+
+- **Worktree keyword detection.** Set `review_worktree_flag = true` if `$ARGUMENTS` contains any of (case-insensitive): `worktree`, `use worktree`, `with worktree` — reusing plan-execute's exact keyword vocabulary for consistency (see plan-execute Arguments "Worktree keyword detection"). **Strip the matched keyword from `$ARGUMENTS` before the ID parse**, so the remaining tokens are just the (optional) task ID. Default `review_worktree_flag = false` when no keyword is present. The ID parse (and the no-ID auto-select case) in step 2 runs on the stripped `$ARGUMENTS`, so `/plan-review worktree` (no ID) still auto-selects, and `/plan-review 5 worktree` resolves to task 5.
 
 ## Steps
 
@@ -35,6 +43,7 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Print exactly one line naming how many notes were applied: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md` (count the applicable bullets across `## all` + `## plan-review`). Print nothing when the file is absent or empty.
 
 2. **Parse and resolve task ID**
+   - **First, detect and strip the worktree keyword** (see the Arguments section): set `review_worktree_flag = true` if `$ARGUMENTS` contains any of (case-insensitive) `worktree`, `use worktree`, `with worktree`, then **remove the matched keyword from `$ARGUMENTS`**. Default `false`. Do this BEFORE the ID parse below so the ID resolution (and the no-ID auto-select case) operates on the stripped argument string.
    - Accept flexible ID formats: "1", "01", "001"
    - Zero-pad to 3 digits for file lookup
    - Find task file in `.plans/pending/NNN-*.md`
@@ -59,9 +68,32 @@ Review a task that has completed execution (typically via worktree workflow). **
    - Check for `**Branch:**` field:
      - If no branch: "Task #NNN has no branch. Nothing to review — the changes are in the current checkout."
 
+3.4. **Create a review worktree if requested but absent** (only when `review_worktree_flag` is true)
+   - This step runs ONLY when `review_worktree_flag` is true (the `worktree` keyword was passed — step 2) AND the task has no live `**Worktree:**` field. When `review_worktree_flag` is false, **skip this entire step** — behavior is byte-for-byte as today.
+   - **Decide whether a worktree already exists (read the task's `**Worktree:**` field):**
+     - **Field present AND its path exists on disk → silent no-op.** The task already has a live worktree; step 3.5 will `cd` into it and review in place. Do nothing here and fall through to step 3.5.
+     - **Field present BUT the path no longer exists on disk (stale) → treat as absent.** Remove the stale `**Worktree:**` line from the task file, then create a fresh worktree below (the branch still lives in the repo's `.git`).
+     - **No `**Worktree:**` field → create a worktree below.**
+   - **Guard — a review worktree presupposes committed work to review; do NOT create a branch at review time:**
+     - The task must have a `**Branch:**` field. If it has none, error consistently with step 3's branch-less message: "Task #NNN has no branch. Nothing to review — the changes are in the current checkout." Stop.
+     - That branch must exist. Check `git branch --list [branch-name]`; if it returns nothing, error consistently with step 5's message: "Branch '[branch-name]' not found. It may have been deleted." Stop. (A missing branch means there is no committed work to review — never create it here.)
+   - **Create the worktree by reference to plan-execute step 7e — do NOT duplicate its ~50 lines.** Determine single- vs multi-repo exactly as step 5 does: if the task carries a `**Repos:**` field OR its `**Branch:**` line has a `(multi-repo: A, B, ...)` parenthetical, take the multi-repo path; otherwise the single-repo path. Use `NNN-slug` = the task filename stem (e.g. `051-add-worktree-flag-to-plan-review`).
+     - **Single-repo path:** follow **plan-execute step 7e single-repo** (`skills/plan-execute/SKILL.md`, the "Single-repo path" sub-steps 1–7, lines ~454–475) in full, with the ONE divergence called out below. That covers: the project-root / not-already-in-a-worktree checks, ensuring `.worktrees/` is in `.gitignore`, symlinking `.plans` into the worktree (per the *worktree `.plans` symlinks are unchanged* invariant in CLAUDE.md → **Plans storage mode**), and symlinking the configured `worktree_links` entries (per the `worktree_links` contract in CLAUDE.md — **absent key ⇒ do nothing**; a missing entry is a one-line warning, never a failure).
+     - **Multi-repo path** (task carries `**Repos:**` or a `(multi-repo: ...)` parenthetical): follow **plan-execute step 7e multi-repo** (`skills/plan-execute/SKILL.md`, the "Multi-repo path" sub-steps 1–7, lines ~476–507) in full — the parent-level `.worktrees/NNN-slug` directory, the per-repo worktree, the non-git-subdirectory symlinks, the `.plans` symlink, the `worktree_links` symlinks, and the per-repo + parent `.gitignore` entries — with the same ONE divergence below, applied per repo.
+   - **THE ONE DELIBERATE DIVERGENCE FROM plan-execute step 7e — read carefully:** execute *creates a fresh branch* with `git worktree add .worktrees/NNN-slug -b [branch-name] [target]`. Here the branch **already exists and holds the work being reviewed**, so check it out with **NO `-b` and NO `[target]`**:
+     - **Single-repo:** `git worktree add .worktrees/NNN-slug [branch-name]`
+     - **Multi-repo (per repo):** `cd [repo] && git worktree add .worktrees/NNN-slug [branch-name]`
+
+     Everything else in execute step 7e is followed verbatim — this checkout-existing-branch form is the only change, and the base-resolution / create-if-missing / `-b` machinery from execute 7e does NOT apply here.
+   - **Run the `.plans`-protection safety guard BEFORE the worktree checkout** — the same guard step 5 runs before its `git checkout`: check `git ls-tree -r --name-only [branch-name] | grep -E '^\.plans($|/)'`; if it returns a match, **do not create the worktree** — stop and warn with step 5's committed-`.plans` message. A `git worktree add` of a branch that tracks a committed `.plans` entry would lay that entry down in the worktree exactly as a `git checkout` would, so the guard is mandatory here too. (Multi-repo: run the guard per repo before that repo's `git worktree add`, naming the repo in the warning.)
+   - **Write the `**Worktree:**` field back to the task file — directly below the `**Branch:**` line — byte-identical to plan-execute step 7e's own `**Worktree:**` write, so every downstream step treats this exactly like a kept worktree:**
+     - **Single-repo:** add the single line `**Worktree:** [absolute-worktree-path]` immediately below the `**Branch:**` line — byte-identical to plan-execute step 7e single-repo sub-step 6 (`**Worktree:** [absolute-worktree-path]`).
+     - **Multi-repo:** add `**Worktree:** [absolute-path-to-.worktrees/NNN-slug]` immediately below the `**Branch:**` line and `**Repos:** [comma-separated repo names]` on the next line below the Worktree line — byte-identical to plan-execute step 7e multi-repo sub-step 6 (`**Worktree:** [absolute-worktree-path]` / `**Repos:** [comma-separated repo names]`). (If `**Repos:**` was parsed from an existing `(multi-repo: ...)` parenthetical rather than an existing field, write it now.)
+   - Writing the field is the entire payoff — it is precisely what moves this task OUT of `MAIN` contention and lets `/plan-complete` tear the worktree down with no special-casing: step 3.5 will now see a present `**Worktree:**` field whose path exists and `cd` into it (`review_in_worktree = true`), step 3.6 will no longer assign this task the shared `MAIN` sentinel so it reviews concurrently, and `/plan-complete` tears this worktree down exactly as it does a `keep`-created one — none of those steps can tell a review-created worktree from a keep-created one.
+
 3.5. **Resolve the review working directory — kept worktree if present, else the main repo**
    - **First, read the task file's `**Worktree:**` field.** This is the load-bearing signal: a task that was executed with the `keep` keyword carries a live `**Worktree:**` field naming its own checkout, and a kept worktree is the *expected* place to review (not an error).
-     - **If a `**Worktree:**` field is present AND that path exists on disk:** `cd` into the worktree, set `review_in_worktree = true`, and **skip the rest of this step's "trapped in a worktree" check** — being inside the worktree is exactly what we want. The branch is already checked out there; all subsequent git commands run from this worktree cwd.
+     - **If a `**Worktree:**` field is present AND that path exists on disk:** `cd` into the worktree, set `review_in_worktree = true`, and **skip the rest of this step's "trapped in a worktree" check** — being inside the worktree is exactly what we want. The branch is already checked out there; all subsequent git commands run from this worktree cwd. (Step 3.4 may have just created this worktree and written the field moments ago; if so, this branch fires naturally with no special-casing — step 3.4 produces a field indistinguishable from a kept worktree's, so no logic here changes.)
      - **If a `**Worktree:**` field is present but the path no longer exists** (manually deleted, etc.): treat it as absent — set `review_in_worktree = false`, fall through to the main-repo handling below, and proceed (the branch still lives in the main repo's `.git`).
      - **If there is no `**Worktree:**` field:** set `review_in_worktree = false` and continue to the main-repo handling below.
    - **Main-repo handling (only when `review_in_worktree` is false):**
@@ -73,7 +105,7 @@ Review a task that has completed execution (typically via worktree workflow). **
 
 3.6. **Enforce review concurrency by repo set** (only when the original status from step 3 was `review` — i.e. this task is about to *enter* review)
    - **A non-default `**Base:**` does not change which shared checkout a task occupies (it only changes the branch target), so this guard is unaffected by the base and its logic is unchanged.**
-   - **The key is worktree-liveness, not single- vs multi-repo.** A task occupies the shared `MAIN` checkout **if and only if it has NO live `**Worktree:**` field** (i.e. `review_in_worktree` is false for it — it must check its branch out into the shared main working directory). A task **with** a live kept worktree reviews entirely inside its own checkout, so it is **never** assigned `MAIN` and never contends for the shared directory. This is what lets two single-repo *kept-worktree* tasks be `in-review` concurrently — the case that previously serialized. (Multi-repo disjoint-repo-set concurrency, commit 7d6723e, still holds — it falls out of the same per-repo intersection logic below.)
+   - **The key is worktree-liveness, not single- vs multi-repo.** A task occupies the shared `MAIN` checkout **if and only if it has NO live `**Worktree:**` field** (i.e. `review_in_worktree` is false for it — it must check its branch out into the shared main working directory). A task **with** a live kept worktree reviews entirely inside its own checkout, so it is **never** assigned `MAIN` and never contends for the shared directory. This is what lets two single-repo *kept-worktree* tasks be `in-review` concurrently — the case that previously serialized. (Step 3.4 creating a worktree for the incoming task is precisely what moves it out of the shared `MAIN` checkout — a task with a live `**Worktree:**` field is never assigned `MAIN` — so it reviews concurrently with no logic change here.) (Multi-repo disjoint-repo-set concurrency, commit 7d6723e, still holds — it falls out of the same per-repo intersection logic below.)
    - **Repo set of a task** (compute for the incoming task and for each existing in-review task):
      - **If the task has a live `**Worktree:**` field** (its path exists on disk → it reviews in its own worktree, never in main): its repo set is its actual repos and **never includes the `MAIN` sentinel**:
        - `**Repos:**` field present → repo set = the comma-separated names there.
@@ -88,7 +120,7 @@ Review a task that has completed execution (typically via worktree workflow). **
      - else if `incoming ∩ occ` is non-empty (intersecting *named* repos) → **conflict** on the overlapping repos — stop with the overlap error below.
      - else disjoint → no conflict with `O`; keep scanning. (Two kept-worktree tasks with no shared named repo, or one kept-worktree task vs a main-occupant on a different repo, are disjoint and may review concurrently.)
    - No conflicting occupant → **proceed** (concurrent review is allowed). On the first conflict, **stop now — before any checkout or status mutation** — and error:
-     - Shared-checkout conflict: `Task #MMM ([title]) is already in review and occupies the shared main working directory. Concurrent single-repo review requires a kept worktree — execute with the keep keyword (/plan-execute NNN worktree keep). Otherwise pause the occupant with /plan-pause MMM (returns it to the review queue) or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
+     - Shared-checkout conflict: `Task #MMM ([title]) is already in review and occupies the shared main working directory. Concurrent single-repo review requires a worktree so this task doesn't need the shared checkout — re-run as /plan-review NNN worktree to create one now, or execute with the keep keyword next time (/plan-execute NNN worktree keep). Otherwise pause the occupant with /plan-pause MMM (returns it to the review queue) or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
      - Repo-overlap conflict (name the intersection): `Task #MMM ([title]) is already in review and touches the same repo(s): [intersection]. Concurrent review needs disjoint repo sets. Pause it with /plan-pause MMM or finish it with /plan-complete MMM, then re-run /plan-review NNN.`
    - This guard does not apply when the original status was `in-review` (resuming the same task) or `in-progress` (reviewing mid-execution) — neither creates a new `in-review` occupant.
 
@@ -328,6 +360,11 @@ Review a task that has completed execution (typically via worktree workflow). **
 - **Uncommitted changes**: Must handle before branch switch (stash, commit, or abort)
 - **Branch doesn't exist**: Error — branch may have been deleted or never created
 - **Task has no branch**: Error — nothing to review in a branch-less workflow
+- **`worktree` flag + task already has a live `**Worktree:**` field**: Silent no-op — the existing field drives in-worktree review (step 3.5); nothing to create.
+- **`worktree` flag + task has no `**Branch:**` field**: Error — review presupposes committed work; never create a branch at review time (consistent with "Task has no branch").
+- **`worktree` flag + the branch no longer exists**: Error — the branch may have been deleted; never create it here (consistent with "Branch doesn't exist").
+- **`worktree` flag + a stale/missing recorded `**Worktree:**` path**: Treat as absent — strip the dead line and create a fresh worktree (step 3.4).
+- **`worktree` flag on a multi-repo task**: Full parity via plan-execute step 7e multi-repo — per-repo worktrees plus a `**Repos:**` field, then reviewed concurrently by disjoint repo set.
 - **Task is pending/elaborated**: Error — must execute first
 - **Already on the task's branch**: Skip checkout, just display the summary
 - **Merge conflicts during checkout**: Report the conflict and suggest resolving manually
