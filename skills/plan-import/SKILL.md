@@ -42,7 +42,12 @@ Import a brainstorming or planning markdown document and split it into multiple 
 
 4. **Extract potential tasks**
    For each identified section/boundary:
-   - **Title**: From the header text or first line
+   - **Title**: From the header text or first line. When the section's anticipated
+     deliverable is non-code output, prepend the artifact prefix to the title — per the
+     **Non-code output tasks — artifact title prefix** convention in CLAUDE.md (same
+     weak-heuristic discipline: infer on the deliverable, never force, and a code task that
+     merely mentions a word like "research" gets no prefix). The prefix lives only in the
+     `# [Title]` heading written at step 7.
    - **Description**: Content under the header/section
    - **Type**: Infer from keywords:
      - `bug`: "fix", "bug", "broken", "error", "issue", "crash", "fail"

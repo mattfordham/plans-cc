@@ -41,7 +41,12 @@ Complements `/plan-import`: import handles structured documents; extract handles
    - **Problems raised**: bugs reported, blockers, things described as broken or slow
 
    For each item, capture:
-   - **Title**: concise imperative phrasing of the action
+   - **Title**: concise imperative phrasing of the action. When the item's anticipated
+     deliverable is non-code output, prepend the artifact prefix to the title — per the
+     **Non-code output tasks — artifact title prefix** convention in CLAUDE.md (same
+     weak-heuristic discipline: infer on the deliverable, never force, and a code item that
+     merely mentions a word like "research" gets no prefix). The prefix lives only in the
+     `# [Title]` heading written at the approved-tasks step.
    - **Context**: the supporting quote or surrounding sentence(s) from the source
    - **Type**: infer from keywords:
      - `bug`: "fix", "bug", "broken", "error", "issue", "crash", "fail"

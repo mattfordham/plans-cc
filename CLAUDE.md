@@ -584,6 +584,31 @@ Inferred from description keywords:
 - `refactor` — refactor, clean, reorganize, restructure, improve
 - `chore` — update, upgrade, config, setup, docs, test
 
+### Non-code output tasks — artifact title prefix
+
+When a task's anticipated deliverable is **non-code output** — documentation, research
+findings, a brainstorm, an analysis, a spec, a plan, etc. — the task's `# ` title is
+prefixed with the artifact kind followed by a colon and a space, e.g.
+`# Research: pricing comparisons`, `# Brainstorm: alternative visualization approaches`,
+`# Doc: onboarding runbook`.
+
+- **Open vocabulary, not a closed enum.** Common prefixes are `Research:`, `Brainstorm:`,
+  `Doc:`, `Spec:`, `Analysis:`, `Plan:` — and other artifact nouns as appropriate. The list
+  is illustrative; use the noun that names the thing being produced.
+- **Title-string only.** The prefix lives in the `# ` title string and nowhere else. It is
+  **NOT** a new header field (no `**Artifact:**`) and does **NOT** change the `**Type:**`
+  field or add a Type value. Every title parser/renderer (`lib/parse-tasks.js`,
+  `lib/render-progress.js`, and the display skills) already reads the whole `# ` heading
+  generically, so a prefix needs zero parser changes.
+- **Detection is a weak heuristic on the DELIVERABLE, not the subject matter.** The signal
+  is that the *thing being produced* is a document/analysis/plan, not a code change. A code
+  task that merely mentions a word like "research" ("fix the research page bug") is still a
+  code task and gets **no** prefix. Infer, never force.
+- **Scope.** Applies to the task-capturing skills that derive a title: `plan-capture`,
+  `plan-import`, `plan-mine`, `plan-pick`, `plan-unpack`. It is honored (not forced) by
+  `plan-combine`'s auto-generated title option. `/plan-brainstorm` is **out of scope** — it
+  writes idea files (`.plans/ideas/`), not tasks, and has no `**Type:**` field.
+
 ## Testing
 
 The Node runtime under `lib/` has unit tests: `npm test` runs `node:test` over `test/*.test.js` (find-root, registry, plans-git, render-progress, render-dashboard — the plans-git tests drive real git in temp repos, including init-branch/migrate/join and a two-clone ID collision). Skills themselves are declarative, not executable code, and have no automated tests — test them manually:

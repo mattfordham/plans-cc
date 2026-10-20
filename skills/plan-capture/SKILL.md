@@ -92,8 +92,18 @@ Quickly capture a task idea with minimal friction. The goal is fast capture — 
 
    Default to "feature" if no keywords match.
 
+5.5. **Infer non-code artifact title prefix**
+   Decide whether the task's anticipated deliverable is non-code output and, if so, prepend
+   the artifact prefix to the title — per the **Non-code output tasks — artifact title
+   prefix** convention in CLAUDE.md (same weak-heuristic discipline described there). This
+   is a weak heuristic on the *deliverable*, not the subject matter: infer, never force, and
+   a code task that merely mentions a word like "research" gets no prefix. The prefix lives
+   only in the `# ` title string written at step 6 — it is not a header field and does not
+   change the inferred `**Type:**`.
+
 6. **Write task file**
-   Create `.plans/pending/NNN-slug.md`:
+   Create `.plans/pending/NNN-slug.md` (the title heading reflects the possible artifact
+   prefix from step 5.5):
    ```markdown
    # [Title - capitalized description]
 

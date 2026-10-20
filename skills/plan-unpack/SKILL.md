@@ -72,7 +72,10 @@ Expand a brainstorm idea into well-scoped, actionable tasks. Unlike `/plan-impor
    - One change is meaningless without another
 
    **For each task candidate, determine:**
-   - Title (clear, action-oriented)
+   - Title (clear, action-oriented). When the candidate's anticipated deliverable is
+     non-code output, prepend the artifact prefix to the title — per the **Non-code output
+     tasks — artifact title prefix** convention in CLAUDE.md (same weak-heuristic discipline
+     described there; the prefix lives only in the `# [Title]` heading)
    - Type (bug/feature/refactor/chore — use same keywords as `/plan-capture`)
    - What it covers (which insights/decisions it addresses)
    - Suggested sequence (if tasks have natural ordering)

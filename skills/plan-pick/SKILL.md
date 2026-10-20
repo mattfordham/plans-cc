@@ -118,7 +118,11 @@ Analyze an idea, surface the highest-value components, and let the user select w
 
    For each selected component:
    - Read current `next_id` from `.plans/config.json`
-   - Generate a clear, action-oriented title from the component
+   - Generate a clear, action-oriented title from the component. When the component's
+     anticipated deliverable is non-code output, prepend the artifact prefix to the title —
+     per the **Non-code output tasks — artifact title prefix** convention in CLAUDE.md (same
+     weak-heuristic discipline described there; the prefix lives only in the `# [Title]`
+     heading)
    - Infer task type using the same keyword rules as `/plan-capture`:
      - **bug**: fix, bug, broken, error, issue, crash, fail
      - **feature**: add, new, implement, create, support

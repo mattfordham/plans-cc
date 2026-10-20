@@ -94,7 +94,7 @@ Merge multiple tasks into a single task. Useful when related tasks should be wor
        description: "Generated from task descriptions"
    ```
 
-   For auto-generated title: combine key nouns/verbs from all tasks into a concise phrase (max 60 chars).
+   For auto-generated title: combine key nouns/verbs from all tasks into a concise phrase (max 60 chars). When the combined deliverable is non-code output, prepend the artifact prefix per the **Non-code output tasks — artifact title prefix** convention in CLAUDE.md. This applies ONLY to the auto-generated option — never force a prefix onto a user-kept title.
 
 8. **Determine combined type**
    - Collect types from all tasks
