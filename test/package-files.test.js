@@ -12,6 +12,8 @@ const REQUIRED = [
   "bin/plan-touch.js",
   "bin/plans-git.js",
   "lib/plans-git.js",
+  "lib/dashboard-git.js",
+  "lib/pidlock.js",
   "skills/plan-execute/SKILL.md",
   "agents/plan-executor.md",
 ];
