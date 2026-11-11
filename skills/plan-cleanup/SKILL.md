@@ -88,7 +88,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - Report what changed: "Rebuilt PROGRESS.md: X pending, Y elaborated, Z in-progress, W completed"
 
 3.5. **Check HISTORY.md Summary cap (flag only — never rewrite)** *(full mode only)*
-   - `.plans/HISTORY.md` is an **index**, not a second archive: each Summary cell is capped at exactly ONE sentence of the form `<verb-phrase> — <what changed>` followed by a ` → completed/NNN-slug.md` pointer, ≤250 chars for sentence and pointer together (the contract lives in `CLAUDE.md` under **HISTORY.md Summary cap** and is written by `plan-complete` step 11). Projects whose history predates the cap still carry fat rows.
+   - `.plans/HISTORY.md` is an **index**, not a second archive: each Summary cell is capped at exactly ONE sentence of the form `<verb-phrase> — <what changed>` followed by a ` → completed/NNN-slug.md` pointer, ≤250 chars for sentence and pointer together (the contract lives in `CLAUDE.md` under **HISTORY.md Summary cap** and is written by `plan-complete` step 15). Projects whose history predates the cap still carry fat rows.
    - If `.plans/HISTORY.md` does not exist, skip this step silently.
    - **Parse data rows**: a data row is a line matching `^\| [0-9]{3,} \|` — a zero-padded ID of 3 or more digits (`001`, `1000`) in the first column. Skip the table header row, the `|---|` separator row, any `<!-- ... -->` HTML comment, and any blank or prose line. Split each data row on `|` into its 5 columns (`ID | Title | Type | Completed | Summary`) and measure the trimmed 5th column.
      ```bash
@@ -103,7 +103,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
      N HISTORY.md row(s) exceed the 250-char Summary cap. Run `/plan-cleanup history` to backfill.
      ```
    - This step **NEVER rewrites a row — it only detects and points at `/plan-cleanup history`**, the same flag-only discipline `des-build` uses for global-CSS drift (it flags and points at `/des-sync`, and never syncs itself). The reason is that re-summarizing a row is an LLM judgment call per row — read `completed/NNN-slug.md`, compose a new sentence — not a mechanical fix like the neighbouring truncate-to-5 in step 3. A judgment call at that volume must never run unattended inside a default sweep.
-   - **Why this is not the shape `plan-complete` step 12 forbids:** that step carries a standing warning against adding a "detect >5 then backfill" branch for PROGRESS.md, and this step is superficially that shape. The two legitimately differ — truncating "Recently Completed" to 5 is a deterministic trim that is free to run everywhere, so it is folded unconditionally into every completion and needs no gate; re-deriving a Summary from a completed file is neither deterministic nor free, so it must be gated behind an explicit invocation. Do not "fix" this branch away by analogy to step 12.
+   - **Why this is not the shape `plan-complete` step 16 forbids:** that step carries a standing warning against adding a "detect >5 then backfill" branch for PROGRESS.md, and this step is superficially that shape. The two legitimately differ — truncating "Recently Completed" to 5 is a deterministic trim that is free to run everywhere, so it is folded unconditionally into every completion and needs no gate; re-deriving a Summary from a completed file is neither deterministic nor free, so it must be gated behind an explicit invocation. Do not "fix" this branch away by analogy to step 16.
 
 3.6. **Backfill HISTORY.md Summary cells** *(history mode only)*
    - This is the invocable form of the backfill procedure documented in `CLAUDE.md`. It is **non-destructive by construction**: same row count, same IDs, dates, titles, and types — only the Summary cell shrinks. The source of truth (`.plans/completed/*.md`) is **never modified**, so the worst case is a poor *summary*, never lost data.
@@ -119,7 +119,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
    - A row that is already conformant on both counts is **SKIPPED** — untouched, counted as already-conformant. That skip is the whole idempotence story: a second run over a backfilled file is a near-no-op.
 
    **(c) Regenerate the Summary from the completed file.**
-   - For each selected row, read `.plans/completed/NNN-slug.md` and compose a replacement Summary matching `plan-complete` step 11's template exactly — a backfilled row and a freshly-completed row must be indistinguishable in form:
+   - For each selected row, read `.plans/completed/NNN-slug.md` and compose a replacement Summary matching `plan-complete` step 15's template exactly — a backfilled row and a freshly-completed row must be indistinguishable in form:
      ```
      [<verb-phrase> — <what changed>.] → completed/NNN-slug.md
      ```
@@ -128,7 +128,7 @@ Anything else (e.g., `elaborated/`, `in-progress/`) is unexpected and should be 
 
    **(d) Rewrite each row in place.**
    - Replace only the Summary cell of that row; leave every other line of the file untouched.
-   - **Never emit a raw `|` inside a regenerated Summary.** A pipe is the table's column delimiter, so a single stray one silently splits the row into 6+ columns and corrupts the table — with no error, and no other skill checking for it. If the source completed file contains a pipe (a file path in a list, a shell one-liner, an "A | B" alternation), either **escape it as `\|`** or, preferably, **rephrase the sentence so it isn't needed**. This backfill is the first bulk writer of Summary cells, so it is the step that has to enforce the rule — `CLAUDE.md`'s **HISTORY.md Summary cap** contract states it, but `plan-complete` step 11 writes one row at a time and does not.
+   - **Never emit a raw `|` inside a regenerated Summary.** A pipe is the table's column delimiter, so a single stray one silently splits the row into 6+ columns and corrupts the table — with no error, and no other skill checking for it. If the source completed file contains a pipe (a file path in a list, a shell one-liner, an "A | B" alternation), either **escape it as `\|`** or, preferably, **rephrase the sentence so it isn't needed**. This backfill is the first bulk writer of Summary cells, so it is the step that has to enforce the rule — `CLAUDE.md`'s **HISTORY.md Summary cap** contract states it, but `plan-complete` step 15 writes one row at a time and does not.
 
    **(e) Skip — never guess — the rows the pass cannot source.**
    The pass rewrites only what it can derive from ground truth. Three kinds of row are left **untouched**, and the first two are reported at the end:

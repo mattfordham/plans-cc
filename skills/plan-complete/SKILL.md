@@ -23,9 +23,12 @@ Mark a task as completed, archive it, and update tracking files.
 
 1. **Branch merge requires interactive prompt** — If the task has a `**Branch:**` field, you MUST call the `AskUserQuestion` tool to ask the user what to do. Do NOT just print "ready to merge" or suggest manual steps.
 
-2. **Follow the exact output format** — Use the format specified in step 16. Do NOT invent your own format or add sections like "Changes Made", "Verification", etc.
+2. **No question after the task leaves pending/** — Every interactive question (the task-selection and never-started confirmations, the unchecked-steps, unreviewed-observation, verification and debug-cleanup prompts, and the "Merge branch" AskUserQuestion) is asked BEFORE the first write under `.plans/` (step 12). Nothing in steps 12–18 may ask the user anything. Any STOP before step 12 — a cancelled question, a guard, a Case B/C refusal, a Case D conflict — leaves the task exactly as it was: still in `.plans/pending/`, status unchanged, no state-file, HISTORY.md or PROGRESS.md edits, and re-runnable with `/plan-complete NNN`.
+   - **Why:** the skill runs in decide → merge → archive order. A task archived before its merge is stranded — step 2 resolves only from `.plans/pending/`, so `/plan-complete NNN` can no longer find it, and the unmerged branch has to be finished by hand. A headless driver makes this worse: the Plans desktop app runs `/plan-complete` through the Agent SDK and renders AskUserQuestion as buttons inside the plan's pending detail view, so a question asked after the file has moved to `completed/` has nowhere to render and the run parks forever.
 
-3. **No hallucinated commands** — Only suggest `/plan-status` or `/plan-capture`. Commands like `/commit` do not exist.
+3. **Follow the exact output format** — Use the format specified in step 18. Do NOT invent your own format or add sections like "Changes Made", "Verification", etc.
+
+4. **No hallucinated commands** — Only suggest `/plan-status` or `/plan-capture`. Commands like `/commit` do not exist.
 
 ## Arguments
 
@@ -48,7 +51,9 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
 ## Steps
 
-> **`MAIN`-checkout invariant.** `plan-complete` never checks out a branch in a working directory it does not own, and never occupies the shared `MAIN` checkout (the single main working directory that `plan-review` step 3.6 serializes on). Its merge dispatch (step 14) touches no shared tree in cases A and D (a ref fast-forward and a throwaway worktree, respectively), operates in case B only inside *this session's own* working directory, and in case C **refuses** rather than checking out a directory another session owns. Because it can never contend for `MAIN`, `plan-complete` needs no concurrency serializer and deliberately has **no** analogue of `plan-review`'s step 3.6 guard.
+> **Order: decide → merge → archive.** Steps 1–8 validate the task and collect every decision (including the "Merge branch" choice), steps 9–11 commit, merge and tear down, and only steps 12–16 mutate plan state, followed by the commit (17) and confirmation (18). Nothing under `.plans/` is written before step 12, so any STOP before it leaves the task untouched in `.plans/pending/` and re-runnable (Critical Requirement 2).
+
+> **`MAIN`-checkout invariant.** `plan-complete` never checks out a branch in a working directory it does not own, and never occupies the shared `MAIN` checkout (the single main working directory that `plan-review` step 3.6 serializes on). Its merge dispatch (step 10) touches no shared tree in cases A and D (a ref fast-forward and a throwaway worktree, respectively), operates in case B only inside *this session's own* working directory, and in case C **refuses** rather than checking out a directory another session owns. Because it can never contend for `MAIN`, `plan-complete` needs no concurrency serializer and deliberately has **no** analogue of `plan-review`'s step 3.6 guard.
 
 1. **Verify initialization**
    - Resolve the project root per the **Project-root discovery** contract in `CLAUDE.md`: ascend from cwd to the nearest ancestor containing `.plans/config.json`, then `cd` there. Do NOT skip this.
@@ -78,6 +83,22 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
      - If `in-progress`, `review`, or `in-review`: proceed (ideal)
      - If `pending` or `elaborated`: warn "Task #NNN wasn't started. Are you sure you want to mark it complete?" Require confirmation.
      - If not found: "Task #NNN not found."
+
+3.5. **Resolve the target branch** (only if task has a `**Branch:**` field)
+   - Check if task file has `**Branch:**` field. If not, skip this step — there is nothing to merge, and steps 8–11 are skipped too.
+   - Get the branch name from the task file
+   - **Resolve the target branch ONCE here, per the **Resolve target branch** contract in `CLAUDE.md`.** Read the task's `**Base:**` header field: if it is present and non-empty, `[target-branch]` is that base branch; OTHERWISE `[target-branch]` is the repo default, resolved by the existing idiom `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main`, then `master`. This single `[target-branch]` value feeds EVERY downstream site — step 7's debug-scan diff, step 8's "Merge branch" question, step 10's dispatch (cases A/B/C/D, the find-checkout query, the fast-forward `git merge-base --is-ancestor` check, the throwaway merge worktree (`git worktree add ... [target-branch]`), the case-C refusal text), and step 18's confirmation. Because they all derive from this one value, they pick up the base automatically. **When `**Base:**` is absent, OR when its value equals the resolved default, `[target-branch]` IS the default and every emitted git command and prompt/confirmation string below is byte-for-byte identical to today.**
+   - The guards below run here, before any question is asked or any file is edited, so a merge that can never succeed stops before the user spends time on prompts and before anything under `.plans/` changes.
+   - **Plans-branch guard (fires ONLY when `**Base:**` is present and non-empty).** Run it immediately after resolving `[target-branch]` and before the base-missing check. When `node ~/.claude/plans-cc/plans-git.js mode` prints `branch` and `node ~/.claude/plans-cc/plans-git.js is-plans-branch [target-branch]` prints `yes`, STOP with:
+     ```
+     🔴 BLOCKED · Task #NNN — '[target-branch]' is the plans branch — the plans branch can never be a base or merge target.
+     ```
+     Leave status unchanged and run no merge steps. This enforces the *plans branch is never a merge target, a `**Base:**`, or an execution branch* invariant in CLAUDE.md → **Plans storage mode**. Merging code into the orphan plans branch would pollute plan history, and the branch is already checked out at `.plans`, which case C's lookup would otherwise surface as a foreign checkout. In any other mode, or when the helper is missing, skip the guard; a branch that happens to be named `plans` is ordinary code there. When the task has NO `**Base:**` field the guard does not run, so the default-branch path is unchanged. Nothing has been changed or archived at this point — task #NNN is still in `.plans/pending/` with its status unchanged; fix the header, then re-run `/plan-complete NNN`.
+   - **Base-missing hard error (fires ONLY when `**Base:**` is present).** Immediately after resolving `[target-branch]`, if the task HAS a `**Base:**` field AND that base branch does NOT exist locally (`git rev-parse --verify --quiet [target-branch]` exits non-zero) AND `[target-branch]` is not the resolved default branch, STOP with:
+     ```
+     🔴 BLOCKED · Task #NNN — base branch '[target-branch]' no longer exists. Cannot merge. (Never falls back to the default branch.)
+     ```
+     Leave status unchanged and do NOT run any merge steps. Do NOT silently fall back to `main`/the default. When the task has NO `**Base:**` field this check does not fire — behavior is unchanged. Nothing has been changed or archived at this point — task #NNN is still in `.plans/pending/` with its status unchanged; restore the base branch (or fix the header), then re-run `/plan-complete NNN`.
 
 4. **Check checkbox completion**
    Parse the How section for checkboxes:
@@ -161,7 +182,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
    **Identify files to search:**
    - Parse the task's Changes section for modified file paths
-   - If the task has a `**Branch:**` field, also run `git diff --name-only [target-branch]...[task-branch]` to get all changed files, where `[target-branch]` is resolved per the **Resolve target branch** contract in `CLAUDE.md` (the task's `**Base:**` when set, else the default branch). With no `**Base:**` field this is the default branch — byte-for-byte the previous behavior.
+   - If the task has a `**Branch:**` field, also run `git diff --name-only [target-branch]...[task-branch]` to get all changed files, where `[target-branch]` is the value resolved once in step 3.5 per the **Resolve target branch** contract in `CLAUDE.md` (the task's `**Base:**` when set, else the default branch). With no `**Base:**` field this is the default branch — byte-for-byte the previous behavior.
    - If no files can be identified, skip this step silently
 
    **Search for common debug patterns using Grep:**
@@ -197,87 +218,49 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
      git commit -m "chore: remove debug statements from task #NNN"
      ```
 
-8. **Update task file**
-   - Change Status to `completed`
-   - Add completion timestamp: `**Completed:** [YYYY-MM-DDTHH:MM]`
-   - Remove `**Worktree:**` line if present (and the `**Repos:**` line if multi-repo). For a non-kept task this is defensive cleanup — the worktree should already be removed by `/plan-execute`, but remove stale metadata if it persists. For a kept-worktree task (executed with `keep`), this is the deliberate field-strip that finishes the teardown begun in step 14b, which removed the actual worktree after merging from main.
-   - Write updated file (still in pending/ temporarily)
+8. **Ask about branch merge** (if task has a branch)
+   - Check if task file has `**Branch:**` field
+   - If no branch field, skip to step 12 (steps 8–11 do not apply; the task still archives and commits)
+   - `[branch-name]` / `[task-branch]` and `[target-branch]` are the values resolved in step 3.5, whose guards have already passed.
+   - **REQUIRED: You MUST use the `AskUserQuestion` tool here** — do NOT skip this or print instructions for the user to follow manually. The prompt and options name the REAL resolved `[target-branch]` (so when Base is set they read "merge to feature/x"). Call AskUserQuestion with:
+     - Header: "Merge branch"
+     - Question: "Branch '[branch-name]' is ready to merge to [target-branch]. What would you like to do?"
+     - Options:
+       1. "Merge and delete branch" — Merge to [target-branch] and delete the feature branch
+       2. "Merge and keep branch" — Merge to [target-branch] but keep the feature branch
+       3. "Skip merge" — Leave branch as-is, I'll handle it manually
+   - Record the answer as `merge_choice`. It is consumed by step 10 (whether to merge) and step 11 (whether to delete the branch). It is never re-asked.
+   - **If the user cancels, dismisses the question, or gives no answer:** STOP. Do not default to any option. Report:
+     ```
+     Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+     Re-run /plan-complete NNN to choose how to handle the branch.
+     ```
+   - This is the LAST question this skill asks. From here on nothing prompts the user (Critical Requirement 2).
 
-9. **Move to completed/**
-   - Move file from `.plans/pending/NNN-slug.md` to `.plans/completed/NNN-slug.md`
+9. **Pre-merge git check** (if task has a branch)
+   - Check if task file has `**Branch:**` field
+   - If no branch field, skip to step 12
+   - Run `git status --porcelain` to check for uncommitted changes
+   - If no uncommitted changes: proceed to step 10
+   - If uncommitted changes exist: commit everything together. The user is working alongside you and may have made changes you're not aware of — include them all without prompting.
+     ```bash
+     git add -A && git commit -m "plan: changes for task #NNN - [title]"
+     ```
+   - Branch mode: this root `git status`/`add -A` behaves as in local mode, because it relies on the code repo ignoring `.plans` (the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**). The `.plans` worktree never shows as dirty here and is never swept into the code commit. Plan state is committed separately by the helper.
+   - At this point nothing under `.plans/` has been written by this run, so this commit only ever carries code (and, in inline mode, any pre-existing uncommitted plan edits — same as before). The completion record itself (steps 12–16) is committed afterwards by step 17's helper.
 
-10. **Clean up state file**
-    - Check if `.plans/state/NNN-state.md` exists
-    - If it exists, delete it: `rm .plans/state/NNN-state.md`
-    - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
+10. **Merge** (if task has a branch)
+    - Act on `merge_choice` from step 8:
 
-11. **Update HISTORY.md**
-    - HISTORY.md is an **index**, not a second archive. The full record already lives in `.plans/completed/NNN-slug.md`.
-    - Append row to the history table:
-      ```
-      | NNN | [Title] | [type] | [YYYY-MM-DD] | [<verb-phrase> — <what changed>.] → completed/NNN-slug.md |
-      ```
-    - The Summary cell has a mandated **shape**: exactly ONE sentence of the form `<verb-phrase> — <what changed>`, then the ` → completed/NNN-slug.md` pointer to the full record. The shape is the constraint; `≤250 chars` (sentence + pointer) is the backstop.
-    - **Never** paste multi-paragraph postmortems, root-cause narratives, disproved hypotheses, bolded caveats, or file-by-file breakdowns into the cell — that content belongs in (and already exists in) the completed task file.
-    - Example row:
-      ```
-      | 005 | User Model Additions | feature | 2026-08-18 | Added company association and pricing override fields — User model, migration, and serializer. → completed/005-user-model-additions.md |
-      ```
+      - **If "Skip merge":** Note in the completion message that the branch was not merged. Do NOT run any of the merge steps below. Continue to step 11.
 
-12. **Update PROGRESS.md**
-    - Remove task from "Active Work" section
-    - Add to "Recently Completed" — two explicit actions, in order:
-      1. **Prepend** the new bullet at the TOP of the section (newest-first, matching the existing ordering):
-         ```
-         ## Recently Completed
-         - **#NNN** - [Title] (completed [YYYY-MM-DD])
-         ```
-         If the section holds only the `_No completed tasks yet_` placeholder, REPLACE the placeholder with the new bullet rather than prepending above it.
-      2. **Hard-truncate to 5**: keep only the top 5 bullet lines and delete every bullet from the 6th onward, stopping at the `## Stats` heading. Never touch `## Stats` or anything after it. This truncate is MANDATORY and unconditional — it runs on EVERY completion, even when the list is already longer than 5, so it self-heals any legacy bloat that accumulated before this rule existed. This is a hard trim, not a warning.
-    - The truncate is unconditional *because* it doubles as the one-time backfill: trimming to 5 on every completion is idempotent (a no-op when the list is already ≤5), so there is NO separate gated backfill mechanism — do not add a "detect >5 then backfill" branch.
-    - Update Stats section:
-      - Decrement In Progress count
-      - Increment Completed count
-    - Update "Last updated" date
+      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[target-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it. The cwd-relative git commands here (Case A's `git fetch .`, Case D's `git worktree add .worktrees/.merge-NNN`) rely on the **Project-root discovery** invariant from step 1: after that step's `cd`, cwd IS the discovered project root, so `.worktrees/` resolves at the root even when the session was started from a sub-repo. (Git semantics, the merge dispatch, and teardown are unchanged — this note only pins *where* cwd is. `[target-branch]` was resolved once in step 3.5 per the **Resolve target branch** contract; when the task has no `**Base:**` field it IS the default and every command here is byte-for-byte what it was before.)
 
-13. **Pre-merge git check** (if task has a branch)
-    - Check if task file has `**Branch:**` field
-    - If no branch field, skip to step 16
-    - Run `git status --porcelain` to check for uncommitted changes
-    - If no uncommitted changes: proceed to step 14
-    - If uncommitted changes exist: commit everything together. The user is working alongside you and may have made changes you're not aware of — include them all without prompting.
-      ```bash
-      git add -A && git commit -m "plan: changes for task #NNN - [title]"
-      ```
-    - Branch mode: this root `git status`/`add -A` behaves as in local mode, because it relies on the code repo ignoring `.plans` (the *`.plans` stays ignored, slashless, on code branches* invariant in CLAUDE.md → **Plans storage mode**). The `.plans` worktree never shows as dirty here and is never swept into the code commit. Plan state is committed separately by the helper.
-
-14. **Ask about branch merge** (if task has a branch)
-    - Check if task file has `**Branch:**` field
-    - If no branch field, skip to step 16
-    - Get the branch name from the task file
-    - **Resolve the target branch ONCE here, per the **Resolve target branch** contract in `CLAUDE.md`.** Read the task's `**Base:**` header field: if it is present and non-empty, `[target-branch]` is that base branch; OTHERWISE `[target-branch]` is the repo default, resolved by the existing idiom `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'`, falling back to `main`, then `master`. This single `[target-branch]` value feeds EVERY downstream site in this step and step 16 — cases A/B/C/D, the find-checkout query, the fast-forward `git merge-base --is-ancestor` check, the throwaway merge worktree (`git worktree add ... [target-branch]`), the case-C refusal text, and the confirmation. Because they all derive from this one value, they pick up the base automatically. **When `**Base:**` is absent, OR when its value equals the resolved default, `[target-branch]` IS the default and every emitted git command and prompt/confirmation string below is byte-for-byte identical to today.**
-    - **Plans-branch guard (fires ONLY when `**Base:**` is present and non-empty).** Run it immediately after resolving `[target-branch]` and before the base-missing check. When `node ~/.claude/plans-cc/plans-git.js mode` prints `branch` and `node ~/.claude/plans-cc/plans-git.js is-plans-branch [target-branch]` prints `yes`, STOP with:
-      ```
-      🔴 BLOCKED · Task #NNN — '[target-branch]' is the plans branch — the plans branch can never be a base or merge target.
-      ```
-      Leave status unchanged and run no merge steps. This enforces the *plans branch is never a merge target, a `**Base:**`, or an execution branch* invariant in CLAUDE.md → **Plans storage mode**. Merging code into the orphan plans branch would pollute plan history, and the branch is already checked out at `.plans`, which case C's lookup would otherwise surface as a foreign checkout. In any other mode, or when the helper is missing, skip the guard; a branch that happens to be named `plans` is ordinary code there. When the task has NO `**Base:**` field the guard does not run, so the default-branch path is unchanged.
-    - **Base-missing hard error (fires ONLY when `**Base:**` is present).** Immediately after resolving `[target-branch]`, if the task HAS a `**Base:**` field AND that base branch does NOT exist locally (`git rev-parse --verify --quiet [target-branch]` exits non-zero) AND `[target-branch]` is not the resolved default branch, STOP with:
-      ```
-      🔴 BLOCKED · Task #NNN — base branch '[target-branch]' no longer exists. Cannot merge. (Never falls back to the default branch.)
-      ```
-      Leave status unchanged and do NOT run any merge steps. Do NOT silently fall back to `main`/the default. When the task has NO `**Base:**` field this check does not fire — behavior is unchanged.
-    - **REQUIRED: You MUST use the `AskUserQuestion` tool here** — do NOT skip this or print instructions for the user to follow manually. The prompt and options name the REAL resolved `[target-branch]` (so when Base is set they read "merge to feature/x"). Call AskUserQuestion with:
-      - Header: "Merge branch"
-      - Question: "Branch '[branch-name]' is ready to merge to [target-branch]. What would you like to do?"
-      - Options:
-        1. "Merge and delete branch" — Merge to [target-branch] and delete the feature branch
-        2. "Merge and keep branch" — Merge to [target-branch] but keep the feature branch
-        3. "Skip merge" — Leave branch as-is, I'll handle it manually
-    - **After user responds via AskUserQuestion:**
-
-      - **If "Skip merge":** Note in the completion message that the branch was not merged. Do NOT run any of the merge steps below.
-
-      - **If "Merge and delete branch" or "Merge and keep branch":** dispatch to one of four cases (A/B/C/D). This skill NEVER checks out `[target-branch]` in a directory it does not own — the dispatch is the mechanism that guarantees it. The cwd-relative git commands here (Case A's `git fetch .`, Case D's `git worktree add .worktrees/.merge-NNN`) rely on the **Project-root discovery** invariant from step 1: after that step's `cd`, cwd IS the discovered project root, so `.worktrees/` resolves at the root even when the session was started from a sub-repo. (Git semantics, the merge dispatch, and teardown are unchanged — this note only pins *where* cwd is. `[target-branch]` was resolved once above per the **Resolve target branch** contract; when the task has no `**Base:**` field it IS the default and every command here is byte-for-byte what it was before.)
+        **Every STOP in this step happens before step 12**, so it leaves the task untouched. After the case's own refusal or conflict report, always print:
+        ```
+        Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+        Fix the above, then re-run /plan-complete NNN.
+        ```
 
         **Detect where `[target-branch]` is checked out, if anywhere:**
         ```bash
@@ -297,6 +280,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
           git fetch . [task-branch]:[target-branch]
           ```
           (If `[target-branch]` is later checked out somewhere unexpected, this fatals with exit 128 rather than stomping — treat that as case C and report.)
+          On that exit-128 path, STOP after the case C report and print:
+          ```
+          Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+          Fix the above, then re-run /plan-complete NNN.
+          ```
 
         - **Case B — `[target-checkout-path]` equals this session's own current working directory** (`git rev-parse --show-toplevel`). The target is already checked out right here. First assert the tree is clean:
           ```bash
@@ -305,6 +293,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
           If that prints anything, **refuse** — do not merge over uncommitted work: report `Cannot merge: [target-branch] is checked out here with uncommitted changes. Commit or stash them, then re-run /plan-complete NNN.` and STOP. If clean, merge in place:
           ```bash
           git merge [task-branch]
+          ```
+          On the refusal path, after the report and before stopping, print:
+          ```
+          Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+          Fix the above, then re-run /plan-complete NNN.
           ```
 
         - **Case C — `[target-checkout-path]` is non-empty and is NOT this session's own working directory.** Another session may own that directory. **Refuse and STOP** — do not fall through to completion. Print VERBATIM:
@@ -315,6 +308,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 
           Another session may be working there. Complete this task from that
           directory, or re-run /plan-complete NNN once it is free.
+          ```
+          Then print, and STOP:
+          ```
+          Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+          Fix the above, then re-run /plan-complete NNN.
           ```
 
         - **Case D — `[target-checkout-path]` is empty but the fast-forward test FAILED** (the branches diverged). Merge in an isolated throwaway worktree so no shared tree is touched. Every command below is addressed with `git -C` and never depends on the current directory — a `cd` in one command does not persist into the next:
@@ -329,6 +327,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
             test ! -e .worktrees/.merge-NNN || echo "WARNING: .worktrees/.merge-NNN still exists — a process may hold it open"
             git worktree prune
             ```
+            After the conflict report, print, and STOP:
+            ```
+            Nothing was archived — task #NNN is still in .plans/pending/ with its status unchanged.
+            Fix the above, then re-run /plan-complete NNN.
+            ```
           - **On clean merge:** tear down the throwaway worktree (the merge commit already landed on `[target-branch]`):
             ```bash
             git worktree remove .worktrees/.merge-NNN || git worktree remove --force .worktrees/.merge-NNN
@@ -337,16 +340,20 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
             ```
 
         **After a successful merge in case A, B, or D:**
-        - If the user chose "Merge and delete branch": `git branch -d [task-branch]`. This is a ref operation and works from any directory — no checkout needed.
         - Report success (or, for cases B/D, any merge conflict already handled above).
+        - Branch deletion for "Merge and delete branch" does NOT happen here — it runs in step 11, after any kept worktree is torn down.
 
-14b. **Tear down a kept worktree** (if the task still has a live `**Worktree:**` field)
+11. **Tear down a kept worktree, then delete the branch** (if task has a branch)
 
-    Completion is the OWNER of kept-worktree teardown. A task executed with `keep` keeps its execution worktree alive through review (`/plan-execute` no longer removes it), so the live `**Worktree:**` field will still be present here. If the task has NO `**Worktree:**` field, skip this step entirely.
+    Run this step from the project root. Step 1's discovery invariant guarantees cwd IS the root; if cwd is somehow inside the worktree being removed, `cd` to the project root first — never run `git worktree remove` from inside the worktree it removes. Read the `**Worktree:**` (and, for multi-repo, `**Repos:**`) values from the task file — they are still intact here, because step 12 strips them later.
+
+    **11a. Tear down a kept worktree** (if the task still has a live `**Worktree:**` field)
+
+    Completion is the OWNER of kept-worktree teardown. A task executed with `keep` keeps its execution worktree alive through review (`/plan-execute` no longer removes it), so the live `**Worktree:**` field will still be present here. If the task has NO `**Worktree:**` field, skip to 11b.
 
     **Merge and teardown are independent.** `git worktree remove` removes a *checkout*, not a *branch* — the branch ref and all its commits survive in the main repo's `.git` regardless of removal order (the same truth plan-spawn states in its "Invariant" after `git worktree remove`). The ordering below is chosen for cleanliness, not correctness.
 
-    1. **Merge.** The merge was already handled by step 14 above via its A/B/C/D decision table — do NOT re-merge, do NOT `cd` to the project root and `git checkout [target-branch]` (`[target-branch]` being the value step 14 resolved per the **Resolve target branch** contract; with no `**Base:**` field it is the default branch, unchanged from before). If the user chose "Skip merge" in step 14, skip merging here too. (Step 14 never checks out inside this kept worktree; its case dispatch keeps the merge off the worktree's tree.)
+    1. **Merge.** The merge was already handled by step 10 above via its A/B/C/D decision table — do NOT re-merge, do NOT `cd` to the project root and `git checkout [target-branch]` (`[target-branch]` being the value step 3.5 resolved per the **Resolve target branch** contract; with no `**Base:**` field it is the default branch, unchanged from before). If the user chose "Skip merge" in step 8, skip merging here too. (Step 10 never checks out inside this kept worktree; its case dispatch keeps the merge off the worktree's tree.)
     2. **Remove the worktree** using the canonical teardown sequence (`remove` → `remove --force` fallback → `test ! -e` warning → `git worktree prune`).
        - **Single-repo:**
          ```bash
@@ -365,9 +372,58 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
          find .worktrees/NNN-slug -maxdepth 1 -type l -delete
          rm -rf .worktrees/NNN-slug
          ```
-    3. **Strip the field(s).** This is handled by step 8's existing field-strip (which removed `**Worktree:**`, and `**Repos:**` for multi-repo) — do not duplicate it here.
+    3. **Strip the field(s).** This is handled by step 12's field-strip (which removes `**Worktree:**`, and `**Repos:**` for multi-repo) — do not duplicate it here.
 
-15. **Commit .plans/ changes**
+    **11b. Delete the task branch** (only if `merge_choice` was "Merge and delete branch" AND step 10's merge succeeded)
+    - `git branch -d [task-branch]`. This is a ref operation and works from any directory — no checkout needed.
+    - It runs after 11a, not in step 10, because git refuses to delete a branch that is still checked out in a linked worktree — a kept worktree has the task branch checked out until 11a removes it.
+    - If `git branch -d` fails, surface git's message as a warning and continue — the merge has already landed, so the task still completes; the branch can be deleted by hand.
+
+12. **Update task file**
+    - Everything from here on mutates plan state. Reaching this step means every decision is collected and the merge succeeded (or was skipped, or the task has no branch).
+    - Change Status to `completed`
+    - Add completion timestamp: `**Completed:** [YYYY-MM-DDTHH:MM]`
+    - Remove `**Worktree:**` line if present (and the `**Repos:**` line if multi-repo). For a non-kept task this is defensive cleanup — the worktree should already be removed by `/plan-execute`, but remove stale metadata if it persists. For a kept-worktree task (executed with `keep`), this is the deliberate field-strip that finishes the teardown done in step 11, which removed the actual worktree after step 10's merge.
+    - Write updated file (still in pending/ temporarily)
+
+13. **Move to completed/**
+    - Move file from `.plans/pending/NNN-slug.md` to `.plans/completed/NNN-slug.md`
+
+14. **Clean up state file**
+    - Check if `.plans/state/NNN-state.md` exists
+    - If it exists, delete it: `rm .plans/state/NNN-state.md`
+    - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
+
+15. **Update HISTORY.md**
+    - HISTORY.md is an **index**, not a second archive. The full record already lives in `.plans/completed/NNN-slug.md`.
+    - Append row to the history table:
+      ```
+      | NNN | [Title] | [type] | [YYYY-MM-DD] | [<verb-phrase> — <what changed>.] → completed/NNN-slug.md |
+      ```
+    - The Summary cell has a mandated **shape**: exactly ONE sentence of the form `<verb-phrase> — <what changed>`, then the ` → completed/NNN-slug.md` pointer to the full record. The shape is the constraint; `≤250 chars` (sentence + pointer) is the backstop.
+    - **Never** paste multi-paragraph postmortems, root-cause narratives, disproved hypotheses, bolded caveats, or file-by-file breakdowns into the cell — that content belongs in (and already exists in) the completed task file.
+    - Example row:
+      ```
+      | 005 | User Model Additions | feature | 2026-08-18 | Added company association and pricing override fields — User model, migration, and serializer. → completed/005-user-model-additions.md |
+      ```
+
+16. **Update PROGRESS.md**
+    - Remove task from "Active Work" section
+    - Add to "Recently Completed" — two explicit actions, in order:
+      1. **Prepend** the new bullet at the TOP of the section (newest-first, matching the existing ordering):
+         ```
+         ## Recently Completed
+         - **#NNN** - [Title] (completed [YYYY-MM-DD])
+         ```
+         If the section holds only the `_No completed tasks yet_` placeholder, REPLACE the placeholder with the new bullet rather than prepending above it.
+      2. **Hard-truncate to 5**: keep only the top 5 bullet lines and delete every bullet from the 6th onward, stopping at the `## Stats` heading. Never touch `## Stats` or anything after it. This truncate is MANDATORY and unconditional — it runs on EVERY completion, even when the list is already longer than 5, so it self-heals any legacy bloat that accumulated before this rule existed. This is a hard trim, not a warning.
+    - The truncate is unconditional *because* it doubles as the one-time backfill: trimming to 5 on every completion is idempotent (a no-op when the list is already ≤5), so there is NO separate gated backfill mechanism — do not add a "detect >5 then backfill" branch.
+    - Update Stats section:
+      - Decrement In Progress count
+      - Increment Completed count
+    - Update "Last updated" date
+
+17. **Commit .plans/ changes**
     - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
       ```bash
       node ~/.claude/plans-cc/plans-git.js commit "plan: complete #NNN - [title]"
@@ -375,14 +431,14 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     - If `~/.claude/plans-cc/plans-git.js` does not exist: print `Warning: plans-git helper missing — run npx plans-cc to reinstall` and continue.
     - Surface any `Warning:` lines it prints, but never fail the skill.
 
-16. **Display confirmation**
+18. **Display confirmation**
 
     Print EXACTLY this format (substitute values in {braces}):
 
     ```
     Task #{id} completed: {title}
 
-    Summary: {one sentence from Changes section — same capped sentence written to HISTORY.md in step 11, without the ` → completed/...` pointer}
+    Summary: {one sentence from Changes section — same capped sentence written to HISTORY.md in step 15, without the ` → completed/...` pointer}
 
     Archived to: .plans/completed/{id}-{slug}.md
     Branch: {branch-name} merged to {target-branch}
@@ -390,7 +446,7 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
     Next: /plan-status or /plan-capture
     ```
 
-    (`{target-branch}` is the value resolved once in step 14 per the **Resolve target branch** contract — the task's `**Base:**` when set, else the default branch. When no `**Base:**` field is present it IS the default, so this line reads exactly as it did before, e.g. `merged to main`.)
+    (`{target-branch}` is the value resolved once in step 3.5 per the **Resolve target branch** contract — the task's `**Base:**` when set, else the default branch. When no `**Base:**` field is present it IS the default, so this line reads exactly as it did before, e.g. `merged to main`.)
 
     **Example output (copy this style exactly):**
 
@@ -423,5 +479,9 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
 - **No files changed**: Skip debug cleanup silently
 - **Debug code is intentional**: User selects "Keep all" to preserve it
 - **False positives in debug scan**: User selects "Review each" to inspect individually
-- **Auto-accept keyword provided**: Skip verification and checkbox prompts, but still enforce unresolved issues block (step 5) and branch merge prompt (step 14) — those are never auto-skipped
-- **Task completed with a kept worktree** (live `**Worktree:**` field, executed with `keep`): remove it during completion (step 14b) — step 14 already merged via its A/B/C/D dispatch, then step 14b removes the worktree with the canonical teardown sequence and step 8 strips the field. Merge and teardown are independent — `git worktree remove` drops a checkout, never the branch, so ordering is a cleanliness choice, not a correctness one.
+- **Auto-accept keyword provided**: Skip verification and checkbox prompts, but still enforce unresolved issues block (step 5) and branch merge prompt (step 8) — those are never auto-skipped
+- **No branch** (no `**Branch:**` field): steps 3.5 and 8–11 are skipped; the task still archives (steps 12–16) and commits (step 17)
+- **Cancelled at "Merge branch"** (step 8 dismissed or unanswered): STOP before step 12 — nothing archived, task still in `.plans/pending/` with status unchanged; re-run `/plan-complete NNN`
+- **Merge refused (Case B/C, including Case A's exit-128) or conflicted (Case D)**: STOP in step 10, before step 12 — nothing archived, task still in `.plans/pending/` with status unchanged; fix the cause, then re-run `/plan-complete NNN`
+- **Plans-branch base / missing base** (step 3.5 guards): STOP before any question and before step 12 — nothing archived, task still in `.plans/pending/` with status unchanged; fix the header or restore the base, then re-run `/plan-complete NNN`
+- **Task completed with a kept worktree** (live `**Worktree:**` field, executed with `keep`): remove it during completion — step 10 merges via its A/B/C/D dispatch, step 11 removes the worktree with the canonical teardown sequence (from the project root) and then deletes the branch if "Merge and delete branch" was chosen, and step 12 strips the field. Merge and teardown are independent — `git worktree remove` drops a checkout, never the branch, so ordering is a cleanliness choice, not a correctness one. Branch deletion is the one ordering that matters: git refuses to delete a branch still checked out in a linked worktree, so it runs after the teardown.

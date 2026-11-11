@@ -77,17 +77,10 @@ Permanently delete a task from the system.
    - Require explicit "yes" to proceed
    - Any other response: "Deletion cancelled."
 
-7. **Delete the file**
-   - Remove the task file from pending/ or completed/
-
-7b. **Clean up state file**
-    - Check if `.plans/state/NNN-state.md` exists (where NNN is the zero-padded task ID)
-    - If it exists, delete it: `rm .plans/state/NNN-state.md`
-    - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
-
-7c. **Clean up associated branch**
+6b. **Ask about associated branch**
+    > **Every question is asked before the task file is deleted (step 7).** Nothing from step 7 on may ask the user anything, so a cancelled or unanswered question leaves the task intact.
     - Check if the task had a `**Branch:**` field (from step 4)
-    - If no branch field, skip to step 8
+    - If no branch field, skip to step 7 (step 9b will have nothing to do)
     - Check if the branch exists locally: `git branch --list [branch-name]`
     - **If branch exists, use `AskUserQuestion` tool:**
       - Header: "Branch"
@@ -95,8 +88,15 @@ Permanently delete a task from the system.
       - Options:
         1. "Delete branch" — Remove the local branch
         2. "Keep branch" — Leave the branch as-is
-    - If "Delete branch": `git branch -D [branch-name]`
-    - If "Keep branch": no action
+    - Record the answer as `branch_choice`; it is applied in step 9b. If the question is dismissed or unanswered: "Deletion cancelled." — STOP with no changes made.
+
+7. **Delete the file**
+   - Remove the task file from pending/ or completed/
+
+7b. **Clean up state file**
+    - Check if `.plans/state/NNN-state.md` exists (where NNN is the zero-padded task ID)
+    - If it exists, delete it: `rm .plans/state/NNN-state.md`
+    - If the `state/` directory is now empty, remove it: `rmdir .plans/state`
 
 8. **Update PROGRESS.md**
    - Update Stats section counts
@@ -107,6 +107,11 @@ Permanently delete a task from the system.
 9. **Update HISTORY.md (if completed task)**
    - If deleting a completed task, remove its row from the history table
    - (Optional: could leave it for audit trail — user preference)
+
+9b. **Clean up associated branch**
+    - Act on `branch_choice` from step 6b (no question here). It runs after the plan-state updates so a failing branch delete can never leave them half-done.
+    - If "Delete branch": `git branch -D [branch-name]`. If it fails, print `Warning: could not delete branch [branch-name]: <error>` and continue.
+    - If "Keep branch", or no branch was found in step 6b: no action
 
 10. **Commit .plans/ changes**
     - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):

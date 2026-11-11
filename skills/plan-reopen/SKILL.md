@@ -75,6 +75,21 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
    - User can also select "Other" to provide custom reason
    - Store the response as the reason
 
+5b. **Ask about branch** (if task has a branch)
+    > **Every question is asked before the task file is moved (step 7)** — and before any `.plans/` write (step 6). Nothing from step 6 on may ask the user anything.
+    - Check if task file has `**Branch:**` field
+    - If no branch field, skip to step 6
+    - Get the branch name from the task file
+    - Check if branch exists locally: `git branch --list [branch-name]`
+    - **If branch exists, use `AskUserQuestion` tool:**
+      - Header: "Branch"
+      - Question: "Branch '[branch-name]' exists. Would you like to check it out to continue work?"
+      - Options:
+        1. "Checkout branch" — Switch to the task's branch
+        2. "Stay on current branch" — Keep working on current branch
+    - Record the answer as `branch_choice`; it is applied in step 10.
+    - If branch doesn't exist, remember this for the confirmation message
+
 6. **Update task file**
    - Change Status: `completed` → `pending`
    - Remove the `**Completed:**` line entirely
@@ -111,21 +126,11 @@ If `$ARGUMENTS` contains any of these words (case-insensitive) alongside the tas
    - Remove the row for this task ID from the history table
    - Match by task ID in the first column (| NNN |)
 
-10. **Ask about branch** (if task has a branch)
-    - Check if task file has `**Branch:**` field
-    - If no branch field, skip to step 11
-    - Get the branch name from the task file
-    - Check if branch exists locally: `git branch --list [branch-name]`
-    - **If branch exists, use `AskUserQuestion` tool:**
-      - Header: "Branch"
-      - Question: "Branch '[branch-name]' exists. Would you like to check it out to continue work?"
-      - Options:
-        1. "Checkout branch" — Switch to the task's branch
-        2. "Stay on current branch" — Keep working on current branch
-    - **After user responds:**
-      - If "Checkout branch": `git checkout [branch-name]`
-      - If "Stay on current branch": no action
-    - If branch doesn't exist, note this in the confirmation message
+10. **Check out branch** (if chosen in step 5b)
+    - Act on `branch_choice` from step 5b (no question here).
+    - If "Checkout branch": `git checkout [branch-name]`. If it fails (e.g. uncommitted changes), print `Warning: could not check out [branch-name]: <error>` and continue — the reopen itself is already complete and must not be undone.
+    - If "Stay on current branch", or there was no branch: no action
+    - If branch doesn't exist (found in step 5b), note this in the confirmation message
 
 11. **Commit .plans/ changes**
     - Commit via the shared helper (it resolves the project root and skips silently when not in a git repo, when `.plans` is gitignored, when `git_commits` is not `true`, or when nothing changed):
