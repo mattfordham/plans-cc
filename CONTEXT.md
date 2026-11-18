@@ -38,5 +38,6 @@ plans-cc/
 - Task files: `NNN-slug.md` in `pending/` or `completed/`
 
 ## Notes
+- **`.plans/` is public** (pushed to GitHub on the `plans` branch). Never put real client/project names, absolute user paths, usernames, emails, hostnames, or private URLs in any plan file. Use generic placeholders (`my-app`, `/Users/alice/code/my-app`). See `.plans/SKILL_NOTES.md`.
 - Most skills are user-invoked only (`disable-model-invocation: true`). See CLAUDE.md for the exceptions.
 - Scratch git work in tests or by hand must use `git -C <abs path>`, so a failed `cd` can't leak commits into this repo.

@@ -1,0 +1,4 @@
+## all
+- `.plans/` is PUBLIC: it is pushed to the public GitHub repo on the `plans` branch. Never write identifying details into any plan file (tasks, ideas, state, CONTEXT, HISTORY, PROGRESS, artifacts, review pages). That means no real client or other project names, no absolute user paths (`/Users/<name>/…`, expanded `~`), no usernames, emails, hostnames, internal or private URLs (client Trello, Figma, Sentry, or repo links), and no credentials.
+- Use generic placeholders instead: `my-app`, `client-site`, `other-repo`, `~/code/my-app`, `/Users/alice/code/my-app`. Repo-relative paths (`lib/registry.js`) are fine.
+- This also covers content brought in from elsewhere (imported docs, mined transcripts, error output, text quoted from another project's session). Scrub it before it lands in a plan file.
