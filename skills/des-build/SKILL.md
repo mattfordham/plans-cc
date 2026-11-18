@@ -11,13 +11,19 @@ allowed-tools:
   - AskUserQuestion
   - mcp__figma-dev-mode-mcp-server__get_design_context
   - mcp__figma-dev-mode-mcp-server__get_metadata
+  - mcp__figma-dev-mode-mcp-server__get_variable_defs
   - mcp__figma-dev-mode-mcp-server__get_screenshot
+  - mcp__plugin_figma_figma__create_session
   - mcp__playwright__browser_navigate
   - mcp__playwright__browser_resize
   - mcp__playwright__browser_take_screenshot
   - mcp__playwright__browser_evaluate
   - mcp__playwright__browser_snapshot
   - mcp__playwright__browser_wait_for
+  - mcp__playwright__browser_close
+  - mcp__playwright__browser_click
+  - mcp__playwright__browser_type
+  - mcp__playwright__browser_console_messages
 description: Build a Next.js + Tailwind component by reading design-system/ first; use only its tokens/patterns, and optionally self-verify the render against the Figma frame. Requires BOTH a reachable Figma Dev Mode MCP and a readable design-system/ — aborts rather than degrading if either is missing. With `verify <url>`, measures the live rendered page against Figma via Playwright; with `verify` alone it is a code-only check that is NEVER reported as verified.
 ---
 

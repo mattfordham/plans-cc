@@ -21,6 +21,10 @@ allowed-tools:
   - mcp__playwright__browser_evaluate
   - mcp__playwright__browser_snapshot
   - mcp__playwright__browser_wait_for
+  - mcp__playwright__browser_close
+  - mcp__playwright__browser_click
+  - mcp__playwright__browser_type
+  - mcp__playwright__browser_console_messages
 description: Start or continue working on a task (auto-captures/elaborates if needed)
 ---
 
