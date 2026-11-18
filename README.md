@@ -8,6 +8,26 @@ Lightweight task management for Claude Code, implemented as a set of skills.
 
 **plans-cc turns Claude Code into a project manager that lives in your repo.** Capture, plan, execute, and ship work as plain markdown tasks in a `.plans/` directory — versioned alongside your code, readable without any special tooling, and driven by natural-language slash commands. From a one-line idea to an elaborated plan to an executed, reviewed, and merged change, the full lifecycle runs inside Claude Code with no external service to sign up for and nothing to host.
 
+## Contents
+
+**Get started**
+- [Overview](#overview)
+- [Installation](#installation)
+- [Getting Started](#getting-started): [initialize](#1-initialize-your-project) → [context](#2-set-up-project-context) → [capture](#3-capture-a-task) → [elaborate](#4-elaborate-the-task) → [execute](#5-execute-the-task) → [complete](#6-complete-the-task) · [shortcut](#shortcut-do-it-all-at-once)
+
+**Use it**
+- [Commands](#commands): [core workflow](#core-workflow) · [git integration](#git-integration) · [viewing & tracking](#viewing-and-tracking) · [task management](#task-management) · [idea exploration](#idea-exploration)
+- [Task Lifecycle](#task-lifecycle) · [worktree lifecycle](#worktree-lifecycle)
+- [Common Workflows](#common-workflows): [standard](#standard-one-task-at-a-time) · [fast track](#fast-track-capture-and-go) · [skip capture](#skip-capture-entirely) · [parallel tasks](#parallel-tasks-with-worktrees) · [parallel review](#parallel-review-with-kept-worktrees) · [explore first](#explore-before-committing) · [triage](#track-and-triage) · [report issues](#report-issues-during-testing)
+- [Desktop app (macOS)](#desktop-app-macos)
+
+**Reference**
+- [File Structure](#file-structure)
+- [Remote sessions (branch mode)](#remote-sessions-branch-mode)
+- [Filtering](#filtering)
+- [Development](#development)
+- [License](#license)
+
 ## Overview
 
 plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks; a small Node runtime (dashboard, project registry, and the `.plans/` commit/sync helper `plans-git.js`) is installed alongside them in `~/.claude/plans-cc/`.
