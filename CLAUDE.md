@@ -2,6 +2,10 @@
 
 Lightweight task management for Claude Code, implemented as a set of skills.
 
+## Plan files are public
+
+This repo's `.plans/` is pushed to the public GitHub repo on the `plans` branch, so every plan file (tasks, ideas, state, CONTEXT, HISTORY, PROGRESS, artifacts) is public. Never write real client or other project names, absolute user paths (`/Users/<name>/…`), usernames, emails, hostnames, private URLs (client Trello/Figma/Sentry/repo links), or credentials into them. That includes content imported, mined, or quoted from other projects. Use generic placeholders (`my-app`, `client-site`, `/Users/alice/code/my-app`). The same rule applies to this CLAUDE.md, the README, and skill examples.
+
 ## What This Is
 
 plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks. A small zero-dependency Node runtime ships alongside them to `~/.claude/plans-cc/` — the desktop dashboard, the project-registry touch (`plan-touch.js`), and the `.plans/` commit/sync helper (`plans-git.js`) — which skills invoke by path.
