@@ -146,7 +146,6 @@ node bin/dashboard.js         # local dev from the plans-cc repo
 ```
 
 ![plans-cc dashboard](docs/images/dashboard.png)
-<!-- TODO: capture docs/images/dashboard.png — run `node bin/dashboard.js` against a populated .plans/ and save an optimized screenshot here -->
 
 `node bin/dev.js` wires up the `plans-cc-dashboard` launcher too, so dev-mode edits to `bin/dashboard.js` and the `lib/` helpers are live without reinstalling.
 
