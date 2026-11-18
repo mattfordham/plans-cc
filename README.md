@@ -339,7 +339,7 @@ The app is built and installed separately from the `npx plans-cc` package — it
 
 > **[Plans Desktop →](https://github.com/mattfordham/plans-desktop)**
 
-![plans-cc desktop — menu-bar glance](docs/images/desktop-menubar.png)
+<img src="docs/images/desktop-menubar.png" width="280" alt="plans-cc desktop — menu-bar glance">
 
 ![plans-cc desktop — cross-project browser window](docs/images/desktop-browser.png)
 
