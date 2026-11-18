@@ -13,6 +13,11 @@ allowed-tools:
   - mcp__figma-dev-mode-mcp-server__get_metadata
   - mcp__figma-dev-mode-mcp-server__get_variable_defs
   - mcp__figma-dev-mode-mcp-server__get_screenshot
+  - mcp__plugin_figma_figma__create_session
+  - mcp__plugin_figma_figma__get_design_context
+  - mcp__plugin_figma_figma__get_metadata
+  - mcp__plugin_figma_figma__get_variable_defs
+  - mcp__plugin_figma_figma__get_screenshot
 description: Author/refine the reviewed design-system/ markdown (tokens, components, composition, layout) from a connected Figma file — the build-time source of truth
 ---
 
@@ -34,17 +39,20 @@ Run this once per new project, or whenever the design system materially changes.
 
 ## Steps
 
-1. **Confirm the Figma input source (MCP-first)**
-   - Prefer the Figma Dev Mode MCP. Pull from `mcp__figma-dev-mode-mcp-server__*`:
+1. **Confirm the Figma input source (MCP-first, remote-first)**
+   - Prefer a Figma MCP, **remote-first with local fallback**. Either server works:
+     - **Remote** — `mcp__plugin_figma_figma__*` (the `figma@claude-plugins-official` plugin, `https://mcp.figma.com/mcp`). Call `mcp__plugin_figma_figma__create_session` with the file's `fileKey` **before any read**; every read is then keyed on `fileKey` + `nodeId` derived from a Figma URL (the remote server has no current-selection reads).
+     - **Local** — `mcp__figma-dev-mode-mcp-server__*` (Dev Mode MCP), the fallback when the remote plugin is unavailable.
+   - From whichever server is connected, pull:
      - `get_variable_defs` — colors and type variables.
      - `get_metadata` + `get_design_context` — structure of frames and layers.
      - `get_screenshot` — full-frame "big picture" captures (desktop **and** mobile of the key frames).
-   - If the MCP is not connected, tell the user to connect the Figma Dev Mode MCP, OR to supply exported variable JSON plus full-frame screenshots. Then proceed with whatever input is available — do not block.
+   - If no Figma MCP is connected, tell the user to connect a Figma MCP (remote plugin or local Dev Mode), OR to supply exported variable JSON plus full-frame screenshots. Then proceed with whatever input is available — **do not block**. Unlike `des-build`, `des-author` does not hard-abort on a missing MCP; it authors from whatever input it has.
    - Always favor full-frame screenshots for the "big picture" that raw token extraction loses. Extraction gives you values; screenshots give you the system.
    - **Apply per-project skill notes** (see **Per-project skill notes** in the plans-cc `CLAUDE.md`). `des-author` has no project-root discovery of its own, so anchor this read here at Step 1: if a `.plans/` directory is reachable from the current working directory (walk up to the nearest ancestor holding `.plans/config.json`), read `.plans/SKILL_NOTES.md` when it exists and apply the `## all` section plus this skill's own `## des-author` section. **If `.plans/` is unreachable, or the file is missing or empty, do nothing and print nothing** — skip silently (today's behavior, byte-identical). Optional-read + silent-default discipline, exactly like `models` / `worktree_links`. Priority order: the caller's own instructions > SKILL_NOTES > this skill's defaults; a note may add steps or change a default but can never turn off a hard-failure rule. When notes were applied, print exactly one line: `Skill notes: applied <n> note(s) from .plans/SKILL_NOTES.md`; print nothing otherwise.
 
 2. **Survey & hypothesize (style-guide vs. page frames)**
-   - Before authoring anything, get the lay of the land. Pull big-picture `get_screenshot` captures plus `get_metadata` of the connected Figma file to see every frame at once.
+   - Before authoring anything, get the lay of the land. Pull big-picture `get_screenshot` captures plus `get_metadata` of the connected Figma file (from whichever server Step 1 established — remote `mcp__plugin_figma_figma__*` or local `mcp__figma-dev-mode-mcp-server__*`) to see every frame at once.
    - Form a broad hypothesis that **classifies the frames into two buckets**: explicit *style-guide* frames (swatches, type ramps, component sheets) vs. actual *page* frames (real screens that use the system).
    - Note explicitly that the design *system* — and **especially composition** — is rarely drawn in one place. It is **inferred across the page frames** (the relationships between real elements on real screens) far more than it is explicitly defined on a style-guide frame. Treat page frames as the primary evidence for the system, with style-guide frames as corroboration.
    - State the broad hypothesis: what kind of system this looks like (density, type voice, color strategy, layout philosophy) and which frames you'll lean on for which areas.
@@ -129,7 +137,7 @@ Run this once per new project, or whenever the design system materially changes.
 
 ## Edge Cases
 
-- **Figma MCP not connected**: instruct the user to connect the Figma Dev Mode MCP or supply exported variable JSON + full-frame screenshots, then proceed with whatever is available.
+- **Figma MCP not connected**: instruct the user to connect a Figma MCP (remote plugin or local Dev Mode) or supply exported variable JSON + full-frame screenshots, then proceed with whatever is available.
 - **`design-system/` already exists**: refine in place. The `refresh` scope re-derives the system from Figma.
 - **User's Step 2 validation contradicts the hypothesis**: adjust to the user's read and re-survey on that basis — do NOT author any file on a hypothesis the user rejected.
 - **Scope phrase or `refresh` invocation**: collapse the Step 2 survey and the five per-area checkpoints into a single quick classify-confirm gate up front, then author without pausing at every area (bare no-arg keeps the full per-area walk).

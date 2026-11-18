@@ -14,6 +14,10 @@ allowed-tools:
   - mcp__figma-dev-mode-mcp-server__get_variable_defs
   - mcp__figma-dev-mode-mcp-server__get_screenshot
   - mcp__plugin_figma_figma__create_session
+  - mcp__plugin_figma_figma__get_design_context
+  - mcp__plugin_figma_figma__get_metadata
+  - mcp__plugin_figma_figma__get_variable_defs
+  - mcp__plugin_figma_figma__get_screenshot
   - mcp__playwright__browser_navigate
   - mcp__playwright__browser_resize
   - mcp__playwright__browser_take_screenshot
@@ -24,14 +28,14 @@ allowed-tools:
   - mcp__playwright__browser_click
   - mcp__playwright__browser_type
   - mcp__playwright__browser_console_messages
-description: Build a Next.js + Tailwind component by reading design-system/ first; use only its tokens/patterns, and optionally self-verify the render against the Figma frame. Requires BOTH a reachable Figma Dev Mode MCP and a readable design-system/ — aborts rather than degrading if either is missing. With `verify <url>`, measures the live rendered page against Figma via Playwright; with `verify` alone it is a code-only check that is NEVER reported as verified.
+description: Build a Next.js + Tailwind component by reading design-system/ first; use only its tokens/patterns, and optionally self-verify the render against the Figma frame. Requires BOTH a reachable Figma MCP (remote plugin or local Dev Mode) and a readable design-system/ — aborts rather than degrading if either is missing. With `verify <url>`, measures the live rendered page against Figma via Playwright; with `verify` alone it is a code-only check that is NEVER reported as verified.
 ---
 
 # des-build
 
 Build a Next.js + Tailwind component (or page section) by reading the reviewed `design-system/` markdown FIRST and using only its tokens and patterns. This is Phase 2 of the `des-*` family, with the Phase 3 self-verify checklist folded in via `verify` mode.
 
-**Two required inputs, no degraded mode.** This skill needs both a reachable Figma Dev Mode MCP connection *and* a readable `design-system/` directory. If either is missing it **aborts** — it never falls back to the other, and never to the task description. The reason is that a build from missing inputs still compiles, lints, and renders, so it reports as a clean success while being structurally wrong. Step 1 is the gate that prevents this.
+**Two required inputs, no degraded mode.** This skill needs both a reachable Figma MCP (remote plugin `mcp__plugin_figma_figma__*` or local Dev Mode `mcp__figma-dev-mode-mcp-server__*`, remote-first with local fallback) *and* a readable `design-system/` directory. If either is missing it **aborts** — it never falls back to the other, and never to the task description. The reason is that a build from missing inputs still compiles, lints, and renders, so it reports as a clean success while being structurally wrong. Step 1 is the gate that prevents this.
 
 ## Arguments
 
@@ -51,14 +55,20 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
 
    Both checks below must produce **observed evidence** — an actual tool result in this transcript. A recollection, an assumption, or a claim that a file was read is NOT evidence. If you cannot point to the tool call that produced the evidence, the check FAILED.
 
-   a. **Figma MCP reachability (hard requirement, no fallback).**
-      - Probe the connection with `mcp__figma-dev-mode-mcp-server__get_metadata` for the target node.
-      - If it returns unauthorized, unavailable, not-connected, or any error: **ABORT immediately.** Do not build. Do not fall back to the markdown alone. Do not fall back to the task description. Emit:
+   a. **Figma MCP reachability (hard requirement, no fallback). Either server satisfies it — remote-first, local fallback.**
+      - Two Figma MCP servers can provide the node: the **remote** server (`https://mcp.figma.com/mcp`, tools namespaced `mcp__plugin_figma_figma__*`) and the **local** Dev Mode MCP (tools namespaced `mcp__figma-dev-mode-mcp-server__*`). Try the remote server first; fall back to the local one only if the remote is unavailable. Record WHICH server answered (step c) — the same server is then used for every later read (Steps 5 and 8a).
+      - **Try the remote server first.** The remote server has no current-selection concept, so every read is keyed on a fileKey + nodeId derived from the Figma URL, and a session must be opened before any read:
+        1. Derive the `fileKey` and `nodeId` from the target's Figma URL (`figma.com/design/<fileKey>/...?node-id=<nodeId>`).
+        2. Open a session with `mcp__plugin_figma_figma__create_session` (passing the `fileKey` and a short task description). **This is mandatory before any remote file read.**
+        3. Probe with `mcp__plugin_figma_figma__get_metadata` for the target node.
+        - If the create_session or the probe returns unauthorized, unavailable, not-connected, or any error, the remote server is not live — fall through to the local server.
+      - **Fall back to the local Dev Mode MCP.** Probe the connection with `mcp__figma-dev-mode-mcp-server__get_metadata` for the target node.
+      - **ABORT only when NEITHER server responds.** If both the remote and the local probe return unauthorized, unavailable, not-connected, or an error: **ABORT immediately.** Do not build. Do not fall back to the markdown alone. Do not fall back to the task description. Emit:
         ```
         🔴 BLOCKED · <Component> — Figma MCP unreachable
-        Reason: <the exact error returned>
+        Reason: <the exact error(s) returned — remote and local>
         The Figma node is a required input; the design-system markdown is a summary, not a substitute.
-        Fix: reconnect Figma Dev Mode MCP, then rerun /des-build <Component>.
+        Fix: reconnect a Figma MCP (remote plugin or local Dev Mode), then rerun /des-build <Component>.
         ```
       - This abort is **unconditional and holds in autonomous contexts too.** Under `/plan-execute` yolo/worktree mode, ABORT rather than deferring to review — an unverifiable build is worse than no build, because it looks finished. The Step 6 autonomous exception covers *ambiguous reflow*, never *missing inputs*.
 
@@ -74,9 +84,10 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
         ```
       - Do NOT proceed on partial reads. Do NOT reconstruct the design from the task description, the component name, or general knowledge of what such a component usually looks like. **Building a generic component is the failure this gate prevents** — not an acceptable degraded mode.
 
-   c. **Record the evidence in your output.** Before Step 2, state what you actually observed:
+   c. **Record the evidence in your output.** Before Step 2, state what you actually observed, including WHICH Figma server answered (so Steps 5 and 8a use the same one):
       ```
-      Preflight: Figma node <id> reachable ✓ (get_metadata returned <n> nodes)
+      Preflight: Figma server: remote (mcp.figma.com) ✓   [or: local (Dev Mode MCP) ✓]
+                 Figma node <id> reachable ✓ (get_metadata returned <n> nodes)
                  design-system/ read from <absolute path> ✓ (tokens.md <n>L,
                  components.md <n>L, composition.md <n>L, layout-and-responsive.md <n>L)
       ```
@@ -110,7 +121,7 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
 
 5. **Gather the per-component input**
    - Use the desktop frame AND the mobile frame; note the structural differences between them.
-   - Pull the specific node via MCP: `mcp__figma-dev-mode-mcp-server__get_screenshot`, `get_metadata`, `get_design_context`. This is **not** conditional — Step 1a already established the connection is live. If a node fetch fails here, ABORT as in Step 1a rather than building from the markdown alone.
+   - Pull the specific node via MCP, using whichever server Step 1a established as live: the **remote** `mcp__plugin_figma_figma__get_screenshot` / `get_metadata` / `get_design_context` (reusing the session opened in Step 1a), or the **local** `mcp__figma-dev-mode-mcp-server__get_screenshot` / `get_metadata` / `get_design_context`. This is **not** conditional — Step 1a already established the connection is live. If a node fetch fails here, ABORT as in Step 1a rather than building from the markdown alone.
    - The markdown spec is a **summary, not the design**: a components.md zone table names the parts but rarely carries the column split, the exact measure, the group arrangement, or the per-breakpoint reordering. Those come from the node. Never treat a correctly-read spec as sufficient on its own.
 
 6. **Build (Next.js + Tailwind)**
@@ -138,7 +149,7 @@ Build a Next.js + Tailwind component (or page section) by reading the reviewed `
      1. `mcp__playwright__browser_navigate` to `<url>`, then `mcp__playwright__browser_wait_for` until the page/content is present.
      2. `mcp__playwright__browser_resize` to that frame's width (from the Figma frame).
      3. Set up the same state the Figma variant shows (click toggles, open menus, type into search, etc.).
-     4. Take the Figma screenshot (`mcp__figma-dev-mode-mcp-server__get_screenshot`) and read the node's properties (`get_design_context`). Take the page screenshot (`mcp__playwright__browser_take_screenshot`) / snapshot (`mcp__playwright__browser_snapshot`).
+     4. Take the Figma screenshot and read the node's properties, using whichever server Step 1a established as live: the **remote** `mcp__plugin_figma_figma__get_screenshot` / `get_design_context` (reusing the Step 1a session), or the **local** `mcp__figma-dev-mode-mcp-server__get_screenshot` / `get_design_context`. Take the page screenshot (`mcp__playwright__browser_take_screenshot`) / snapshot (`mcp__playwright__browser_snapshot`).
      5. **Measure the page, not the code.** Use `mcp__playwright__browser_evaluate` to read `getComputedStyle` and `getBoundingClientRect` for the key elements — headings/body text (font-size, line-height, letter-spacing, weight), containers/grids (widths, column count, gaps, padding), repeated items (card size, spacing). Check the `html` font-size against the design system first.
      6. Compare the measured px to the Figma px. For each discrepancy report the **property**, the Figma **px**, the rendered **px**, and the **fix**.
      7. **Judge the two screenshots side by side** for *structure*: missing/extra elements, wrong order or alignment, different content in a slot, wrong glyphs or icons. **Do NOT compute an automatic pixel-diff score** — font rendering and sample content make it noisy.
