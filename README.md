@@ -2,6 +2,12 @@
 
 Lightweight task management for Claude Code, implemented as a set of skills.
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D16.7.0-green.svg)](https://nodejs.org)
+[![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-d97757.svg)](https://docs.anthropic.com/en/docs/claude-code)
+
+**plans-cc turns Claude Code into a project manager that lives in your repo.** Capture, plan, execute, and ship work as plain markdown tasks in a `.plans/` directory — versioned alongside your code, readable without any special tooling, and driven by natural-language slash commands. From a one-line idea to an elaborated plan to an executed, reviewed, and merged change, the full lifecycle runs inside Claude Code with no external service to sign up for and nothing to host.
+
 ## Overview
 
 plans-cc provides a simple task management system through Claude Code skills. Users install via `npx plans-cc`, which copies skill files to `~/.claude/skills/`. Skills are declarative SKILL.md files that instruct Claude how to manage tasks; a small Node runtime (dashboard, project registry, and the `.plans/` commit/sync helper `plans-git.js`) is installed alongside them in `~/.claude/plans-cc/`.
@@ -22,7 +28,7 @@ plans-cc also ships a second binary, `plans-cc-dashboard`, a live-updating TUI f
 export PATH="$HOME/.claude/bin:$PATH"
 ```
 
-`blessed` is the only runtime dependency — previously the package was zero-dep.
+`blessed` (used by the dashboard) is the package's only runtime dependency.
 
 **Requirements:** Node.js 16.7.0 or later, [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 
@@ -138,6 +144,9 @@ Run the live dashboard from a project directory that has a `.plans/` folder:
 plans-cc-dashboard            # installed usage (after `npx plans-cc` + PATH setup)
 node bin/dashboard.js         # local dev from the plans-cc repo
 ```
+
+![plans-cc dashboard](docs/images/dashboard.png)
+<!-- TODO: capture docs/images/dashboard.png — run `node bin/dashboard.js` against a populated .plans/ and save an optimized screenshot here -->
 
 `node bin/dev.js` wires up the `plans-cc-dashboard` launcher too, so dev-mode edits to `bin/dashboard.js` and the `lib/` helpers are live without reinstalling.
 
@@ -297,6 +306,25 @@ After running `/plan-init`, your project will have:
 Task files are plain markdown with metadata at the top and sections for What, Why, How (with checkboxes), Verification, Impact Scope, Changes, and Notes. You can read and edit them directly — they're designed to be human-readable.
 
 `config.json` includes a `plan_comments` setting (asked during `/plan-init`): set it to `false` to forbid executors from writing plan/task-referencing code comments (e.g. `// Task #012 Step 3`) — useful for projects that don't keep `.plans/` in the repo. A missing key means such comments are allowed.
+
+## Desktop app (macOS)
+
+plans-cc has a companion native macOS app — a **read-only personal viewer** for your tasks across *every* project on your machine. Because tasks live in a separate `.plans/` folder in each repo, there's normally no way to see all your work at once without `cd`-ing into each project in turn. The desktop app solves that. It never writes to `.plans/` — it only reads the registry and your task files and shows them.
+
+It has two surfaces at two altitudes:
+
+- **Menu-bar glance** — a macOS menu-bar item that gives an at-a-glance, machine-wide summary without opening a window. Per registered project, it shows the project name and a compact breakdown of its task counts by status (e.g. 2 in-progress, 1 review, 5 pending) — "what's hot right now, everywhere."
+- **Cross-project browser window** — a full window for reading and triaging. Open any task's full body (What / Why / How checklist / Verification), filter by status across *all* projects at once (global, not scoped to one repo), and sort by staleness so stale or forgotten work floats to the top. Drilling in from a project in the menu bar lands you on that project's tasks.
+
+The app is built and installed separately from the `npx plans-cc` package — it's its own project with its own build.
+
+> **[Plans Desktop →](#)** <!-- TODO: desktop app URL -->
+
+![plans-cc desktop — menu-bar glance](docs/images/desktop-menubar.png)
+<!-- TODO: capture docs/images/desktop-menubar.png — the menu-bar glance screenshot is produced in the plans-desktop repo / follow-up task -->
+
+![plans-cc desktop — cross-project browser window](docs/images/desktop-browser.png)
+<!-- TODO: capture docs/images/desktop-browser.png — the browser-window screenshot is produced in the plans-desktop repo / follow-up task -->
 
 ## Remote sessions (branch mode)
 
