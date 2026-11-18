@@ -337,13 +337,11 @@ It has two surfaces at two altitudes:
 
 The app is built and installed separately from the `npx plans-cc` package — it's its own project with its own build.
 
-> **[Plans Desktop →](#)** <!-- TODO: desktop app URL -->
+> **[Plans Desktop →](https://github.com/mattfordham/plans-desktop)**
 
 ![plans-cc desktop — menu-bar glance](docs/images/desktop-menubar.png)
-<!-- TODO: capture docs/images/desktop-menubar.png — the menu-bar glance screenshot is produced in the plans-desktop repo / follow-up task -->
 
 ![plans-cc desktop — cross-project browser window](docs/images/desktop-browser.png)
-<!-- TODO: capture docs/images/desktop-browser.png — the browser-window screenshot is produced in the plans-desktop repo / follow-up task -->
 
 ## Remote sessions (branch mode)
 
