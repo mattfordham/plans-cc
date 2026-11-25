@@ -1,6 +1,6 @@
 # Current Progress
 
-**Last updated:** 2026-11-18
+**Last updated:** 2026-11-24
 
 ## Active Work
 _No active tasks_
@@ -13,9 +13,9 @@ _No active tasks_
 - **#055** - Reorder /plan-complete so it collects every decision and finishes the merge BEFORE it archives the task (completed 2026-11-10)
 
 ## Stats
-- Pending: 1
+- Pending: 0
 - Elaborated: 0
 - In Progress: 0
 - In Review: 0
-- Backlogged: 1
+- Backlogged: 2
 - Completed: 52
